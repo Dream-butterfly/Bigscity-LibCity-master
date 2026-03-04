@@ -100,15 +100,19 @@ def masked_rmse_torch(preds, labels, null_val=np.nan, mask_val=None):
 
 
 def r2_score_torch(preds, labels):
+    # Return a scalar tensor to match existing evaluator code that calls `.item()`.
     preds = preds.cpu().flatten()
     labels = labels.cpu().flatten()
-    return r2_score(labels, preds)
+    score = r2_score(labels, preds)
+    return torch.tensor(score, dtype=torch.float32)
 
 
 def explained_variance_score_torch(preds, labels):
+    # Return a scalar tensor to match existing evaluator code that calls `.item()`.
     preds = preds.cpu().flatten()
     labels = labels.cpu().flatten()
-    return explained_variance_score(labels, preds)
+    score = explained_variance_score(labels, preds)
+    return torch.tensor(score, dtype=torch.float32)
 
 
 def masked_rmse_np(preds, labels, null_val=np.nan):

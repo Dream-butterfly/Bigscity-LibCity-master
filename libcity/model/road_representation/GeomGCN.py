@@ -2,23 +2,23 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import dgl
-import dgl.function as fn
-from dgl import DGLGraph
 from logging import getLogger
-import scipy.sparse as sp
 import networkx as nx
+from torch_geometric.utils import scatter, subgraph
 from libcity.model.abstract_traffic_state_model import AbstractTrafficStateModel
 from libcity.model import loss
-from libcity.model import utils
 
 
 class GeomGCNSingleChannel(nn.Module):
-    def __init__(self, g, in_feats, out_feats, num_divisions, activation, dropout_prob, merge, device):
+    def __init__(self, graph_data, in_feats, out_feats, num_divisions, activation, dropout_prob, merge, device):
         super(GeomGCNSingleChannel, self).__init__()
         self.num_divisions = num_divisions
         self.in_feats_dropout = nn.Dropout(dropout_prob)
         self.device = device
+        self.edge_index = graph_data['edge_index']
+        self.edge_subgraph_idx = graph_data['edge_subgraph_idx']
+        self.norm = graph_data['norm']
+        self.num_nodes = graph_data['num_nodes']
 
         self.linear_for_each_division = nn.ModuleList().to(self.device)
         for i in range(self.num_divisions):
@@ -28,72 +28,80 @@ class GeomGCNSingleChannel(nn.Module):
             nn.init.xavier_uniform_(self.linear_for_each_division[i].weight.to(self.device))
 
         self.activation = activation
-        self.g = g
-        self.subgraph_edge_list_of_list = self.get_subgraphs(self.g)
-        self.subgraph_node_list_of_list = self.get_node_subgraphs(self.g)
+        self.subgraph_node_list_of_list = self.get_node_subgraphs()
+        self.subgraph_edge_index_list = self.get_subgraphs(self.subgraph_node_list_of_list)
         self.merge = merge
         self.out_feats = out_feats
 
-    def get_subgraphs(self, g):
-        subgraph_edge_list = [[] for _ in range(self.num_divisions)]
-        u, v, eid = g.all_edges(form='all')
-        for i in range(g.number_of_edges()):
-            subgraph_edge_list[g.edges[u[i], v[i]].data['subgraph_idx']].append(eid[i])
-
-        return subgraph_edge_list
-
-    def get_node_subgraphs(self, g):
+    def get_node_subgraphs(self):
         subgraph_node_list = [[] for _ in range(self.num_divisions)]
-        u, v, eid = g.all_edges(form='all')
-        for i in range(g.number_of_edges()):
-            subgraph_node_list[g.edges[u[i], v[i]].data['subgraph_idx']].append(u[i])
-            subgraph_node_list[g.edges[u[i], v[i]].data['subgraph_idx']].append(v[i])
+        src_list = self.edge_index[0].detach().cpu().tolist()
+        dst_list = self.edge_index[1].detach().cpu().tolist()
+        edge_subgraph_idx_list = self.edge_subgraph_idx.detach().cpu().tolist()
+        for src, dst, edge_subgraph_idx in zip(src_list, dst_list, edge_subgraph_idx_list):
+            if 0 <= edge_subgraph_idx < self.num_divisions:
+                subgraph_node_list[edge_subgraph_idx].append(src)
+                subgraph_node_list[edge_subgraph_idx].append(dst)
 
-        return subgraph_node_list
+        return [
+            torch.tensor(sorted(set(node_list)), dtype=torch.long, device=self.device)
+            if len(node_list) > 0 else torch.empty(0, dtype=torch.long, device=self.device)
+            for node_list in subgraph_node_list
+        ]
+
+    def get_subgraphs(self, subgraph_node_list_of_list):
+        subgraph_edge_index_list = []
+        for node_index in subgraph_node_list_of_list:
+            if node_index.numel() == 0:
+                subgraph_edge_index_list.append(torch.empty((2, 0), dtype=torch.long, device=self.device))
+                continue
+            # DGL subgraph(node_set) is replaced by PyG induced subgraph extraction.
+            subgraph_edge_index, _ = subgraph(
+                node_index, self.edge_index, relabel_nodes=False, num_nodes=self.num_nodes
+            )
+            subgraph_edge_index_list.append(subgraph_edge_index.to(self.device))
+        return subgraph_edge_index_list
 
     def forward(self, feature):
-        in_feats_dropout = self.in_feats_dropout(feature).to(self.device)    # 使输入挂上dropout
-        self.g.ndata['h'] = in_feats_dropout.to(self.device)  # 使数据挂上dropout；ndata代表特征；加入关于h的索引；
-
-        for i in range(self.num_divisions):
-            subgraph = self.g.subgraph(self.subgraph_node_list_of_list[i])
-            self.linear_for_each_division[i].to(self.device)
-            temp = self.linear_for_each_division[i](subgraph.ndata['h'])
-            subgraph.ndata[f'Wh_{i}'] = temp * subgraph.ndata['norm']
-            subgraph.update_all(message_func=fn.copy_u(u=f'Wh_{i}', out=f'm_{i}'),
-                                reduce_func=fn.sum(msg=f'm_{i}', out=f'h_{i}'))
-            subgraph.ndata.pop(f'Wh_{i}')
-
-        self.g.ndata.pop('h')
+        in_feats_dropout = self.in_feats_dropout(feature).to(self.device)
 
         results_from_subgraph_list = []
         for i in range(self.num_divisions):
-            if f'h_{i}' in self.g.node_attr_schemes():
-                results_from_subgraph_list.append(self.g.ndata.pop(f'h_{i}'))
-            else:
+            subgraph_edge_index = self.subgraph_edge_index_list[i]
+            if subgraph_edge_index.numel() == 0:
                 results_from_subgraph_list.append(
-                    torch.zeros((feature.size(0), self.out_feats), dtype=torch.float32, device=feature.device))
+                    torch.zeros((feature.size(0), self.out_feats), dtype=in_feats_dropout.dtype, device=self.device)
+                )
+                continue
+
+            # DGL copy_u + sum becomes source gather + scatter(sum) on edge_index.
+            transformed_feature = self.linear_for_each_division[i](in_feats_dropout) * self.norm
+            src_nodes, dst_nodes = subgraph_edge_index[0], subgraph_edge_index[1]
+            aggregated_feature = scatter(
+                transformed_feature[src_nodes], dst_nodes, dim=0, dim_size=self.num_nodes, reduce='sum'
+            )
+            results_from_subgraph_list.append(aggregated_feature)
 
         if self.merge == 'cat':
             h_new = torch.cat(results_from_subgraph_list, dim=-1).to(self.device)
         else:
             h_new = torch.mean(torch.stack(results_from_subgraph_list, dim=-1), dim=-1).to(self.device)
-        h_new = h_new * self.g.ndata['norm']
+        h_new = h_new * self.norm
         h_new = self.activation(h_new)
         return h_new
 
 
 class GeomGCNNet(nn.Module):
-    def __init__(self, g, in_feats, out_feats, num_divisions, activation, num_heads, dropout_prob, ggcn_merge,
+    def __init__(self, graph_data, in_feats, out_feats, num_divisions, activation, num_heads, dropout_prob, ggcn_merge,
                  channel_merge, device):
         super(GeomGCNNet, self).__init__()
         self.attention_heads = nn.ModuleList()
         for _ in range(num_heads):
             self.attention_heads.append(
-                GeomGCNSingleChannel(g, in_feats, out_feats, num_divisions,
+                GeomGCNSingleChannel(graph_data, in_feats, out_feats, num_divisions,
                                      activation, dropout_prob, ggcn_merge, device))
         self.channel_merge = channel_merge
-        self.g = g
+        self.graph_data = graph_data
 
     def forward(self, feature):
         all_attention_head_outputs = [head(feature) for head in self.attention_heads]
@@ -107,11 +115,11 @@ class GeomGCN(AbstractTrafficStateModel):
     def __init__(self, config, data_feature):
         super().__init__(config, data_feature)
         self.device = config.get('device')
-        g, num_input_features, num_output_classes, num_hidden, num_divisions, \
+        graph_data, num_input_features, num_output_classes, num_hidden, num_divisions, \
         num_heads_layer_one, num_heads_layer_two, dropout_rate, layer_one_ggcn_merge, \
         layer_one_channel_merge, layer_two_ggcn_merge, layer_two_channel_merge = self.get_input(config, data_feature)
 
-        self.geomgcn1 = GeomGCNNet(g, num_input_features, num_hidden, num_divisions, F.relu, num_heads_layer_one,
+        self.geomgcn1 = GeomGCNNet(graph_data, num_input_features, num_hidden, num_divisions, F.relu, num_heads_layer_one,
                                    dropout_rate, layer_one_ggcn_merge, layer_one_channel_merge, self.device)
 
         if layer_one_ggcn_merge == 'cat':
@@ -124,22 +132,24 @@ class GeomGCN(AbstractTrafficStateModel):
         else:
             layer_one_channel_merge_multiplier = 1
 
-        self.geomgcn2 = GeomGCNNet(g, num_hidden * layer_one_ggcn_merge_multiplier * layer_one_channel_merge_multiplier,
+        self.geomgcn2 = GeomGCNNet(graph_data,
+                                   num_hidden * layer_one_ggcn_merge_multiplier * layer_one_channel_merge_multiplier,
                                    num_output_classes, num_divisions, lambda x: x,
                                    num_heads_layer_two, dropout_rate, layer_two_ggcn_merge,
                                    layer_two_channel_merge, self.device)
 
-        self.geomgcn3 = GeomGCNNet(g, num_output_classes,
+        self.geomgcn3 = GeomGCNNet(graph_data, num_output_classes,
                                    num_hidden * layer_one_ggcn_merge_multiplier * layer_one_channel_merge_multiplier,
                                    num_divisions, lambda x: x,
                                    num_heads_layer_two, dropout_rate, layer_two_ggcn_merge,
                                    layer_two_channel_merge, self.device)
 
-        self.geomgcn4 = GeomGCNNet(g, num_hidden * layer_one_ggcn_merge_multiplier * layer_one_channel_merge_multiplier,
+        self.geomgcn4 = GeomGCNNet(graph_data,
+                                   num_hidden * layer_one_ggcn_merge_multiplier * layer_one_channel_merge_multiplier,
                                    num_input_features,  num_divisions, F.relu, num_heads_layer_one,
                                    dropout_rate, layer_two_ggcn_merge, layer_two_channel_merge, self.device)
 
-        self.g = g
+        self.g = graph_data
         self._logger = getLogger()
         self._scaler = self.data_feature.get('scaler')
         self.model = config.get('model', '')
@@ -162,28 +172,38 @@ class GeomGCN(AbstractTrafficStateModel):
 
         G = nx.DiGraph(adj_mx)
 
-        for (node1, node2) in G.edges:
-            G.remove_edge(node1, node2)
-            G.add_edge(node1, node2, subgraph_idx=0)
+        for node1, node2 in list(G.edges()):
+            G[node1][node2]['subgraph_idx'] = 0
 
         for node in sorted(G.nodes):
             if G.has_edge(node, node):
                 G.remove_edge(node, node)
             G.add_edge(node, node, subgraph_idx=1)
-        adj = nx.adjacency_matrix(G, sorted(G.nodes))
-        g = DGLGraph(adj)
-        g = g.to(self.device)
+        # DGLGraph is replaced by PyG-style tensor graph: edge_index + per-edge subgraph tags.
+        edge_with_attr = list(G.edges(data='subgraph_idx'))
+        src = [edge[0] for edge in edge_with_attr]
+        dst = [edge[1] for edge in edge_with_attr]
+        edge_subgraph_idx = [int(edge[2]) if edge[2] is not None else 0 for edge in edge_with_attr]
+        edge_index = torch.tensor([src, dst], dtype=torch.long, device=self.device)
+        edge_subgraph_idx = torch.tensor(edge_subgraph_idx, dtype=torch.long, device=self.device)
 
-        for u, v, feature in G.edges(data='subgraph_idx'):
-            if (feature is not None) and g.has_edge_between(u, v):
-                g.edges[g.edge_id(u, v)].data['subgraph_idx'] = torch.tensor([feature]).to(self.device)
-
-        degs = g.in_degrees().float()
+        degs = scatter(
+            torch.ones(edge_index.size(1), dtype=torch.float32, device=self.device),
+            edge_index[1],
+            dim=0,
+            dim_size=G.number_of_nodes(),
+            reduce='sum'
+        )
         norm = torch.pow(degs, -0.5)
         norm[torch.isinf(norm)] = 0
-        g.ndata['norm'] = norm.unsqueeze(1).to(self.device).requires_grad_()
+        graph_data = {
+            'edge_index': edge_index,
+            'edge_subgraph_idx': edge_subgraph_idx,
+            'norm': norm.unsqueeze(1).to(self.device).requires_grad_(),
+            'num_nodes': G.number_of_nodes()
+        }
 
-        return g, num_input_features, num_output_classes, num_hidden, num_divisions, \
+        return graph_data, num_input_features, num_output_classes, num_hidden, num_divisions, \
             num_heads_layer_one, num_heads_layer_two, dropout_rate, layer_one_ggcn_merge, \
             layer_one_channel_merge, layer_two_ggcn_merge, layer_two_channel_merge
 

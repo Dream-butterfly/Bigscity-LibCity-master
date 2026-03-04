@@ -2,7 +2,6 @@ from libcity.executor.dcrnn_executor import DCRNNExecutor
 from libcity.executor.fogs_executor import FOGSExecutor
 from libcity.executor.geml_executor import GEMLExecutor
 from libcity.executor.geosan_executor import GeoSANExecutor
-from libcity.executor.hyper_tuning import HyperTuning
 from libcity.executor.line_executor import LINEExecutor
 from libcity.executor.map_matching_executor import MapMatchingExecutor
 from libcity.executor.mtgnn_executor import MTGNNExecutor
@@ -21,6 +20,19 @@ from libcity.executor.megacrn_executor import MegaCRNExecutor
 from libcity.executor.trafformer_executor import TrafformerExecutor
 from libcity.executor.pdformer_executor import PDFormerExecutor
 from libcity.executor.astgnn_executor import ASTGNNExecutor
+
+# Keep HyperTuning optional so normal training does not hard-require hyperopt/setuptools.
+try:
+    from libcity.executor.hyper_tuning import HyperTuning
+except ModuleNotFoundError as import_error:
+    _HYPERTUNING_IMPORT_ERROR = import_error
+
+    class HyperTuning:  # type: ignore[no-redef]
+        def __init__(self, *args, **kwargs):
+            raise ModuleNotFoundError(
+                "HyperTuning requires optional dependencies 'hyperopt' and "
+                "'setuptools' (for pkg_resources)."
+            ) from _HYPERTUNING_IMPORT_ERROR
 
 __all__ = [
     "TrajLocPredExecutor",

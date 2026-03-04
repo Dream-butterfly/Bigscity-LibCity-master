@@ -37,6 +37,7 @@ dependencies = [
     "torchdata>=0.7.1",
     "torch-geometric>=2.5,<2.7",
     "pywavelets>=1.9.0",
+    "setuptools>=82.0.0",
 ]
 
 [tool.uv.sources]

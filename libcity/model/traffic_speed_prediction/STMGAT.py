@@ -1,9 +1,10 @@
 import torch.nn.functional as F
-from dgl.nn.pytorch import GATConv
 import torch
 import torch.nn as nn
 from torch.nn import BatchNorm2d, Conv1d, Conv2d, ModuleList
-import dgl
+from torch_geometric.data import Batch, Data
+from torch_geometric.nn import GATConv
+from torch_geometric.utils import add_self_loops
 from logging import getLogger
 from libcity.model import loss
 from libcity.model.abstract_traffic_state_model import AbstractTrafficStateModel
@@ -36,7 +37,9 @@ class STMGAT(AbstractTrafficStateModel):
         self._logger = getLogger()
         self.device = config.get('device', torch.device('cpu'))
 
-        self.g = self._get_adj()
+        self.edge_index, self.edge_weight = self._get_adj()
+        # Cache batched PyG graphs by batch size to replace legacy graph batching.
+        self.batched_graph_cache = {}
 
         self.start_conv = nn.Conv2d(in_channels=self.feature_dim,
                                     out_channels=self.residual_channels,
@@ -87,13 +90,21 @@ class STMGAT(AbstractTrafficStateModel):
                 self.gat_layers.append(GATConv(
                     self.dilation_channels * receptive_field,
                     self.dilation_channels * receptive_field,
-                    self.heads, self.feat_drop, self.attn_drop, self.negative_slope,
-                    residual=False, activation=F.elu))
+                    heads=self.heads,
+                    concat=False,  # Match DGL .mean(1) over heads by returning averaged head output directly.
+                    negative_slope=self.negative_slope,
+                    dropout=self.attn_drop,
+                    add_self_loops=False,
+                    residual=False))
                 self.gat_layers1.append(GATConv(
                     self.dilation_channels * receptive_field,
                     self.dilation_channels * receptive_field,
-                    self.heads, self.feat_drop, self.attn_drop, self.negative_slope,
-                    residual=False, activation=F.elu))
+                    heads=self.heads,
+                    concat=False,
+                    negative_slope=self.negative_slope,
+                    dropout=self.attn_drop,
+                    add_self_loops=False,
+                    residual=False))
 
         self.end_conv_1 = Conv2d(self.skip_channels, self.end_channels, (1, 1), bias=True)
         self.end_conv_2 = Conv2d(self.end_channels, self.output_window, (1, 1), bias=True)
@@ -105,14 +116,29 @@ class STMGAT(AbstractTrafficStateModel):
             for j in range(adj_mx.shape[1]):
                 if adj_mx[i][j] > 0:  # link
                     edge_list.append((i, j, adj_mx[i][j]))
-        src, dst, cost = tuple(zip(*edge_list))
-        g = dgl.DGLGraph()
-        g.add_nodes(self.num_nodes)
-        g.add_edges(src, dst)
-        g = dgl.add_self_loop(g)
-        g.edges[src, dst].data['w'] = torch.Tensor(cost)
-        g = g.to(self.device)
-        return g
+        if len(edge_list) > 0:
+            src, dst, cost = tuple(zip(*edge_list))
+            edge_index = torch.tensor([src, dst], dtype=torch.long, device=self.device)
+            edge_weight = torch.tensor(cost, dtype=torch.float32, device=self.device)
+        else:
+            edge_index = torch.empty((2, 0), dtype=torch.long, device=self.device)
+            edge_weight = torch.empty((0,), dtype=torch.float32, device=self.device)
+
+        # Keep DGL add_self_loop semantics while migrating to PyG tensor graph format.
+        edge_index, edge_weight = add_self_loops(
+            edge_index, edge_attr=edge_weight, fill_value=1.0, num_nodes=self.num_nodes
+        )
+        return edge_index, edge_weight
+
+    def _get_batched_graph(self, batch_size):
+        if batch_size not in self.batched_graph_cache:
+            graph_list = [
+                Data(edge_index=self.edge_index, edge_attr=self.edge_weight, num_nodes=self.num_nodes)
+                for _ in range(batch_size)
+            ]
+            # Use PyG Batch.from_data_list and keep batch vector generation.
+            self.batched_graph_cache[batch_size] = Batch.from_data_list(graph_list).to(self.device)
+        return self.batched_graph_cache[batch_size]
 
     def forward(self, batch):
         x = batch['X']  # (batch_size, input_window, num_nodes, feature_dim)
@@ -151,10 +177,16 @@ class STMGAT(AbstractTrafficStateModel):
             # graph conv and mix
             if self.run_gconv:
                 [batch_size, fea_size, num_of_vertices, step_size] = x.size()  # [64, 40, 207, 12]
-                batched_g = dgl.batch(batch_size * [self.g])
+                batched_g = self._get_batched_graph(batch_size)
+                _ = batched_g.batch  # Explicitly keep PyG batch vector creation behavior.
                 h = x.permute(0, 2, 1, 3).reshape(batch_size*num_of_vertices, fea_size*step_size)  # [64*207, 40*12]
-                h = self.gat_layers[i](batched_g, h).mean(1)  # [64*207, 40*12]
-                h = self.gat_layers1[i](batched_g, h).mean(1)  # [64*207, 40*12]
+                # DGL feat_drop is mapped to explicit feature dropout before each PyG GAT layer.
+                h = F.dropout(h, p=self.feat_drop, training=self.training)
+                h = self.gat_layers[i](h, batched_g.edge_index)  # [64*207, 40*12]
+                h = F.elu(h)
+                h = F.dropout(h, p=self.feat_drop, training=self.training)
+                h = self.gat_layers1[i](h, batched_g.edge_index)  # [64*207, 40*12]
+                h = F.elu(h)
                 gc = h.reshape(batch_size, num_of_vertices, fea_size, -1)  # [64, 207, 40, 12]
                 graph_out = gc.permute(0, 2, 1, 3)  # [64, 40, 207, 12]
                 x = x + graph_out
