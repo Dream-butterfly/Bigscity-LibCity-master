@@ -13,6 +13,7 @@ def calculate_scaled_laplacian(adj):
     """
     L = D^-1/2 (D-A) D^-1/2 = I - D^-1/2 A D^-1/2
     L' = 2L/lambda - I
+    功能：计算近似后的拉普拉斯矩阵~L
 
     Args:
         adj: adj_matrix
@@ -37,6 +38,7 @@ def calculate_cheb_poly(lap, ks):
     """
     k-order Chebyshev polynomials : T0(L)~Tk(L)
     T0(L)=I/1 T1(L)=L Tk(L)=2LTk-1(L)-Tk-2(L)
+    功能：计算切比
 
     Args:
         lap: scaled laplacian matrix
@@ -63,15 +65,24 @@ def calculate_first_approx(weight):
     :param W: weighted adjacency matrix of G. Not laplacian matrix.
     :return: np.ndarray
     '''
-    # TODO: 如果W对角线本来就是全1？
+    # # TODO: 如果W对角线本来就是全1？
+    # n = weight.shape[0]
+    # adj = weight + np.identity(n)
+    # d = np.sum(adj, axis=1)
+    # # sinvd = np.sqrt(np.mat(np.diag(d)).I)
+    # # return np.array(sinvd * A * sinvd)
+    # sinvd = np.sqrt(np.linalg.inv(np.diag(d)))
+    # lap = np.matmul(np.matmul(sinvd, adj), sinvd)  # n*n
+    # lap = np.expand_dims(lap, axis=0)              # 1*n*n
+    # return lap
     n = weight.shape[0]
     adj = weight + np.identity(n)
     d = np.sum(adj, axis=1)
-    # sinvd = np.sqrt(np.mat(np.diag(d)).I)
-    # return np.array(sinvd * A * sinvd)
-    sinvd = np.sqrt(np.linalg.inv(np.diag(d)))
-    lap = np.matmul(np.matmul(sinvd, adj), sinvd)  # n*n
-    lap = np.expand_dims(lap, axis=0)              # 1*n*n
+    d_inv_sqrt = np.power(d, -0.5).flatten()
+    d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
+    d_mat_inv_sqrt = np.diag(d_inv_sqrt)
+    lap = adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt).tocoo()  # n*n
+    lap = np.expand_dims(lap, axis=0)  # 1*n*n
     return lap
 
 
@@ -99,12 +110,17 @@ class TemporalConvLayer(nn.Module):
         self.c_out = c_out
         self.align = Align(c_in, c_out)
         if self.act == "GLU":
+            # 注：如果选择使用GLU，则需要将卷积输出的通道数设置为c_out*2，因为GLU会将输出分成两部分，一部分用于计算门控机制，另一部分用于计算卷积结果。
             self.conv = nn.Conv2d(c_in, c_out * 2, (kt, 1), 1)
         else:
             self.conv = nn.Conv2d(c_in, c_out, (kt, 1), 1)
 
     def forward(self, x):
         """
+        forward函数中首先通过align层对输入进行通道数的对齐，然后根据选择的激活函数类型进行不同的卷积计算和激活处理。
+            - 如果选择了GLU激活函数，卷积层的输出会被分成两部分，一部分用于计算门控机制（通过sigmoid函数），另一部分用于计算卷积结果。最终的输出是卷积结果与门控机制的乘积，并加上对齐后的输入作为残差连接。
+            - 如果选择了sigmoid激活函数，卷积层的输出会直接加上对齐后的输入，并通过sigmoid函数进行激活处理。
+            - 如果选择了其他激活函数（默认为ReLU），卷积层的输出会直接加上对齐后的输入，并通过ReLU函数进行激活处理。
 
         :param x: (batch_size, feature_dim(c_in), input_length, num_nodes)
         :return: (batch_size, c_out, input_length-kt+1, num_nodes)
