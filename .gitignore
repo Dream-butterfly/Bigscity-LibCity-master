@@ -11,3 +11,6 @@
 /libcity/model/*/__pycache__
 /libcity/data/dataset/*/__pycache__
 /uv.lock
+/raw_data/
+/output/
+/visualized_data/

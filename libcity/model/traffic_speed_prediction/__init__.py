@@ -25,8 +25,10 @@ from libcity.model.traffic_speed_prediction.STAEformer import STAEformer
 from libcity.model.traffic_speed_prediction.TESTAM import TESTAM
 from libcity.model.traffic_speed_prediction.MegaCRN import MegaCRN
 from libcity.model.traffic_speed_prediction.Trafformer import Trafformer
+from libcity.model.new.new_model import NEW_MODEL
 
 __all__ = [
+    "NEW_MODEL",
     "DCRNN",
     "STGCN",
     "GWNET",

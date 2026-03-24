@@ -5,7 +5,6 @@ import copy
 from datetime import datetime
 import numpy as np
 from collections import defaultdict
-from torchtext.data import Field
 from nltk import ngrams
 from tqdm import tqdm
 from libcity.data.dataset import AbstractDataset
@@ -15,6 +14,42 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 import torch.nn as nn
 from sklearn.neighbors import BallTree
+
+
+class _QuadKeyVocab:
+    def __init__(self, tokens):
+        self.itos = tokens
+        self.stoi = {token: idx for idx, token in enumerate(tokens)}
+
+
+class QuadKeyTensorEncoder:
+    def __init__(self, pad_token='<pad>'):
+        self.pad_token = pad_token
+        self.vocab = _QuadKeyVocab([pad_token])
+
+    def build_vocab(self, sequences):
+        seen = {self.pad_token}
+        tokens = [self.pad_token]
+        for sequence in sequences:
+            for token in self._normalize(sequence):
+                if token not in seen:
+                    seen.add(token)
+                    tokens.append(token)
+        self.vocab = _QuadKeyVocab(tokens)
+
+    def numericalize(self, sequences):
+        rows = []
+        for sequence in sequences:
+            rows.append([self.vocab.stoi[token] for token in self._normalize(sequence)])
+        if not rows:
+            return torch.empty((0, 0), dtype=torch.long)
+        return torch.tensor(rows, dtype=torch.long)
+
+    @staticmethod
+    def _normalize(sequence):
+        if isinstance(sequence, str):
+            return sequence.split()
+        return list(sequence)
 
 
 class GeoSANDataset(AbstractDataset):
@@ -299,13 +334,7 @@ class GeoSANDataset(AbstractDataset):
             self.loc2quadkey.append(quadkey_bigram)
             all_quadkeys.append(quadkey_bigram)
 
-        self.QUADKEY = Field(
-            sequential=True,
-            use_vocab=True,
-            batch_first=True,
-            unk_token=None,
-            preprocessing=str.split
-        )
+        self.QUADKEY = QuadKeyTensorEncoder()
         self.QUADKEY.build_vocab(all_quadkeys)
 
         return user_seq_array, user2idx, region2idx, n_users, n_region, regidx2loc, 169

@@ -98,6 +98,12 @@ def evaluate_model(y_pred, y_true, metrics, mode='single', path='metrics.csv'):
     assert isinstance(y_pred, torch.Tensor)
     assert isinstance(y_true, torch.Tensor)
 
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.width', None)
+    pd.set_option('display.max_colwidth', None)
+
+    np.set_printoptions(threshold=np.inf)
+
     df = []
     for i in range(1, len_timeslots + 1):
         line = {}
