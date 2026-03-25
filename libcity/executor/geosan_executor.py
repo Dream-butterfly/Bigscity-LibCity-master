@@ -6,7 +6,7 @@ from tqdm import tqdm
 import time as Time
 from libcity.executor.abstract_executor import AbstractExecutor
 import random
-from libcity.utils import get_evaluator
+from libcity.utils import get_evaluator, get_run_subdir
 
 
 class GeoSANExecutor(AbstractExecutor):
@@ -17,9 +17,9 @@ class GeoSANExecutor(AbstractExecutor):
         self.model = model.to(self.device)
         self.evaluator = get_evaluator(config)
         self.exp_id = self.config.get('exp_id', None)
-        self.cache_dir = './libcity/cache/{}/model_cache'.format(self.exp_id)
-        self.evaluate_res_dir = './libcity/cache/{}/evaluate_cache'.format(self.exp_id)
-        self.tmp_path = './libcity/tmp/checkpoint/'
+        self.cache_dir = get_run_subdir(self.exp_id, 'model_cache')
+        self.evaluate_res_dir = get_run_subdir(self.exp_id, 'evaluate_cache')
+        self.tmp_path = get_run_subdir(self.exp_id, 'tmp_checkpoints')
 
     def train(self, train_dataloader, eval_dataloader):
         """

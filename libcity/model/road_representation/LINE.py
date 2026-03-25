@@ -1,8 +1,10 @@
 import numpy as np
+import os
 import torch.nn as nn
 import torch.nn.functional as F
 
 from libcity.model.abstract_traffic_state_model import AbstractTrafficStateModel
+from libcity.utils import get_run_subdir
 
 
 class LINE_FIRST(nn.Module):
@@ -72,6 +74,7 @@ class LINE(AbstractTrafficStateModel):
         self.model = config.get('model', '')
         self.dataset = config.get('dataset', '')
         self.exp_id = config.get('exp_id', None)
+        self.evaluate_res_dir = get_run_subdir(self.exp_id, 'evaluate_cache')
 
     def calculate_loss(self, batch):
         I, J, is_neg = batch['I'], batch['J'], batch['Neg']
@@ -89,7 +92,7 @@ class LINE(AbstractTrafficStateModel):
             elif order == 'second':
                 [u'_j^T * v_i for (i,j) in zip(I, J)]; (B,)
         """
-        np.save('./libcity/cache/{}/evaluate_cache/embedding_{}_{}_{}.npy'
-                .format(self.exp_id, self.model, self.dataset, self.output_dim),
+        np.save(os.path.join(self.evaluate_res_dir, 'embedding_{}_{}_{}.npy'
+                .format(self.model, self.dataset, self.output_dim)),
                 self.embed.get_embeddings().cpu().numpy())
         return self.embed(I, J)

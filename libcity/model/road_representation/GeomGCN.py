@@ -2,11 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import os
 from logging import getLogger
 import networkx as nx
 from torch_geometric.utils import scatter, subgraph
 from libcity.model.abstract_traffic_state_model import AbstractTrafficStateModel
 from libcity.model import loss
+from libcity.utils import get_run_subdir
 
 
 class GeomGCNSingleChannel(nn.Module):
@@ -155,6 +157,8 @@ class GeomGCN(AbstractTrafficStateModel):
         self.model = config.get('model', '')
         self.dataset = config.get('dataset', '')
         self.output_dim = config.get('output_dim', 8)
+        self.exp_id = config.get('exp_id', None)
+        self.evaluate_res_dir = get_run_subdir(self.exp_id, 'evaluate_cache')
 
     def get_input(self, config, data_feature):
         num_input_features = data_feature.get('feature_dim', 1)
@@ -220,8 +224,8 @@ class GeomGCN(AbstractTrafficStateModel):
         inputs = batch['node_features']
         x = self.geomgcn1(inputs)
         encoder_state = self.geomgcn2(x)
-        np.save('./libcity/cache/evaluate_cache/embedding_{}_{}_{}.npy'
-                .format(self.model, self.dataset, self.output_dim),
+        np.save(os.path.join(self.evaluate_res_dir, 'embedding_{}_{}_{}.npy'
+                .format(self.model, self.dataset, self.output_dim)),
                 encoder_state.detach().cpu().numpy())
         x = self.geomgcn3(encoder_state)
         output = self.geomgcn4(x)

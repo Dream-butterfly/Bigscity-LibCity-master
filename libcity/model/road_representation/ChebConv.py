@@ -1,10 +1,12 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import os
 from logging import getLogger
 from libcity.model.abstract_traffic_state_model import AbstractTrafficStateModel
 from libcity.model import loss
 from libcity.model import utils
+from libcity.utils import get_run_subdir
 
 
 class ChebConvModule(nn.Module):
@@ -97,6 +99,7 @@ class ChebConv(AbstractTrafficStateModel):
         self.model = config.get('model', '')
         self.dataset = config.get('dataset', '')
         self.exp_id = config.get('exp_id', None)
+        self.evaluate_res_dir = get_run_subdir(self.exp_id, 'evaluate_cache')
 
         self.encoder = ChebConvModule(num_nodes=self.num_nodes, max_diffusion_step=self.max_diffusion_step,
                                       adj_mx=self.adj_mx, device=self.device, input_dim=self.feature_dim,
@@ -118,8 +121,8 @@ class ChebConv(AbstractTrafficStateModel):
         """
         inputs = batch['node_features']
         encoder_state = self.encoder(inputs)  # N, output_dim
-        np.save('./libcity/cache/{}/evaluate_cache/embedding_{}_{}_{}.npy'
-                .format(self.exp_id, self.model, self.dataset, self.output_dim),
+        np.save(os.path.join(self.evaluate_res_dir, 'embedding_{}_{}_{}.npy'
+                .format(self.model, self.dataset, self.output_dim)),
                 encoder_state.detach().cpu().numpy())
         output = self.decoder(encoder_state)  # N, feature_dim
         return output

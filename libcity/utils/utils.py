@@ -2,10 +2,49 @@ import importlib
 import logging
 import datetime
 import os
+import re
 import sys
 import numpy as np
 import random
 import torch
+
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+OUTPUT_ROOT = os.path.join(PROJECT_ROOT, "outputs")
+
+
+def _slugify(value):
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", str(value)).strip("-") or "unknown"
+
+
+def build_run_id(task, model, dataset):
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    return "__".join([timestamp, _slugify(task), _slugify(model), _slugify(dataset)])
+
+
+def ensure_run_id(config):
+    exp_id = config.get("exp_id", None)
+    if not exp_id:
+        exp_id = build_run_id(config.get("task", "task"), config.get("model", "model"), config.get("dataset", "dataset"))
+        config["exp_id"] = exp_id
+    return exp_id
+
+
+def get_output_root():
+    ensure_dir(OUTPUT_ROOT)
+    return OUTPUT_ROOT
+
+
+def get_run_dir(exp_id):
+    run_dir = os.path.join(get_output_root(), str(exp_id))
+    ensure_dir(run_dir)
+    return run_dir
+
+
+def get_run_subdir(exp_id, *parts):
+    path = os.path.join(get_run_dir(exp_id), *parts)
+    ensure_dir(path)
+    return path
 
 
 def get_executor(config, model, data_feature):
@@ -115,11 +154,9 @@ def get_logger(config, name=None):
     Returns:
         Logger: logger
     """
-    log_dir = './libcity/log'
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-    log_filename = '{}-{}-{}-{}.log'.format(config['exp_id'],
-                                            config['model'], config['dataset'], get_local_time())
+    ensure_run_id(config)
+    log_dir = get_run_subdir(config['exp_id'], 'logs')
+    log_filename = 'run.log'
     logfilepath = os.path.join(log_dir, log_filename)
 
     logger = logging.getLogger(name)
@@ -150,8 +187,12 @@ def get_logger(config, name=None):
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(console_formatter)
 
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
+    if not any(isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", None) == os.path.abspath(logfilepath)
+               for handler in logger.handlers):
+        logger.addHandler(file_handler)
+    if not any(isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler)
+               for handler in logger.handlers):
+        logger.addHandler(console_handler)
 
     logger.info('Log directory: %s', log_dir)
     return logger

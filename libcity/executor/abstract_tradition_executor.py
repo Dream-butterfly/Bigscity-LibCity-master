@@ -1,6 +1,6 @@
 from libcity.executor.abstract_executor import AbstractExecutor
 from logging import getLogger
-from libcity.utils import get_evaluator, ensure_dir
+from libcity.utils import get_evaluator, get_run_subdir
 import numpy as np
 import torch
 import time
@@ -16,11 +16,8 @@ class AbstractTraditionExecutor(AbstractExecutor):
         self.model = model
         self.exp_id = self.config.get('exp_id', None)
 
-        self.cache_dir = './libcity/cache/{}/model_cache'.format(self.exp_id)
-        self.evaluate_res_dir = './libcity/cache/{}/evaluate_cache'.format(self.exp_id)
-
-        ensure_dir(self.cache_dir)
-        ensure_dir(self.evaluate_res_dir)
+        self.cache_dir = get_run_subdir(self.exp_id, 'model_cache')
+        self.evaluate_res_dir = get_run_subdir(self.exp_id, 'evaluate_cache')
 
         self._logger = getLogger()
         self._scaler = self.data_feature.get('scaler')

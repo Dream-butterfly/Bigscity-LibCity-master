@@ -1,4 +1,4 @@
-from libcity.utils import get_evaluator, ensure_dir
+from libcity.utils import get_evaluator, get_run_subdir
 from libcity.executor.abstract_executor import AbstractExecutor
 
 
@@ -9,10 +9,8 @@ class GensimExecutor(AbstractExecutor):
         self.model = model
         self.exp_id = config.get('exp_id', None)
 
-        self.cache_dir = './libcity/cache/{}/model_cache'.format(self.exp_id)
-        self.evaluate_res_dir = './libcity/cache/{}/evaluate_cache'.format(self.exp_id)
-        ensure_dir(self.cache_dir)
-        ensure_dir(self.evaluate_res_dir)
+        self.cache_dir = get_run_subdir(self.exp_id, 'model_cache')
+        self.evaluate_res_dir = get_run_subdir(self.exp_id, 'evaluate_cache')
 
     def evaluate(self, test_dataloader):
         """

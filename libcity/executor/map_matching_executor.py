@@ -1,6 +1,6 @@
 from logging import getLogger
 from libcity.executor.abstract_tradition_executor import AbstractTraditionExecutor
-from libcity.utils import get_evaluator
+from libcity.utils import get_evaluator, get_run_subdir
 
 
 class MapMatchingExecutor(AbstractTraditionExecutor):
@@ -10,8 +10,8 @@ class MapMatchingExecutor(AbstractTraditionExecutor):
         self.config = config
         self.evaluator = get_evaluator(config)
         self.exp_id = self.config.get('exp_id', None)
-        self.cache_dir = './libcity/cache/{}/model_cache'.format(self.exp_id)
-        self.evaluate_res_dir = './libcity/cache/{}/evaluate_cache'.format(self.exp_id)
+        self.cache_dir = get_run_subdir(self.exp_id, 'model_cache')
+        self.evaluate_res_dir = get_run_subdir(self.exp_id, 'evaluate_cache')
         self._logger = getLogger()
 
     def evaluate(self, test_data):

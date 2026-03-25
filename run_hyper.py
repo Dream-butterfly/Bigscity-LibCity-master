@@ -3,10 +3,10 @@
 """
 
 import argparse
-import random
+import os
 from libcity.pipeline import objective_function
 from libcity.executor import HyperTuning
-from libcity.utils import str2bool, get_logger, set_random_seed, add_general_args
+from libcity.utils import str2bool, get_logger, set_random_seed, add_general_args, build_run_id, get_run_subdir
 
 
 if __name__ == '__main__':
@@ -44,11 +44,8 @@ if __name__ == '__main__':
         'task', 'model', 'dataset', 'config_file', 'saved_model', 'train',
         'params_file', 'hyper_algo'] and val is not None}
     # exp_id
-    exp_id = dict_args.get('exp_id', None)
-    if exp_id is None:
-        # Make a new experiment ID
-        exp_id = int(random.SystemRandom().random() * 100000)
-        other_args['exp_id'] = exp_id
+    exp_id = dict_args.get('exp_id', None) or build_run_id(args.task, args.model, args.dataset)
+    other_args['exp_id'] = exp_id
     # logger
     logger = get_logger({'model': args.model, 'dataset': args.dataset, 'exp_id': exp_id})
     # seed
@@ -60,7 +57,7 @@ if __name__ == '__main__':
                      dataset_name=args.dataset, config_file=args.config_file,
                      saved_model=args.saved_model, train=args.train, other_args=other_args)
     hp.start()
-    hp.save_result(filename='hyper.result')
+    hp.save_result(filename=os.path.join(get_run_subdir(exp_id, 'artifacts'), 'hyper.result'))
     logger.info('best params: ' + str(hp.best_params))
     logger.info('best result: ')
     logger.info(str(hp.params2result[hp.params2str(hp.best_params)]))

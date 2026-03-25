@@ -2,9 +2,11 @@ import math
 import json
 import numpy as np
 import pandas as pd
+import os
 from logging import getLogger
 from sklearn.cluster import KMeans
 from libcity.evaluator.abstract_evaluator import AbstractEvaluator
+from libcity.utils import get_run_subdir
 
 
 class RoadRepresentationEvaluator(AbstractEvaluator):
@@ -17,8 +19,11 @@ class RoadRepresentationEvaluator(AbstractEvaluator):
         self.data_path = './raw_data/' + self.dataset + '/'
         self.geo_file = config.get('geo_file', self.dataset)
         self.output_dim = config.get('output_dim', 32)
-        self.embedding_path = './libcity/cache/{}/evaluate_cache/embedding_{}_{}_{}.npy'\
-            .format(self.exp_id, self.model, self.dataset, self.output_dim)
+        self.evaluate_res_dir = get_run_subdir(self.exp_id, 'evaluate_cache')
+        self.embedding_path = os.path.join(
+            self.evaluate_res_dir,
+            'embedding_{}_{}_{}.npy'.format(self.model, self.dataset, self.output_dim)
+        )
 
     def collect(self, batch):
         pass
@@ -56,8 +61,10 @@ class RoadRepresentationEvaluator(AbstractEvaluator):
             if kind not in result_token:
                 result_token[kind] = []
             result_token[kind].append(self.ind_to_geo[i])
-        result_path = './libcity/cache/{}/evaluate_cache/kmeans_category_{}_{}_{}_{}.json'.\
-            format(self.exp_id, self.model, self.dataset, str(self.output_dim), str(kinds))
+        result_path = os.path.join(
+            self.evaluate_res_dir,
+            'kmeans_category_{}_{}_{}_{}.json'.format(self.model, self.dataset, str(self.output_dim), str(kinds))
+        )
         json.dump(result_token, open(result_path, 'w'))
         self._logger.info('Kmeans category is saved at {}'.format(result_path))
 
@@ -90,8 +97,10 @@ class RoadRepresentationEvaluator(AbstractEvaluator):
         df = pd.DataFrame(df)
         df.columns = ['id', 'rid', 'class', 'wkt']
         df = df.sort_values(by='class')
-        result_path = './libcity/cache/{}/evaluate_cache/kmeans_qgis_{}_{}_{}_{}.csv'.\
-            format(self.exp_id, self.model, self.dataset, str(self.output_dim), str(kinds))
+        result_path = os.path.join(
+            self.evaluate_res_dir,
+            'kmeans_qgis_{}_{}_{}_{}.csv'.format(self.model, self.dataset, str(self.output_dim), str(kinds))
+        )
         df.to_csv(result_path, index=False)
         self._logger.info('Kmeans result for QGIS is saved at {}'.format(result_path))
 

@@ -5,7 +5,7 @@ import os
 from logging import getLogger
 
 from libcity.executor.abstract_executor import AbstractExecutor
-from libcity.utils import get_evaluator, tune
+from libcity.utils import get_evaluator, get_run_subdir, tune
 
 
 class TrajLocPredExecutor(AbstractExecutor):
@@ -18,10 +18,10 @@ class TrajLocPredExecutor(AbstractExecutor):
             self.metrics = 'Recall@{}'.format(config['topk'][0])
         self.config = config
         self.model = model.to(self.config['device'])
-        self.tmp_path = './libcity/tmp/checkpoint/'
         self.exp_id = self.config.get('exp_id', None)
-        self.cache_dir = './libcity/cache/{}/model_cache'.format(self.exp_id)
-        self.evaluate_res_dir = './libcity/cache/{}/evaluate_cache'.format(self.exp_id)
+        self.cache_dir = get_run_subdir(self.exp_id, 'model_cache')
+        self.evaluate_res_dir = get_run_subdir(self.exp_id, 'evaluate_cache')
+        self.tmp_path = get_run_subdir(self.exp_id, 'tmp_checkpoints')
         self.loss_func = None  # TODO: 根据配置文件支持选择特定的 Loss Func 目前并未实装
         self._logger = getLogger()
         self.optimizer = self._build_optimizer()

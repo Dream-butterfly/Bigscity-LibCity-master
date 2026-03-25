@@ -5,7 +5,7 @@ import torch
 from logging import getLogger
 from torch.utils.tensorboard import SummaryWriter
 from libcity.executor.abstract_executor import AbstractExecutor
-from libcity.utils import get_evaluator, ensure_dir, tune
+from libcity.utils import get_evaluator, ensure_dir, get_run_dir, get_run_subdir, tune
 from libcity.model import loss
 from functools import partial
 
@@ -19,12 +19,10 @@ class TrafficStateExecutor(AbstractExecutor):
         self.model = model.to(self.device)
         self.exp_id = self.config.get('exp_id', None)
 
-        self.cache_dir = './libcity/cache/{}/model_cache'.format(self.exp_id)
-        self.evaluate_res_dir = './libcity/cache/{}/evaluate_cache'.format(self.exp_id)
-        self.summary_writer_dir = './libcity/cache/{}/'.format(self.exp_id)
-        ensure_dir(self.cache_dir)
-        ensure_dir(self.evaluate_res_dir)
-        ensure_dir(self.summary_writer_dir)
+        self.run_dir = get_run_dir(self.exp_id)
+        self.cache_dir = get_run_subdir(self.exp_id, 'model_cache')
+        self.evaluate_res_dir = get_run_subdir(self.exp_id, 'evaluate_cache')
+        self.summary_writer_dir = get_run_subdir(self.exp_id, 'tensorboard')
 
         self._writer = SummaryWriter(self.summary_writer_dir)
         self._logger = getLogger()

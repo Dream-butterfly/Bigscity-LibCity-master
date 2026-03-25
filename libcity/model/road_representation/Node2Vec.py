@@ -2,10 +2,12 @@ import random
 import json
 import networkx as nx
 import numpy as np
+import os
 from gensim.models import Word2Vec
 
 from logging import getLogger
 from libcity.model.abstract_traffic_tradition_model import AbstractTraditionModel
+from libcity.utils import get_run_subdir
 
 
 # Reference: https://github.com/aditya-grover/node2vec
@@ -189,12 +191,14 @@ class Node2Vec(AbstractTraditionModel):
         self.model = config.get('model', '')
         self.dataset = config.get('dataset', '')
         self.exp_id = config.get('exp_id', None)
-        self.txt_cache_file = './libcity/cache/{}/evaluate_cache/embedding_{}_{}_{}.txt'.\
-            format(self.exp_id, self.model, self.dataset, self.output_dim)
-        self.model_cache_file = './libcity/cache/{}/model_cache/embedding_{}_{}_{}.m'.\
-            format(self.exp_id, self.model, self.dataset, self.output_dim)
-        self.npy_cache_file = './libcity/cache/{}/evaluate_cache/embedding_{}_{}_{}.npy'.\
-            format(self.exp_id, self.model, self.dataset, self.output_dim)
+        self.evaluate_res_dir = get_run_subdir(self.exp_id, 'evaluate_cache')
+        self.model_cache_dir = get_run_subdir(self.exp_id, 'model_cache')
+        self.txt_cache_file = os.path.join(self.evaluate_res_dir, 'embedding_{}_{}_{}.txt'.format(
+            self.model, self.dataset, self.output_dim))
+        self.model_cache_file = os.path.join(self.model_cache_dir, 'embedding_{}_{}_{}.m'.format(
+            self.model, self.dataset, self.output_dim))
+        self.npy_cache_file = os.path.join(self.evaluate_res_dir, 'embedding_{}_{}_{}.npy'.format(
+            self.model, self.dataset, self.output_dim))
 
     def run(self, data=None):
         nx_g = nx.from_numpy_matrix(self.adj_mx, create_using=nx.DiGraph())
@@ -222,7 +226,7 @@ class Node2Vec(AbstractTraditionModel):
 
         self._logger.info('词向量和模型保存完成')
         self._logger.info('词向量维度：(' + str(len(model.wv)) + ',' + str(len(model.wv[0])) + ')')
-        json.dump(self.ind_to_geo, open('./libcity/cache/{}/evaluate_cache/ind_to_geo_{}.json'.format(
-            self.exp_id, self.dataset), 'w'))
-        json.dump(self.geo_to_ind, open('./libcity/cache/{}/evaluate_cache/geo_to_ind_{}.json'.format(
-            self.exp_id, self.dataset), 'w'))
+        json.dump(self.ind_to_geo, open(os.path.join(self.evaluate_res_dir, 'ind_to_geo_{}.json'.format(
+            self.dataset)), 'w'))
+        json.dump(self.geo_to_ind, open(os.path.join(self.evaluate_res_dir, 'geo_to_ind_{}.json'.format(
+            self.dataset)), 'w'))

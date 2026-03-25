@@ -1,10 +1,12 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import os
 from logging import getLogger
 from libcity.model.abstract_traffic_state_model import AbstractTrafficStateModel
 from libcity.model import loss
 from libcity.model import utils
+from libcity.utils import get_run_subdir
 
 """前馈
 Args:
@@ -38,6 +40,7 @@ class GAT(AbstractTrafficStateModel):
 
         self.output_dim = config.get('output_dim', 32)
         self.exp_id = config.get('exp_id', None)
+        self.evaluate_res_dir = get_run_subdir(self.exp_id, 'evaluate_cache')
         GATLayer = GATLayerImp3
         self.encoder = GATLayer(num_in_features=self.feature_dim, num_out_features=self.output_dim,
                                 num_of_heads=5, concat=False, device=self.device)
@@ -54,8 +57,8 @@ class GAT(AbstractTrafficStateModel):
         """
         inputs = batch['node_features']
         encoder_state = self.encoder([inputs, self.Apt])[0]  # N, output_dim
-        np.save('./libcity/cache/{}/evaluate_cache/embedding_{}_{}_{}.npy'
-                .format(self.exp_id, self.model, self.dataset, self.output_dim),
+        np.save(os.path.join(self.evaluate_res_dir, 'embedding_{}_{}_{}.npy'
+                .format(self.model, self.dataset, self.output_dim)),
                 encoder_state.detach().cpu().numpy())
         output = self.decoder([encoder_state, self.Apt])[0]  # N, feature_dim
         return output

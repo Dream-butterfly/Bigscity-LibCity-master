@@ -3,7 +3,7 @@ import torch
 import random
 from libcity.config import ConfigParser
 from libcity.data import get_dataset
-from libcity.utils import get_executor, get_model, get_logger, ensure_dir, set_random_seed
+from libcity.utils import get_executor, get_model, get_logger, get_run_subdir, ensure_run_id, set_random_seed
 
 
 def run_model(task=None, model_name=None, dataset_name=None, config_file=None,
@@ -22,11 +22,7 @@ def run_model(task=None, model_name=None, dataset_name=None, config_file=None,
     # load config
     config = ConfigParser(task, model_name, dataset_name,
                           config_file, saved_model, train, other_args)
-    exp_id = config.get('exp_id', None)
-    if exp_id is None:
-        # Make a new experiment ID
-        exp_id = int(random.SystemRandom().random() * 100000)
-        config['exp_id'] = exp_id
+    exp_id = ensure_run_id(config)
     # logger
     logger = get_logger(config)
     logger.info('Begin pipeline, task={}, model_name={}, dataset_name={}, exp_id={}'.
@@ -41,8 +37,10 @@ def run_model(task=None, model_name=None, dataset_name=None, config_file=None,
     train_data, valid_data, test_data = dataset.get_data()
     data_feature = dataset.get_data_feature()
     # 加载执行器
-    model_cache_file = './libcity/cache/{}/model_cache/{}_{}.m'.format(
-        exp_id, model_name, dataset_name)
+    model_cache_file = os.path.join(
+        get_run_subdir(exp_id, 'model_cache'),
+        '{}_{}.m'.format(model_name, dataset_name)
+    )
     model = get_model(config, data_feature)
     executor = get_executor(config, model, data_feature)
     # 训练
