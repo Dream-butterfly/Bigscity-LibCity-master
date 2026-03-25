@@ -4,9 +4,9 @@ from libcity.executor import TrafficStateExecutor
 import os
 import time
 import torch
-from ray import tune
 
 from libcity.model import loss
+from libcity.utils import tune
 
 
 class CosineWarmupScheduler():

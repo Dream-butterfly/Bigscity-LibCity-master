@@ -1,9 +1,9 @@
 import os
 import time
 import torch
-from ray import tune
 from libcity.model import loss
 from libcity.executor.traffic_state_executor import TrafficStateExecutor
+from libcity.utils import tune
 
 
 class ChebConvExecutor(TrafficStateExecutor):

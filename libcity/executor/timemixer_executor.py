@@ -3,9 +3,9 @@ import time
 
 import numpy as np
 import torch
-from ray import tune
 
 from libcity.executor import TrafficStateExecutor
+from libcity.utils import tune
 
 
 class TimeMixerExecutor(TrafficStateExecutor):

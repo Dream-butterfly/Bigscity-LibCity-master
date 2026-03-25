@@ -1,4 +1,3 @@
-from ray import tune
 import torch
 import torch.optim as optim
 import numpy as np
@@ -6,7 +5,7 @@ import os
 from logging import getLogger
 
 from libcity.executor.abstract_executor import AbstractExecutor
-from libcity.utils import get_evaluator
+from libcity.utils import get_evaluator, tune
 
 
 class TrajLocPredExecutor(AbstractExecutor):

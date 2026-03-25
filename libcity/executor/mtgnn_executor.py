@@ -2,10 +2,10 @@ import time
 import numpy as np
 import torch
 import os
-from ray import tune
 from libcity.model import loss
 from functools import partial
 from libcity.executor.traffic_state_executor import TrafficStateExecutor
+from libcity.utils import tune
 
 
 class MTGNNExecutor(TrafficStateExecutor):

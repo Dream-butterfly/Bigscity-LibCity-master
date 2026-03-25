@@ -2,11 +2,10 @@ import os
 import time
 import numpy as np
 import torch
-from ray import tune
 from logging import getLogger
 from torch.utils.tensorboard import SummaryWriter
 from libcity.executor.abstract_executor import AbstractExecutor
-from libcity.utils import get_evaluator, ensure_dir
+from libcity.utils import get_evaluator, ensure_dir, tune
 from libcity.model import loss
 from functools import partial
 from libcity.executor.traffic_state_executor import TrafficStateExecutor
