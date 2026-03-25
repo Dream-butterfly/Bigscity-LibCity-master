@@ -3,7 +3,6 @@ import os
 import datetime
 import numpy as np
 import pandas as pd
-from fastdtw import fastdtw
 import scipy.sparse as sp
 from scipy.sparse.linalg import eigsh
 from scipy.sparse import csr_matrix
@@ -11,6 +10,7 @@ from scipy.sparse.csgraph import dijkstra
 
 from libcity.data.dataset import TrafficStatePointDataset
 from libcity.utils import ensure_dir
+from libcity.utils.dtw import dtw_distance as calc_dtw_distance
 
 
 class STWaveDataset(TrafficStatePointDataset):
@@ -129,7 +129,7 @@ class STWaveDataset(TrafficStatePointDataset):
             dtw_distance = np.zeros((num_node, num_node))
             for i in range(num_node):
                 for j in range(i, num_node):
-                    dtw_distance[i][j] = fastdtw(data_mean[i], data_mean[j], radius=6)[0]
+                    dtw_distance[i][j] = calc_dtw_distance(data_mean[i], data_mean[j], radius=6)
             for i in range(num_node):
                 for j in range(i):
                     dtw_distance[i][j] = dtw_distance[j][i]

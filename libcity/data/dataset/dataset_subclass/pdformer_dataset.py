@@ -1,10 +1,10 @@
 import os
 import numpy as np
-from fastdtw import fastdtw
 from tqdm import tqdm
 from libcity.data.dataset import TrafficStatePointDataset
 from libcity.data.utils import generate_dataloader
 from tslearn.clustering import TimeSeriesKMeans, KShape
+from libcity.utils.dtw import dtw_distance_ndim
 
 
 class PDFormerDataset(TrafficStatePointDataset):
@@ -37,7 +37,7 @@ class PDFormerDataset(TrafficStatePointDataset):
             dtw_distance = np.zeros((self.num_nodes, self.num_nodes))
             for i in tqdm(range(self.num_nodes)):
                 for j in range(i, self.num_nodes):
-                    dtw_distance[i][j], _ = fastdtw(data_mean[:, i, :], data_mean[:, j, :], radius=6)
+                    dtw_distance[i][j] = dtw_distance_ndim(data_mean[:, i, :], data_mean[:, j, :], radius=6)
             for i in range(self.num_nodes):
                 for j in range(i):
                     dtw_distance[i][j] = dtw_distance[j][i]
