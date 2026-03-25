@@ -1,7 +1,7 @@
 [project]
-name = "bigscity-libcity"
-version = "0.1.0"
-description = "Add your description here"
+name = "GNN-TFP"
+version = "0.2.0"
+description = "Graph Neural Network-based Traffic Flow Prediction"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
