@@ -29,7 +29,6 @@ dependencies = [
     "torch==2.10.0",
     "torchaudio==2.10.0",
     "torchvision==0.25.0",
-    "torchdata>=0.7.1",
     "torch-geometric>=2.5,<2.7",
     "pywavelets>=1.9.0",
     "tslearn",
