@@ -1,0 +1,16 @@
+import numpy as np
+from dtaidistance import dtw, dtw_ndim
+
+
+def dtw_distance(x, y, radius=None):
+    x_arr = np.asarray(x, dtype=np.double)
+    y_arr = np.asarray(y, dtype=np.double)
+    window = None if radius is None else int(radius)
+    return dtw.distance_fast(x_arr, y_arr, window=window, use_pruning=True)
+
+
+def dtw_distance_ndim(x, y, radius=None):
+    x_arr = np.asarray(x, dtype=np.double)
+    y_arr = np.asarray(y, dtype=np.double)
+    window = None if radius is None else int(radius)
+    return dtw_ndim.distance_fast(x_arr, y_arr, window=window, use_pruning=True)
