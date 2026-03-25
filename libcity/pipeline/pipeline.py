@@ -1,9 +1,9 @@
 import os
 from ray import tune
 from ray.tune.search import ConcurrencyLimiter
-from ray.tune.search.hyperopt import HyperOptSearch
 from ray.tune.search.bayesopt import BayesOptSearch
 from ray.tune.search.basic_variant import BasicVariantGenerator
+from ray.tune.search.optuna import OptunaSearch
 from ray.tune.schedulers import FIFOScheduler, ASHAScheduler, MedianStoppingRule
 import json
 import torch
@@ -198,8 +198,8 @@ def hyper_parameter(task=None, model_name=None, dataset_name=None, config_file=N
         algorithm = BayesOptSearch(metric='loss', mode='min')
         # add concurrency limit
         algorithm = ConcurrencyLimiter(algorithm, max_concurrent=max_concurrent)
-    elif search_alg == 'HyperOpt':
-        algorithm = HyperOptSearch(metric='loss', mode='min')
+    elif search_alg in {'OptunaSearch'}:
+        algorithm = OptunaSearch(metric='loss', mode='min')
         # add concurrency limit
         algorithm = ConcurrencyLimiter(algorithm, max_concurrent=max_concurrent)
     else:

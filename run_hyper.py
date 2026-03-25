@@ -1,5 +1,5 @@
 """
-模型调参脚本 (based on the hyperopt)
+模型调参脚本 (based on Optuna)
 """
 
 import argparse
@@ -29,7 +29,7 @@ if __name__ == '__main__':
                         default='hyper_example.txt', help='the file which specify the \
                              hyper-parameters and ranges to be adjusted')
     parser.add_argument('--hyper_algo', type=str,
-                        default='grid_search', help='hyper-parameters search algorithm')
+                        default='grid_search', help='hyper-parameters search algorithm: grid_search, random_search, tpe')
     parser.add_argument('--max_evals', type=int,
                         default=100, help='Allow up to this many function \
                              evaluations before returning.')

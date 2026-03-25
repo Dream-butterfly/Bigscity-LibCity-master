@@ -21,7 +21,7 @@ from libcity.executor.trafformer_executor import TrafformerExecutor
 from libcity.executor.pdformer_executor import PDFormerExecutor
 from libcity.executor.astgnn_executor import ASTGNNExecutor
 
-# Keep HyperTuning optional so normal training does not hard-require hyperopt/setuptools.
+# Keep HyperTuning optional so normal training does not hard-require optuna.
 try:
     from libcity.executor.hyper_tuning import HyperTuning
 except ModuleNotFoundError as import_error:
@@ -30,8 +30,7 @@ except ModuleNotFoundError as import_error:
     class HyperTuning:  # type: ignore[no-redef]
         def __init__(self, *args, **kwargs):
             raise ModuleNotFoundError(
-                "HyperTuning requires optional dependencies 'hyperopt' and "
-                "'setuptools' (for pkg_resources)."
+                "HyperTuning requires the optional dependency 'optuna'."
             ) from _HYPERTUNING_IMPORT_ERROR
 
 __all__ = [
