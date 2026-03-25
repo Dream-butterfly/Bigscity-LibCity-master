@@ -5,7 +5,6 @@ import copy
 from datetime import datetime
 import numpy as np
 from collections import defaultdict
-from nltk import ngrams
 from tqdm import tqdm
 from libcity.data.dataset import AbstractDataset
 from torch.utils.data import DataLoader
@@ -14,6 +13,14 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 import torch.nn as nn
 from sklearn.neighbors import BallTree
+
+
+def ngrams(sequence, n):
+    if n <= 0:
+        raise ValueError("n must be a positive integer")
+    sequence_length = len(sequence)
+    for index in range(sequence_length - n + 1):
+        yield tuple(sequence[index:index + n])
 
 
 class _QuadKeyVocab:
