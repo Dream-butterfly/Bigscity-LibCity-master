@@ -1,4 +1,3 @@
-import importlib
 import logging
 import datetime
 import os
@@ -78,11 +77,10 @@ def get_executor(config, model, data_feature):
     Returns:
         AbstractExecutor: the loaded executor
     """
-    try:
-        return getattr(importlib.import_module('libcity.executor'),
-                       config['executor'])(config, model, data_feature)
-    except AttributeError:
-        raise AttributeError('executor is not found')
+    from libcity.executor.registry import get_executor_class
+
+    executor_class = get_executor_class(config['executor'])
+    return executor_class(config, model, data_feature)
 
 
 def get_model(config, data_feature):
@@ -96,54 +94,10 @@ def get_model(config, data_feature):
     Returns:
         AbstractModel: the loaded model
     """
-    if config['task'] == 'traj_loc_pred':
-        try:
-            return getattr(importlib.import_module('libcity.model.trajectory_loc_prediction'),
-                           config['model'])(config, data_feature)
-        except AttributeError:
-            raise AttributeError('model is not found')
-    elif config['task'] == 'traffic_state_pred':
-        try:
-            return getattr(importlib.import_module('libcity.model.traffic_flow_prediction'),
-                           config['model'])(config, data_feature)
-        except AttributeError:
-            try:
-                return getattr(importlib.import_module('libcity.model.traffic_speed_prediction'),
-                               config['model'])(config, data_feature)
-            except AttributeError:
-                try:
-                    return getattr(importlib.import_module('libcity.model.traffic_demand_prediction'),
-                                   config['model'])(config, data_feature)
-                except AttributeError:
-                    try:
-                        return getattr(importlib.import_module('libcity.model.traffic_od_prediction'),
-                                       config['model'])(config, data_feature)
-                    except AttributeError:
-                        try:
-                            return getattr(importlib.import_module('libcity.model.traffic_accident_prediction'),
-                                           config['model'])(config, data_feature)
-                        except AttributeError:
-                            raise AttributeError('model is not found')
-    elif config['task'] == 'map_matching':
-        try:
-            return getattr(importlib.import_module('libcity.model.map_matching'),
-                           config['model'])(config, data_feature)
-        except AttributeError:
-            raise AttributeError('model is not found')
-    elif config['task'] == 'road_representation':
-        try:
-            return getattr(importlib.import_module('libcity.model.road_representation'),
-                           config['model'])(config, data_feature)
-        except AttributeError:
-            raise AttributeError('model is not found')
-    elif config['task'] == 'eta':
-        try:
-            return getattr(importlib.import_module('libcity.model.eta'),
-                           config['model'])(config, data_feature)
-        except AttributeError:
-            raise AttributeError('model is not found')
-    else:
-        raise AttributeError('task is not found')
+    from libcity.model.registry import get_model_class
+
+    model_class = get_model_class(config['task'], config['model'])
+    return model_class(config, data_feature)
 
 
 def get_evaluator(config):
@@ -156,11 +110,10 @@ def get_evaluator(config):
     Returns:
         AbstractEvaluator: the loaded evaluator
     """
-    try:
-        return getattr(importlib.import_module('libcity.evaluator'),
-                       config['evaluator'])(config)
-    except AttributeError:
-        raise AttributeError('evaluator is not found')
+    from libcity.evaluator.registry import get_evaluator_class
+
+    evaluator_class = get_evaluator_class(config['evaluator'])
+    return evaluator_class(config)
 
 
 def get_logger(config, name=None):
