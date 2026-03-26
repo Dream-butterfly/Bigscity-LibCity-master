@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import numpy as np
 import pandas as pd
@@ -43,7 +44,7 @@ class StanEncoder(AbstractTrajectoryEncoder):
             if key in self.config:
                 parameters_str += '_' + str(self.config[key])
         self.cache_file_name = os.path.join(
-            './libcity/cache/dataset_cache/', 'trajectory_{}.json'.format(parameters_str))
+            get_dataset_cache_dir(), 'trajectory_{}.json'.format(parameters_str))
 
     def encode(self, uid, trajectories, negative_sample=None):
         """standard encoder use the same method as DeepMove

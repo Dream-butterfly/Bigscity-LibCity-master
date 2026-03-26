@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 
 import numpy as np
@@ -34,7 +35,7 @@ class STPGCNDataset(TrafficStatePointDataset):
     def __init__(self, config):
         super().__init__(config)
         self.parameters_str += "_STPGCN"
-        self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
+        self.cache_file_name = os.path.join(get_dataset_cache_dir(),
                                             'point_based_{}.npz'.format(self.parameters_str))
 
         self.feature_name = {'X': 'float', 'y': 'float', 'pos_w': 'int', 'pos_d': 'int'}

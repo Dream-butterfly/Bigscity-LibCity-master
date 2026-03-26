@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import json
 import pandas as pd
@@ -19,7 +20,7 @@ class PBSTrajectoryDataset(AbstractDataset):
 
     def __init__(self, config):
         self.config = config
-        self.cache_file_folder = './libcity/cache/dataset_cache/'
+        self.cache_file_folder = get_dataset_cache_dir()
         self.dataset = self.config.get('dataset', '')
         self.geo_file = self.config.get('geo_file', self.dataset)
         self.dyna_file = self.config.get('dyna_file', self.dataset)

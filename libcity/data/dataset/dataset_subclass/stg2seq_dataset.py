@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import math
 import numpy as np
@@ -25,7 +26,7 @@ class STG2SeqDataset(TrafficStatePointDataset):
         super().__init__(config)
         self.use_row_column = False
         self.parameters_str += '_save_adj'
-        self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
+        self.cache_file_name = os.path.join(get_dataset_cache_dir(),
                                             'point_based_{}.npz'.format(self.parameters_str))
 
     def _load_rel(self):

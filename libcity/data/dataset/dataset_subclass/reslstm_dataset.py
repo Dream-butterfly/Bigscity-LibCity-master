@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import numpy as np
 
@@ -17,7 +18,7 @@ class RESLSTMDataset(TrafficStatePointDataset):
             + str(self.train_rate) + '_' + str(self.eval_rate) + '_' + str(self.scaler_type) + '_' \
             + str(self.batch_size) + '_' + str(self.load_external) + '_' \
             + str(self.TG) + '_' + str(self.TG_in_one_day) + '_' + str(self.TG_in_one_week)
-        self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
+        self.cache_file_name = os.path.join(get_dataset_cache_dir(),
                                             'point_based_{}.npz'.format(self.parameters_str))
 
     def _generate_input_data(self, df):

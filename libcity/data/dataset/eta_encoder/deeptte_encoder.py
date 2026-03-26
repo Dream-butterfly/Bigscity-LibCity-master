@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import numpy as np
 from datetime import datetime
@@ -53,7 +54,7 @@ class DeeptteEncoder(AbstractETAEncoder):
             if key in self.config:
                 parameters_str += '_' + str(self.config[key])
         self.cache_file_name = os.path.join(
-            './libcity/cache/dataset_cache/', 'eta{}.json'.format(parameters_str))
+            get_dataset_cache_dir(), 'eta{}.json'.format(parameters_str))
 
         self.uid_size = 0
 

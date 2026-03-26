@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import numpy as np
 
@@ -16,7 +17,7 @@ class ACFMDataset(TrafficStateGridDataset, TrafficStateCPTDataset):
             + '_' + str(self.pad_forward_period) + '_' + str(self.pad_back_period) \
             + '_' + str(self.pad_forward_trend) + '_' + str(self.pad_back_trend) \
             + '_' + str(self.interval_period) + '_' + str(self.interval_trend)
-        self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
+        self.cache_file_name = os.path.join(get_dataset_cache_dir(),
                                             'grid_based_{}.npz'.format(self.parameters_str))
 
     def _get_external_array(self, timestamp_list, ext_data=None, previous_ext=False, ext_time=True):

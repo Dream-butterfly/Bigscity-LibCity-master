@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import numpy as np
 import pandas as pd
@@ -56,7 +57,7 @@ class TtpnetEncoder(AbstractETAEncoder):
             if key in self.config:
                 parameters_str += '_' + str(self.config[key])
         self.cache_file_name = os.path.join(
-            './libcity/cache/dataset_cache/', 'eta{}.json'.format(parameters_str))
+            get_dataset_cache_dir(), 'eta{}.json'.format(parameters_str))
 
         self.geo_embedding = []
         self.dataset = self.config.get('dataset', '')

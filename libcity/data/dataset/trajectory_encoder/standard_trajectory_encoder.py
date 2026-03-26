@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 
 from libcity.data.dataset.trajectory_encoder.abstract_trajectory_encoder import AbstractTrajectoryEncoder
@@ -28,7 +29,7 @@ class StandardTrajectoryEncoder(AbstractTrajectoryEncoder):
             if key in self.config:
                 parameters_str += '_' + str(self.config[key])
         self.cache_file_name = os.path.join(
-            './libcity/cache/dataset_cache/', 'trajectory_{}.json'.format(parameters_str))
+            get_dataset_cache_dir(), 'trajectory_{}.json'.format(parameters_str))
         # 对于这种 history 模式没办法做到 batch
         if self.history_type == 'cut_off':
             # self.config['batch_size'] = 1

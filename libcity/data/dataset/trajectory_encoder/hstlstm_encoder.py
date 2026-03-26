@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import math
 import pandas as pd
@@ -33,7 +34,7 @@ class HstlstmEncoder(AbstractTrajectoryEncoder):
             if key in self.config:
                 parameters_str += '_' + str(self.config[key])
         self.cache_file_name = os.path.join(
-            './libcity/cache/dataset_cache/', 'trajectory_{}.json'.format(parameters_str))
+            get_dataset_cache_dir(), 'trajectory_{}.json'.format(parameters_str))
         self.dataset = self.config.get('dataset', '')
         self.geo_file = self.config.get('geo_file', self.dataset)
         self.data_path = './raw_data/{}/'.format(self.dataset)

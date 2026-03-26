@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import pickle
 
@@ -18,7 +19,7 @@ class STGODEDataset(TrafficStatePointDataset):
         self.points_per_day = 24 * 60 * 60 // self.time_intervals
         self.sigma1 = self.config.get('sigma1', 0.1)
         self.thres1 = self.config.get('thres1', 0.6)
-        cache_path = './libcity/cache/dataset_cache/dtw_distance_index_' + self.dataset + '.npz'
+        cache_path = os.path.join(get_dataset_cache_dir(), 'dtw_distance_index_' + self.dataset + '.npz')
         if self.load_from_local and os.path.exists(cache_path):
             with open(cache_path, 'rb') as f:
                 self.dist_matrix = pickle.load(f)

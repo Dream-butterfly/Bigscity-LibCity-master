@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import numpy as np
 from tqdm import tqdm
@@ -12,7 +13,7 @@ class PDFormerDataset(TrafficStatePointDataset):
     def __init__(self, config):
         self.type_short_path = config.get('type_short_path', 'hop')
         super().__init__(config)
-        self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
+        self.cache_file_name = os.path.join(get_dataset_cache_dir(),
                                             'pdformer_point_based_{}.npz'.format(self.parameters_str))
         self.points_per_hour = 3600 // self.time_intervals
         self.dtw_matrix = self._get_dtw()
@@ -24,7 +25,7 @@ class PDFormerDataset(TrafficStatePointDataset):
         self.cluster_method = config.get("cluster_method", "kshape")
 
     def _get_dtw(self):
-        cache_path = './libcity/cache/dataset_cache/dtw_' + self.dataset + '.npy'
+        cache_path = os.path.join(get_dataset_cache_dir(), 'dtw_' + self.dataset + '.npy')
         for ind, filename in enumerate(self.data_files):
             if ind == 0:
                 df = self._load_dyna(filename)
@@ -111,7 +112,7 @@ class PDFormerDataset(TrafficStatePointDataset):
                                 self.batch_size, self.num_workers, pad_with_last_sample=self.pad_with_last_sample)
         self.num_batches = len(self.train_dataloader)
         self.pattern_key_file = os.path.join(
-            './libcity/cache/dataset_cache/', 'pattern_keys_{}_{}_{}_{}_{}_{}'.format(
+            get_dataset_cache_dir(), 'pattern_keys_{}_{}_{}_{}_{}_{}'.format(
                 self.cluster_method, self.dataset, self.cand_key_days, self.s_attn_size, self.n_cluster, self.cluster_max_iter))
         if not os.path.exists(self.pattern_key_file + '.npy'):
             cand_key_time_steps = self.cand_key_days * self.points_per_day

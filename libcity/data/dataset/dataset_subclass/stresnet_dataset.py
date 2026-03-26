@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import numpy as np
 from libcity.data.dataset import TrafficStateCPTDataset, TrafficStateGridDataset
@@ -16,7 +17,7 @@ class STResNetDataset(TrafficStateGridDataset, TrafficStateCPTDataset):
             self.parameters_str + '_' + str(self.len_closeness) \
             + '_' + str(self.len_period) + '_' + str(self.len_trend) \
             + '_' + str(self.interval_period) + '_' + str(self.interval_trend)
-        self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
+        self.cache_file_name = os.path.join(get_dataset_cache_dir(),
                                             'grid_based_{}.npz'.format(self.parameters_str))
         self.pad_forward_period = 0
         self.pad_back_period = 0

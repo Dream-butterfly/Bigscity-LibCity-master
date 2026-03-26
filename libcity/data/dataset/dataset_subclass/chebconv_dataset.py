@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import pandas as pd
 import numpy as np
@@ -21,9 +22,9 @@ class ChebConvDataset(AbstractDataset):
         self.parameters_str = \
             str(self.dataset) + '_' + str(self.train_rate) + '_' \
             + str(self.eval_rate) + '_' + str(self.scaler_type)
-        self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
+        self.cache_file_name = os.path.join(get_dataset_cache_dir(),
                                             'road_rep_{}.npz'.format(self.parameters_str))
-        self.cache_file_folder = './libcity/cache/dataset_cache/'
+        self.cache_file_folder = get_dataset_cache_dir()
         ensure_dir(self.cache_file_folder)
         self.data_path = './raw_data/' + self.dataset + '/'
         if not os.path.exists(self.data_path):

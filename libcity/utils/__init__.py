@@ -1,6 +1,7 @@
 from libcity.utils.utils import get_executor, get_model, get_evaluator, \
     get_logger, get_local_time, ensure_dir, trans_naming_rule, preprocess_data, set_random_seed, \
-    build_run_id, ensure_run_id, get_output_root, get_run_dir, get_run_subdir
+    build_run_id, ensure_run_id, get_output_root, get_cache_root, get_cache_subdir, \
+    get_dataset_cache_dir, get_dataset_cache_path, get_run_dir, get_run_subdir
 from libcity.utils.dataset import parse_time, cal_basetime, cal_timeoff, \
     caculate_time_sim, parse_coordinate, string2timestamp, timestamp2array, \
     timestamp2vec_origin
@@ -42,6 +43,10 @@ __all__ = [
     "build_run_id",
     "ensure_run_id",
     "get_output_root",
+    "get_cache_root",
+    "get_cache_subdir",
+    "get_dataset_cache_dir",
+    "get_dataset_cache_path",
     "get_run_dir",
     "get_run_subdir",
     "add_general_args",

@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import pandas as pd
 import importlib
@@ -20,10 +21,10 @@ class ETADataset(AbstractDataset):
 
     def __init__(self, config):
         self.config = config
-        self.cache_file_folder = './libcity/cache/dataset_cache/'
+        self.cache_file_folder = get_dataset_cache_dir()
         self.need_cut = config.get("need_cut", False)
         if self.need_cut:
-            self.cut_data_cache = './libcity/cache/dataset_cache/cut_traj'
+            self.cut_data_cache = os.path.join(get_dataset_cache_dir(), 'cut_traj')
             for param in parameter_list_cut:
                 self.cut_data_cache += '_' + str(self.config[param])
             self.cut_data_cache += '.json'

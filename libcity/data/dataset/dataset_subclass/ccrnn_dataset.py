@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import numpy as np
 from scipy.spatial.distance import cdist
@@ -24,7 +25,7 @@ class CCRNNDataset(TrafficStatePointDataset):
         self.hidden_size = config.get('hidden_size', 20)
         self.method = config.get('method', 'big')
         self.parameters_str += '_save_adj'
-        self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
+        self.cache_file_name = os.path.join(get_dataset_cache_dir(),
                                             'point_based_{}.npz'.format(self.parameters_str))
 
     def _load_rel(self):

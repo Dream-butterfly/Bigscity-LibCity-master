@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import pandas as pd
 import numpy as np
@@ -45,9 +46,9 @@ class TrafficStateDataset(AbstractDataset):
             + str(self.train_rate) + '_' + str(self.eval_rate) + '_' + str(self.scaler_type) + '_' \
             + str(self.batch_size) + '_' + str(self.load_external) + '_' + str(self.add_time_in_day) + '_' \
             + str(self.add_day_in_week) + '_' + str(self.pad_with_last_sample)
-        self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
+        self.cache_file_name = os.path.join(get_dataset_cache_dir(),
                                             'traffic_state_{}.npz'.format(self.parameters_str))
-        self.cache_file_folder = './libcity/cache/dataset_cache/'
+        self.cache_file_folder = get_dataset_cache_dir()
         ensure_dir(self.cache_file_folder)
         self.data_path = './raw_data/' + self.dataset + '/'
         if not os.path.exists(self.data_path):
@@ -209,7 +210,7 @@ class TrafficStateDataset(AbstractDataset):
     def _calculate_adjacency_matrix(self):
         """
         使用带有阈值的高斯核计算邻接矩阵的权重，如果有其他的计算方法，可以覆盖这个函数,
-        公式为：$ w_{ij} = \exp \left(- \\frac{d_{ij}^{2}}{\sigma^{2}} \\right) $, $\sigma$ 是方差,
+        公式为：$ w_{ij} = exp \left(- \\frac{d_{ij}^{2}}{\sigma^{2}} \\right) $, $\sigma$ 是方差,
         小于阈值`weight_adj_epsilon`的值设为0：$  w_{ij}[w_{ij}<\epsilon]=0 $
 
         Returns:

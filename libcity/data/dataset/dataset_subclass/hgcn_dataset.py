@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 from libcity.data.dataset import TrafficStatePointDataset
 from sklearn.cluster import SpectralClustering
@@ -9,7 +10,7 @@ class HGCNDataset(TrafficStatePointDataset):
 
     def __init__(self, config):
         super().__init__(config)
-        self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
+        self.cache_file_name = os.path.join(get_dataset_cache_dir(),
                                             'point_based_{}.npz'.format(self.parameters_str))
 
         # 聚类中心（区域）的个数

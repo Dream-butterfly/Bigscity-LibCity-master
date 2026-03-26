@@ -11,6 +11,7 @@ import torch
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUTPUT_ROOT = os.path.join(PROJECT_ROOT, "outputs")
+CACHE_ROOT = os.path.join(PROJECT_ROOT, "cache")
 
 
 def _slugify(value):
@@ -33,6 +34,25 @@ def ensure_run_id(config):
 def get_output_root():
     ensure_dir(OUTPUT_ROOT)
     return OUTPUT_ROOT
+
+
+def get_cache_root():
+    ensure_dir(CACHE_ROOT)
+    return CACHE_ROOT
+
+
+def get_cache_subdir(*parts):
+    path = os.path.join(get_cache_root(), *parts)
+    ensure_dir(path)
+    return path
+
+
+def get_dataset_cache_dir():
+    return get_cache_subdir("dataset_cache")
+
+
+def get_dataset_cache_path(*parts):
+    return os.path.join(get_dataset_cache_dir(), *parts)
 
 
 def get_run_dir(exp_id):

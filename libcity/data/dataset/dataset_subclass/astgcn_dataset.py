@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import sys
 import numpy as np
@@ -35,7 +36,7 @@ class ASTGCNDataset(TrafficStatePointDataset):
             + '_' + str(self.eval_rate) + '_' + str(self.scaler_type) \
             + '_' + str(self.batch_size) + '_' + str(self.add_time_in_day) \
             + '_' + str(self.add_day_in_week) + '_' + str(self.pad_with_last_sample)
-        self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
+        self.cache_file_name = os.path.join(get_dataset_cache_dir(),
                                             'point_based_{}.npz'.format(self.parameters_str))
 
     def _search_data(self, sequence_length, label_start_idx, num_for_predict, num_of_depend, units):

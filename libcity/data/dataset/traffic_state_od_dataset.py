@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 
 import numpy as np
@@ -8,7 +9,7 @@ from libcity.data.dataset import TrafficStateDataset
 class TrafficStateOdDataset(TrafficStateDataset):
     def __init__(self, config):
         super().__init__(config)
-        self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
+        self.cache_file_name = os.path.join(get_dataset_cache_dir(),
                                             'od_based_{}.npz'.format(self.parameters_str))
         self._load_rel()  # don't care whether there is a .rel file
 

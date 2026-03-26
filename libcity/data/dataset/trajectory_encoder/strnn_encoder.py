@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import numpy as np
 from libcity.data.dataset.trajectory_encoder.abstract_trajectory_encoder import AbstractTrajectoryEncoder
@@ -23,7 +24,7 @@ class StrnnEncoder(AbstractTrajectoryEncoder):
             if key in self.config:
                 parameters_str += '_' + str(self.config[key])
         self.cache_file_name = os.path.join(
-            './libcity/cache/dataset_cache/', 'trajectory_{}.json'.format(parameters_str))
+            get_dataset_cache_dir(), 'trajectory_{}.json'.format(parameters_str))
 
         self.geo_coord = {}
         self.dataset = self.config.get('dataset', '')

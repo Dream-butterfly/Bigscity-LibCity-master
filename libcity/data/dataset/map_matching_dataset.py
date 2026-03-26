@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import pickle
 
 from libcity.data.dataset import AbstractDataset
@@ -51,9 +52,9 @@ class MapMatchingDataset(AbstractDataset):
         self.cache_dataset = self.config.get('cache_dataset', True)
         self.parameters_str = \
             str(self.dataset) + '_' + str(self.delta_time)
-        self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
+        self.cache_file_name = os.path.join(get_dataset_cache_dir(),
                                             'map_matching_{}.pkl'.format(self.parameters_str))
-        self.cache_file_folder = './libcity/cache/dataset_cache/'
+        self.cache_file_folder = get_dataset_cache_dir()
         ensure_dir(self.cache_file_folder)
 
         # ensure dataset

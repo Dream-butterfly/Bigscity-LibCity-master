@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import random
 
@@ -177,7 +178,7 @@ class GMANDataset(TrafficStatePointDataset):
                              '_' + str(self.SE_config['q']) + '_' + str(self.SE_config['num_walks']) + \
                              '_' + str(self.SE_config['walk_length']) + '_' + str(self.SE_config['dimensions']) + \
                              '_' + str(self.SE_config['window_size']) + '_' + str(self.SE_config['iter'])
-        self.SE_cache_file = os.path.join('./libcity/cache/dataset_cache/',
+        self.SE_cache_file = os.path.join(get_dataset_cache_dir(),
                                           'SE_based_{}.txt'.format(str(self.dataset) + '_' + self.SE_config_str))
         self._generate_SE()
 

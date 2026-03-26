@@ -1,3 +1,4 @@
+from libcity.utils import get_dataset_cache_dir
 import os
 import json
 import pandas as pd
@@ -18,8 +19,8 @@ class TrajectoryDataset(AbstractDataset):
 
     def __init__(self, config):
         self.config = config
-        self.cache_file_folder = './libcity/cache/dataset_cache/'
-        self.cut_data_cache = './libcity/cache/dataset_cache/cut_traj'
+        self.cache_file_folder = get_dataset_cache_dir()
+        self.cut_data_cache = os.path.join(get_dataset_cache_dir(), 'cut_traj')
         for param in parameter_list:
             self.cut_data_cache += '_' + str(self.config[param])
         self.cut_data_cache += '.json'

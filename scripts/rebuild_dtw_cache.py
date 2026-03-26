@@ -8,7 +8,7 @@ from libcity.utils import get_logger, set_random_seed, str2bool
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATASET_CACHE = PROJECT_ROOT / "libcity" / "cache" / "dataset_cache"
+DATASET_CACHE = PROJECT_ROOT / "cache" / "dataset_cache"
 
 
 DTW_CACHE_PATTERNS = [
