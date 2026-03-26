@@ -2,20 +2,19 @@ import os
 import json
 import datetime
 import pandas as pd
-from libcity.evaluator.registry import register_evaluator
+from libcity.tasks.registry import register_evaluator
 from libcity.utils import ensure_dir
-from libcity.model import loss
+from libcity.tasks import loss
 from logging import getLogger
-from libcity.evaluator.abstract_evaluator import AbstractEvaluator
+from libcity.tasks._Abstract_model.evaluator import AbstractEvaluator
 
 
 @register_evaluator()
 class TrafficStateEvaluator(AbstractEvaluator):
 
     def __init__(self, config):
-        self.metrics = config.get('metrics', ['MAE'])  # 评估指标, 是一个 list
-        self.allowed_metrics = ['MAE', 'MSE', 'RMSE', 'MAPE', 'masked_MAE', 'masked_MSE', 'masked_RMSE', 'masked_MAPE',
-                                'R2', 'EVAR']
+        self.metrics = config.get('metrics', ['MAE', 'MSE', 'RMSE', 'MAPE', 'masked_MAE', 'masked_MSE', 'masked_RMSE', 'masked_MAPE','R2', 'EVAR'])  # 评估指标, 是一个 list
+        self.allowed_metrics = ['MAE', 'MSE', 'RMSE', 'MAPE', 'masked_MAE', 'masked_MSE', 'masked_RMSE', 'masked_MAPE','R2', 'EVAR']
         self.save_modes = config.get('save_mode', ['csv', 'json'])
         self.mode = config.get('evaluator_mode', 'single')  # or average
         self.mask_val = config.get('mask_val', None)

@@ -1,6 +1,6 @@
 import os
 import json
-from libcity.config import ConfigParser
+from libcity.tasks.config_parser import ConfigParser
 from libcity.data import get_dataset
 from libcity.utils import get_executor, get_model, get_logger, get_run_subdir, ensure_run_id, set_random_seed
 

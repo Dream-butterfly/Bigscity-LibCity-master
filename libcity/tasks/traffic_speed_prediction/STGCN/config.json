@@ -4,19 +4,28 @@
     "params": {
       "Ks": 3,
       "Kt": 3,
-      "blocks": [[1, 32, 64], [64, 32, 128]],
+      "blocks": [
+        [
+          1,
+          32,
+          64
+        ],
+        [
+          64,
+          32,
+          128
+        ]
+      ],
       "dropout": 0,
       "graph_conv_type": "chebconv",
       "stgcn_train_mode": "quick",
       "bidir_adj_mx": true,
-
       "scaler": "standard",
       "load_external": false,
       "normal_external": false,
       "ext_scaler": "none",
       "add_time_in_day": false,
       "add_day_in_week": false,
-
       "max_epoch": 100,
       "learner": "rmsprop",
       "learning_rate": 0.001,
@@ -34,7 +43,20 @@
   },
   "evaluator": {
     "name": "TrafficStateEvaluator",
-    "params": {}
+    "params": {
+      "metrics": [
+        "MAE",
+        "MSE",
+        "RMSE",
+        "MAPE",
+        "masked_MAE",
+        "masked_MSE",
+        "masked_RMSE",
+        "masked_MAPE",
+        "R2",
+        "EVAR"
+      ]
+    }
   },
   "dataset": {
     "name": "TrafficStatePointDataset",

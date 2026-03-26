@@ -11,11 +11,11 @@ import pprint
 from libcity import model as model_pkg
 from libcity import data as data_pkg
 
-# Import registries and bootstrappers
-from libcity.model import registry as model_registry
+# Import registries and bootstrappers from tasks-based registry
+from libcity.tasks import registry as model_registry
 from libcity.data import registry as data_registry
-from libcity.executor import registry as executor_registry
-from libcity.evaluator import registry as evaluator_registry
+from libcity.tasks import registry as executor_registry
+from libcity.tasks import registry as evaluator_registry
 import importlib
 
 
@@ -42,17 +42,18 @@ def list_datasets():
 def list_models():
     # Trigger recursive import of model modules to ensure registrations
     try:
+        # import all model modules under libcity.tasks to trigger registrations
         if hasattr(model_registry, '_import_submodules'):
-            model_registry._import_submodules('libcity.model')
+            model_registry._import_submodules('libcity.tasks')
         else:
-            importlib.import_module('libcity.model')
+            importlib.import_module('libcity.tasks')
     except Exception:
         pass
     # Also try task-level packages
     try:
         for task in getattr(model_registry, 'TASK_MODEL_REGISTRY', {}).keys():
             try:
-                model_registry._import_submodules(f'libcity.model.{task}')
+                model_registry._import_submodules(f'libcity.tasks.{task}')
             except Exception:
                 pass
     except Exception:
@@ -74,12 +75,12 @@ def list_models():
 def list_executors_and_evaluators():
     try:
         if hasattr(executor_registry, '_import_submodules'):
-            executor_registry._import_submodules('libcity.executor')
+            executor_registry._import_submodules('libcity.tasks')
     except Exception:
         pass
     try:
         if hasattr(evaluator_registry, '_import_submodules'):
-            evaluator_registry._import_submodules('libcity.evaluator')
+            evaluator_registry._import_submodules('libcity.tasks')
     except Exception:
         pass
     print('\nRegistered executors:')

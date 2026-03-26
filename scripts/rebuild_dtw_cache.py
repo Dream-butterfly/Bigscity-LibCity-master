@@ -2,7 +2,7 @@ import argparse
 import random
 from pathlib import Path
 
-from libcity.config import ConfigParser
+from libcity.tasks.config_parser import ConfigParser
 from libcity.data import get_dataset
 from libcity.utils import get_logger, set_random_seed, str2bool
 

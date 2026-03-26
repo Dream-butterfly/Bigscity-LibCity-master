@@ -2,10 +2,10 @@ import time
 import numpy as np
 import torch
 import os
-from libcity.model import loss
+from libcity.tasks import loss
 from functools import partial
-from libcity.executor.registry import register_executor
-from libcity.executor.traffic_state_executor import TrafficStateExecutor
+from libcity.tasks.registry import register_executor
+from libcity.tasks._Base.executor import TrafficStateExecutor
 from libcity.utils import tune
 
 

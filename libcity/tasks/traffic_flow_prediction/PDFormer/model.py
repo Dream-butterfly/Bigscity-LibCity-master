@@ -6,9 +6,9 @@ import torch.nn.functional as F
 import torch.nn.init as init
 from functools import partial
 from logging import getLogger
-from libcity.model.registry import register_model
-from libcity.model import loss
-from libcity.model.abstract_traffic_state_model import AbstractTrafficStateModel
+from libcity.tasks.registry import register_model
+from libcity.tasks import loss
+from libcity.tasks._Base.model import AbstractTrafficStateModel
 
 
 def drop_path(x, drop_prob=0., training=False):

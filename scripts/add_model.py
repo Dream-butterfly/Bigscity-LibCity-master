@@ -54,9 +54,9 @@ def model_template(model_name: str, task: str) -> str:
     import torch
     import torch.nn as nn
     from logging import getLogger
-    from libcity.model.registry import register_model
-    from libcity.model.abstract_traffic_state_model import AbstractTrafficStateModel
-    from libcity.model import loss
+    from libcity.tasks.registry import register_model
+    from libcity.tasks._Base.model import AbstractTrafficStateModel
+    from libcity.tasks import loss
 
 
     @register_model("{task}")

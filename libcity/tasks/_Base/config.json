@@ -1,0 +1,54 @@
+{
+    "model": {
+        "name": "_Base",
+        "params": {
+            "d_model": 64,
+            "embed_dim": 10,
+            "num_heads": 4,
+            "num_layers": 2,
+            "cheb_order": 3,
+            "dropout": 0.1,
+            "external_dim": 4,
+            "input_window": 12,
+            "output_window": 12,
+            "scaler": "standard",
+            "load_external": true,
+            "normal_external": true,
+            "ext_scaler": "standard",
+            "add_time_in_day": true,
+            "add_day_in_week": true,
+            "max_epoch": 10,
+            "learner": "adamw",
+            "learning_rate": 0.001,
+            "lr_decay": true,
+            "weight_decay": 0.0001,
+            "clip_grad_norm": true,
+            "max_grad_norm": 5,
+            "use_early_stop": true,
+            "patience": 50,
+            "batch_size": 32,
+            "eval_batch_size": 32,
+            "base_lr": 0.001,
+            "steps": [
+                5
+            ],
+            "step_size": 10,
+            "lr_decay_ratio": 0.1,
+            "weight_adj": null,
+            "support_len": 2,
+            "output_attention": false
+        }
+    },
+    "executor": {
+        "name": "TrafficStateExecutor",
+        "params": {}
+    },
+    "evaluator": {
+        "name": "TrafficStateEvaluator",
+        "params": {}
+    },
+    "dataset": {
+        "name": "TrafficStatePointDataset",
+        "params": {}
+    }
+}

@@ -11,13 +11,13 @@ __all__ = ["DCRNN", "STGCN"]
 
 if TYPE_CHECKING:
     # type: ignore - for static type checkers only
-    from libcity.model.traffic_speed_prediction.DCRNN import DCRNN  # noqa: F401
-    from libcity.model.traffic_speed_prediction.STGCN import STGCN  # noqa: F401
+    from libcity.tasks.traffic_speed_prediction.DCRNN import DCRNN  # noqa: F401
+    from libcity.tasks.traffic_speed_prediction.STGCN import STGCN  # noqa: F401
 
 # map exported attribute -> module path that defines it
 _exports: Dict[str, str] = {
-    "DCRNN": "libcity.model.traffic_speed_prediction.DCRNN",
-    "STGCN": "libcity.model.traffic_speed_prediction.STGCN",
+    "DCRNN": "libcity.tasks.traffic_speed_prediction.DCRNN.model",
+    "STGCN": "libcity.tasks.traffic_speed_prediction.STGCN.model",
 }
 
 

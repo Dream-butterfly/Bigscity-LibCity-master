@@ -5,7 +5,11 @@ from tqdm import tqdm
 from libcity.data.dataset import TrafficStatePointDataset
 from libcity.data.registry import register_dataset
 from libcity.data.utils import generate_dataloader
-from tslearn.clustering import TimeSeriesKMeans, KShape
+try:
+    from tslearn.clustering import TimeSeriesKMeans, KShape
+except Exception:
+    TimeSeriesKMeans = None
+    KShape = None
 from libcity.utils.dtw import dtw_distance_ndim
 
 

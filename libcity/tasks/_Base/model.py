@@ -1,4 +1,4 @@
-from libcity.model.abstract_model import AbstractModel
+from libcity.tasks._Abstract_model.model import AbstractModel
 
 
 class AbstractTrafficStateModel(AbstractModel):

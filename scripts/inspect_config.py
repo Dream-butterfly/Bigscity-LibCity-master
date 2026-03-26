@@ -1,7 +1,7 @@
 import argparse
 import json
 
-from libcity.config import ConfigParser
+from libcity.tasks.config_parser import ConfigParser
 from libcity.utils import str2bool
 
 

@@ -4,10 +4,10 @@ import numpy as np
 import torch
 from logging import getLogger
 from torch.utils.tensorboard import SummaryWriter
-from libcity.executor.abstract_executor import AbstractExecutor
-from libcity.executor.registry import register_executor
+from libcity.tasks._Abstract_model.executor import AbstractExecutor
+from libcity.tasks.registry import register_executor
 from libcity.utils import get_evaluator, ensure_dir, get_run_dir, get_run_subdir, tune
-from libcity.model import loss
+from libcity.tasks import loss
 from functools import partial
 
 

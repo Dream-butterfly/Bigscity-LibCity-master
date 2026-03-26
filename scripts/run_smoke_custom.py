@@ -3,7 +3,7 @@ Custom smoke test that allows passing extra config options (gpu, num_workers, et
 Runs a single forward pass using the project's ConfigParser/get_dataset/get_model.
 """
 import argparse
-from libcity.config import ConfigParser
+from libcity.tasks.config_parser import ConfigParser
 from libcity.data import get_dataset
 from libcity.utils import get_model, set_random_seed
 
