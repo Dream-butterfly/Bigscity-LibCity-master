@@ -108,23 +108,97 @@ class ConfigParser(object):
             if self.config['task'] not in task_config:
                 raise ValueError(
                     'task {} is not supported.'.format(self.config['task']))
-            task_config = task_config[self.config['task']]
+            task_entry = task_config[self.config['task']]
             # check model and dataset
-            if self.config['model'] not in task_config['allowed_model']:
-                raise ValueError('task {} do not support model {}'.format(
-                    self.config['task'], self.config['model']))
             model = self.config['model']
-            # 加载 dataset、executor、evaluator 的模块
+            allowed_models = task_entry.get('allowed_model', [])
+            if model not in allowed_models:
+                # Don't fail hard if model is not listed; allow registration-based discovery.
+                # Log a warning and try to infer dataset/executor/evaluator later.
+                # Note: some workflows may still prefer strict checking; this relaxes that.
+                # We import logging lazily to avoid heavy imports here.
+                try:
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        "Model %s is not listed in task_config for task %s; will try auto-discovery.",
+                        model, self.config['task'])
+                except Exception:
+                    pass
+            # Try to set dataset_class/executor/evaluator from task config mapping if present
+            model_mapping = task_entry.get(model, {}) if isinstance(task_entry, dict) else {}
+            # dataset_class
             if 'dataset_class' not in self.config:
-                self.config['dataset_class'] = task_config[model]['dataset_class']
+                if 'dataset_class' in model_mapping:
+                    self.config['dataset_class'] = model_mapping['dataset_class']
+                else:
+                    # fallback: try sensible defaults or discover from registry
+                    try:
+                        from libcity.data.registry import DATASET_REGISTRY
+                        # prefer TrafficStatePointDataset if present
+                        if 'TrafficStatePointDataset' in DATASET_REGISTRY.items():
+                            self.config['dataset_class'] = 'TrafficStatePointDataset'
+                        else:
+                            # pick first registered dataset if exists
+                            items = DATASET_REGISTRY.items()
+                            if items:
+                                self.config['dataset_class'] = list(items.keys())[0]
+                            else:
+                                # fallback to existing value in config or empty
+                                self.config.setdefault('dataset_class', '')
+                    except Exception:
+                        self.config.setdefault('dataset_class', '')
+            # task-specific encoder defaults
             if self.config['task'] == 'traj_loc_pred' and 'traj_encoder' not in self.config:
-                self.config['traj_encoder'] = task_config[model]['traj_encoder']
+                if 'traj_encoder' in model_mapping:
+                    self.config['traj_encoder'] = model_mapping['traj_encoder']
             if self.config['task'] == 'eta' and 'eta_encoder' not in self.config:
-                self.config['eta_encoder'] = task_config[model]['eta_encoder']
+                if 'eta_encoder' in model_mapping:
+                    self.config['eta_encoder'] = model_mapping['eta_encoder']
+            # executor
             if 'executor' not in self.config:
-                self.config['executor'] = task_config[model]['executor']
+                if 'executor' in model_mapping:
+                    self.config['executor'] = model_mapping['executor']
+                else:
+                    # try model-specific executor name else default
+                    try:
+                        from libcity.executor.registry import EXECUTOR_REGISTRY
+                        candidate = model + 'Executor'
+                        if candidate in EXECUTOR_REGISTRY.items():
+                            self.config['executor'] = candidate
+                        else:
+                            # pick TrafficStateExecutor if present
+                            if 'TrafficStateExecutor' in EXECUTOR_REGISTRY.items():
+                                self.config['executor'] = 'TrafficStateExecutor'
+                            else:
+                                # pick first registered executor
+                                items = EXECUTOR_REGISTRY.items()
+                                if items:
+                                    self.config['executor'] = list(items.keys())[0]
+                                else:
+                                    self.config.setdefault('executor', '')
+                    except Exception:
+                        self.config.setdefault('executor', '')
+            # evaluator
             if 'evaluator' not in self.config:
-                self.config['evaluator'] = task_config[model]['evaluator']
+                if 'evaluator' in model_mapping:
+                    self.config['evaluator'] = model_mapping['evaluator']
+                else:
+                    try:
+                        from libcity.evaluator.registry import EVALUATOR_REGISTRY
+                        candidate = model + 'Evaluator'
+                        if candidate in EVALUATOR_REGISTRY.items():
+                            self.config['evaluator'] = candidate
+                        else:
+                            if 'TrafficStateEvaluator' in EVALUATOR_REGISTRY.items():
+                                self.config['evaluator'] = 'TrafficStateEvaluator'
+                            else:
+                                items = EVALUATOR_REGISTRY.items()
+                                if items:
+                                    self.config['evaluator'] = list(items.keys())[0]
+                                else:
+                                    self.config.setdefault('evaluator', '')
+                    except Exception:
+                        self.config.setdefault('evaluator', '')
             # 对于 LSTM RNN GRU 使用的都是同一个类，只是 RNN 模块不一样而已，这里做一下修改
             if self.config['model'].upper() in ['LSTM', 'GRU', 'RNN']:
                 self.config['rnn_type'] = self.config['model']

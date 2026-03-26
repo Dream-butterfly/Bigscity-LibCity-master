@@ -2,7 +2,6 @@
   "traffic_state_pred": {
     "allowed_model": [
       "DCRNN",
-      "ExampleModel",
       "NEW_MODEL",
       "PDFormer",
       "STGCN"
@@ -26,11 +25,6 @@
       "evaluator": "TrafficStateEvaluator"
     },
     "NEW_MODEL": {
-      "dataset_class": "TrafficStatePointDataset",
-      "executor": "TrafficStateExecutor",
-      "evaluator": "TrafficStateEvaluator"
-    },
-    "ExampleModel": {
       "dataset_class": "TrafficStatePointDataset",
       "executor": "TrafficStateExecutor",
       "evaluator": "TrafficStateEvaluator"
