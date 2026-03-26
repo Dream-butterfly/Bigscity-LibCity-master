@@ -1,4 +1,4 @@
-from libcity.utils.registry import Registry
+from libcity.core.registry import Registry
 
 
 TASK_MODEL_REGISTRY = {
@@ -14,35 +14,19 @@ def register_model(task, name=None):
 
 
 def _bootstrap_traffic_speed_models():
-    if "traffic_speed_prediction" in _BOOTSTRAPPED:
+    if "traffic_state_pred" in _BOOTSTRAPPED:
         return
-    import libcity.model.traffic_speed_prediction  # noqa: F401
+    import libcity.model.traffic_state_pred  # noqa: F401
 
-    _BOOTSTRAPPED.add("traffic_speed_prediction")
-
-
-def _bootstrap_traffic_flow_models():
-    if "traffic_flow_prediction" in _BOOTSTRAPPED:
-        return
-    import libcity.model.traffic_flow_prediction  # noqa: F401
-
-    _BOOTSTRAPPED.add("traffic_flow_prediction")
-
-
-def _bootstrap_new_models():
-    if "new" in _BOOTSTRAPPED:
-        return
-    import libcity.model.new  # noqa: F401
-
-    _BOOTSTRAPPED.add("new")
+    _BOOTSTRAPPED.add("traffic_state_pred")
 
 
 MODEL_BOOTSTRAPPERS = {
     "traffic_state_pred": {
         "DCRNN": _bootstrap_traffic_speed_models,
         "STGCN": _bootstrap_traffic_speed_models,
-        "PDFormer": _bootstrap_traffic_flow_models,
-        "NEW_MODEL": _bootstrap_new_models,
+        "PDFormer": _bootstrap_traffic_speed_models,
+        "NEW_MODEL": _bootstrap_traffic_speed_models,
     }
 }
 

@@ -16,10 +16,9 @@ def get_dataset(config):
     Returns:
         AbstractDataset: the loaded dataset
     """
-    from libcity.data.registry import get_dataset_class
+    from libcity.core.factory import create_dataset
 
-    dataset_class = get_dataset_class(config['dataset_class'])
-    return dataset_class(config)
+    return create_dataset(config)
 
 
 def generate_dataloader(train_data, eval_data, test_data, feature_name,

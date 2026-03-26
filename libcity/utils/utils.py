@@ -77,10 +77,9 @@ def get_executor(config, model, data_feature):
     Returns:
         AbstractExecutor: the loaded executor
     """
-    from libcity.executor.registry import get_executor_class
+    from libcity.core.factory import create_executor
 
-    executor_class = get_executor_class(config['executor'])
-    return executor_class(config, model, data_feature)
+    return create_executor(config, model, data_feature)
 
 
 def get_model(config, data_feature):
@@ -94,10 +93,9 @@ def get_model(config, data_feature):
     Returns:
         AbstractModel: the loaded model
     """
-    from libcity.model.registry import get_model_class
+    from libcity.core.factory import create_model
 
-    model_class = get_model_class(config['task'], config['model'])
-    return model_class(config, data_feature)
+    return create_model(config, data_feature)
 
 
 def get_evaluator(config):
@@ -110,10 +108,9 @@ def get_evaluator(config):
     Returns:
         AbstractEvaluator: the loaded evaluator
     """
-    from libcity.evaluator.registry import get_evaluator_class
+    from libcity.core.factory import create_evaluator
 
-    evaluator_class = get_evaluator_class(config['evaluator'])
-    return evaluator_class(config)
+    return create_evaluator(config)
 
 
 def get_logger(config, name=None):

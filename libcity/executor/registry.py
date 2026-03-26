@@ -1,4 +1,4 @@
-from libcity.utils.registry import Registry
+from libcity.core.registry import Registry
 
 
 EXECUTOR_REGISTRY = Registry("executor")

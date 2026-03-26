@@ -63,6 +63,44 @@ class ConfigParser(object):
                     the config file is in the root dir and is a JSON \
                     file.'.format(config_file))
 
+    def _load_json_file(self, relative_path):
+        with open(os.path.join('./libcity/config', relative_path), 'r') as f:
+            return json.load(f)
+
+    def _load_stage_defaults(self, relative_path):
+        candidates = []
+        if relative_path.startswith('model/'):
+            _, task_name, _ = relative_path.split('/', 2)
+            candidates.extend([
+                'model/_base.json',
+                f'model/{task_name}/_base.json',
+                relative_path,
+            ])
+        elif relative_path.startswith('data/'):
+            candidates.extend([
+                'data/_base.json',
+                relative_path,
+            ])
+        elif relative_path.startswith('executor/'):
+            candidates.extend([
+                'executor/_base.json',
+                relative_path,
+            ])
+        elif relative_path.startswith('evaluator/'):
+            candidates.extend([
+                'evaluator/_base.json',
+                relative_path,
+            ])
+        else:
+            candidates.append(relative_path)
+
+        merged = {}
+        for candidate in candidates:
+            candidate_path = os.path.join('./libcity/config', candidate)
+            if os.path.exists(candidate_path):
+                merged.update(self._load_json_file(candidate))
+        return merged
+
     def _load_default_config(self):
         # 首先加载 task config
         with open('./libcity/config/task_config.json', 'r') as f:
@@ -106,11 +144,10 @@ class ConfigParser(object):
         default_file_list.append('evaluator/{}.json'.format(self.config['evaluator']))
         # 加载所有默认配置
         for file_name in default_file_list:
-            with open('./libcity/config/{}'.format(file_name), 'r') as f:
-                x = json.load(f)
-                for key in x:
-                    if key not in self.config:
-                        self.config[key] = x[key]
+            defaults = self._load_stage_defaults(file_name)
+            for key in defaults:
+                if key not in self.config:
+                    self.config[key] = defaults[key]
         # 加载数据集config.json
         with open('./raw_data/{}/config.json'.format(self.config['dataset']), 'r') as f:
             x = json.load(f)

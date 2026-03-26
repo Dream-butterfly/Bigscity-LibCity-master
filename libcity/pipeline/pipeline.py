@@ -1,6 +1,5 @@
 import os
-import torch
-import random
+import json
 from libcity.config import ConfigParser
 from libcity.data import get_dataset
 from libcity.utils import get_executor, get_model, get_logger, get_run_subdir, ensure_run_id, set_random_seed
@@ -27,7 +26,8 @@ def run_model(task=None, model_name=None, dataset_name=None, config_file=None,
     logger = get_logger(config)
     logger.info('Begin pipeline, task={}, model_name={}, dataset_name={}, exp_id={}'.
                 format(str(task), str(model_name), str(dataset_name), str(exp_id)))
-    logger.info(config.config)
+    # logger.info(config.config)
+    logger.info("Config:\n%s", json.dumps(config.config, indent=2, ensure_ascii=False, default=str))
     # seed
     seed = config.get('seed', 0)
     set_random_seed(seed)
