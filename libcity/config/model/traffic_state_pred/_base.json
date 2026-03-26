@@ -1,0 +1,7 @@
+{
+  "max_epoch": 100,
+  "clip_grad_norm": true,
+  "max_grad_norm": 5,
+  "use_early_stop": true,
+  "patience": 50
+}
