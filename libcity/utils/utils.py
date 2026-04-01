@@ -79,7 +79,9 @@ def get_executor(config, model, data_feature):
     """
     from libcity.common.registry_executor import get_executor_class
 
-    executor_class = get_executor_class(config['executor'])
+    executor_class = get_executor_class(
+        config['executor'], task=config['task'], model_name=config['model']
+    )
     return executor_class(config, model, data_feature)
 
 

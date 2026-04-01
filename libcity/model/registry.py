@@ -1,4 +1,5 @@
 from libcity.utils.registry import Registry
+from libcity.models.locator import import_model_resource
 
 
 TASK_MODEL_REGISTRY = {
@@ -48,6 +49,12 @@ MODEL_BOOTSTRAPPERS = {
 
 
 def get_model_class(task, model_name):
+    imported = import_model_resource(task, model_name, "model")
+    if imported:
+        task_registry = TASK_MODEL_REGISTRY.get(task)
+        if task_registry is None:
+            raise AttributeError("task is not found")
+        return task_registry.get(model_name)
     task_bootstrappers = MODEL_BOOTSTRAPPERS.get(task, {})
     bootstrap = task_bootstrappers.get(model_name)
     if bootstrap is not None:

@@ -25,7 +25,7 @@
   "max_grad_norm": 5,
   "use_early_stop": true,
   "patience": 50,
-  
+
   "batch_size": 32,
   "eval_batch_size": 32,
   "base_lr": 0.001,

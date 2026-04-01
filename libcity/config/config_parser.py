@@ -1,6 +1,7 @@
 import os
 import json
 import torch
+from libcity.models.locator import get_model_resource_path, has_model_resource
 
 
 class ConfigParser(object):
@@ -95,18 +96,15 @@ class ConfigParser(object):
             #     raise ValueError('task {} do not support dataset {}'.format(
             #         self.config['task'], self.config['dataset']))
         # 接着加载每个阶段的 default config
-        default_file_list = []
-        # model
-        default_file_list.append('model/{}/{}.json'.format(self.config['task'], self.config['model']))
-        # dataset
-        default_file_list.append('data/{}.json'.format(self.config['dataset_class']))
-        # executor
-        default_file_list.append('executor/{}.json'.format(self.config['executor']))
-        # evaluator
-        default_file_list.append('evaluator/{}.json'.format(self.config['evaluator']))
+        default_file_list = [
+            self._get_model_default_config_path(),
+            './libcity/config/data/{}.json'.format(self.config['dataset_class']),
+            self._get_executor_default_config_path(),
+            './libcity/config/evaluator/{}.json'.format(self.config['evaluator']),
+        ]
         # 加载所有默认配置
         for file_name in default_file_list:
-            with open('./libcity/config/{}'.format(file_name), 'r') as f:
+            with open(file_name, 'r') as f:
                 x = json.load(f)
                 for key in x:
                     if key not in self.config:
@@ -130,6 +128,16 @@ class ConfigParser(object):
             torch.cuda.set_device(gpu_id)
         self.config['device'] = torch.device(
             "cuda:%d" % gpu_id if torch.cuda.is_available() and use_gpu else "cpu")
+
+    def _get_model_default_config_path(self):
+        if has_model_resource(self.config['task'], self.config['model'], 'config.json'):
+            return get_model_resource_path(self.config['task'], self.config['model'], 'config.json')
+        return './libcity/config/model/{}/{}.json'.format(self.config['task'], self.config['model'])
+
+    def _get_executor_default_config_path(self):
+        if has_model_resource(self.config['task'], self.config['model'], 'executor.json'):
+            return get_model_resource_path(self.config['task'], self.config['model'], 'executor.json')
+        return './libcity/config/executor/{}.json'.format(self.config['executor'])
 
     def get(self, key, default=None):
         return self.config.get(key, default)
