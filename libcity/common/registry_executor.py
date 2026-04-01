@@ -12,7 +12,7 @@ def register_executor(name=None):
 def _bootstrap_traffic_state_executor():
     if "TrafficStateExecutor" in _BOOTSTRAPPED:
         return
-    import libcity.executor.traffic_state_executor  # noqa: F401
+    import libcity.common.traffic_state_executor  # noqa: F401
 
     _BOOTSTRAPPED.add("TrafficStateExecutor")
 

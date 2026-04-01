@@ -4,8 +4,8 @@ import torch
 import os
 from libcity.model import loss
 from functools import partial
-from libcity.executor.registry import register_executor
-from libcity.executor.traffic_state_executor import TrafficStateExecutor
+from libcity.common.registry_executor import register_executor
+from libcity.common.traffic_state_executor import TrafficStateExecutor
 from libcity.utils import tune
 
 

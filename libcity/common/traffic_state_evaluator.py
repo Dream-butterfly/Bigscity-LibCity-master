@@ -2,11 +2,11 @@ import os
 import json
 import datetime
 import pandas as pd
-from libcity.evaluator.registry import register_evaluator
+from libcity.common.registry_evaluator import register_evaluator
 from libcity.utils import ensure_dir
 from libcity.model import loss
 from logging import getLogger
-from libcity.evaluator.abstract_evaluator import AbstractEvaluator
+from libcity.common.abstract_evaluator import AbstractEvaluator
 
 
 @register_evaluator()

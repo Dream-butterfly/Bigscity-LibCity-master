@@ -77,7 +77,7 @@ def get_executor(config, model, data_feature):
     Returns:
         AbstractExecutor: the loaded executor
     """
-    from libcity.executor.registry import get_executor_class
+    from libcity.common.registry_executor import get_executor_class
 
     executor_class = get_executor_class(config['executor'])
     return executor_class(config, model, data_feature)
@@ -110,7 +110,7 @@ def get_evaluator(config):
     Returns:
         AbstractEvaluator: the loaded evaluator
     """
-    from libcity.evaluator.registry import get_evaluator_class
+    from libcity.common.registry_evaluator import get_evaluator_class
 
     evaluator_class = get_evaluator_class(config['evaluator'])
     return evaluator_class(config)

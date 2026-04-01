@@ -4,11 +4,11 @@ import torch
 import os
 import math
 from logging import getLogger
-from libcity.executor.registry import register_executor
-from libcity.executor.traffic_state_executor import TrafficStateExecutor
+from libcity.common.registry_executor import register_executor
+from libcity.common.traffic_state_executor import TrafficStateExecutor
 from libcity.utils import tune
 import scipy.sparse as sp
-from tqdm import tqdm
+
 
 class Scheduler:
 

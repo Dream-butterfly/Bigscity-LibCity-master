@@ -12,7 +12,7 @@ def register_evaluator(name=None):
 def _bootstrap_traffic_state_evaluator():
     if "TrafficStateEvaluator" in _BOOTSTRAPPED:
         return
-    import libcity.evaluator.traffic_state_evaluator  # noqa: F401
+    import libcity.common.traffic_state_evaluator  # noqa: F401
 
     _BOOTSTRAPPED.add("TrafficStateEvaluator")
 
