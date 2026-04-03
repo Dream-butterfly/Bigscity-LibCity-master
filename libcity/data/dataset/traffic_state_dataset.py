@@ -804,40 +804,96 @@ class TrafficStateDataset(AbstractDataset):
 
         return x, y
 
+    # def _generate_data(self):
+    #     """
+    #     加载数据文件(.dyna/.grid/.od/.gridod)和外部数据(.ext)，且将二者融合，以X，y的形式返回
+    #
+    #     Returns:
+    #         tuple: tuple contains:
+    #             x(np.ndarray): 模型输入数据，(num_samples, input_length, ..., feature_dim) \n
+    #             y(np.ndarray): 模型输出数据，(num_samples, output_length, ..., feature_dim)
+    #     """
+    #     # 处理多数据文件问题
+    #     if isinstance(self.data_files, list):
+    #         data_files = self.data_files.copy()
+    #     else:  # str
+    #         data_files = [self.data_files].copy()
+    #     # 加载外部数据
+    #     if self.load_external and os.path.exists(self.data_path + self.ext_file + '.ext'):  # 外部数据集
+    #         ext_data = self._load_ext()
+    #     else:
+    #         ext_data = None
+    #     x_list, y_list = [], []
+    #     for filename in data_files:
+    #         df = self._load_dyna(filename)  # (len_time, ..., feature_dim)
+    #         if self.load_external:
+    #             df = self._add_external_information(df, ext_data)
+    #         x, y = self._generate_input_data(df)
+    #         # x: (num_samples, input_length, ..., input_dim)
+    #         # y: (num_samples, output_length, ..., output_dim)
+    #         x_list.append(x)
+    #         y_list.append(y)
+    #     x = np.concatenate(x_list)
+    #     y = np.concatenate(y_list)
+    #     self._logger.info("Dataset created")
+    #     self._logger.info("x shape: " + str(x.shape) + ", y shape: " + str(y.shape))
+    #     return x, y
+
     def _generate_data(self):
         """
-        加载数据文件(.dyna/.grid/.od/.gridod)和外部数据(.ext)，且将二者融合，以X，y的形式返回
+        加载数据文件(.dyna/.grid/.od/.gridod)和外部数据(.ext)，并生成 (x, y)
 
         Returns:
-            tuple: tuple contains:
-                x(np.ndarray): 模型输入数据，(num_samples, input_length, ..., feature_dim) \n
-                y(np.ndarray): 模型输出数据，(num_samples, output_length, ..., feature_dim)
+            x: (num_samples, input_length, ..., feature_dim)
+            y: (num_samples, output_length, ..., feature_dim)
         """
-        # 处理多数据文件问题
-        if isinstance(self.data_files, list):
-            data_files = self.data_files.copy()
-        else:  # str
-            data_files = [self.data_files].copy()
-        # 加载外部数据
-        if self.load_external and os.path.exists(self.data_path + self.ext_file + '.ext'):  # 外部数据集
-            ext_data = self._load_ext()
-        else:
-            ext_data = None
-        x_list, y_list = [], []
+
+        # -------- 统一 data_files（避免多余 copy）--------
+        data_files = (
+            self.data_files
+            if isinstance(self.data_files, list)
+            else [self.data_files]
+        )
+
+        # -------- 外部数据（只加载一次）--------
+        ext_data = None
+        if self.load_external:
+            ext_path = os.path.join(self.data_path, self.ext_file + ".ext")
+            if os.path.exists(ext_path):
+                ext_data = self._load_ext()
+
+        # -------- 主流程 --------
+        x_list = []
+        y_list = []
+
         for filename in data_files:
-            df = self._load_dyna(filename)  # (len_time, ..., feature_dim)
-            if self.load_external:
+            # 1. 加载主数据
+            df = self._load_dyna(filename)
+
+            # 2. 融合外部数据（避免重复判断）
+            if ext_data is not None:
                 df = self._add_external_information(df, ext_data)
+
+            # 3. 滑窗生成
             x, y = self._generate_input_data(df)
-            # x: (num_samples, input_length, ..., input_dim)
-            # y: (num_samples, output_length, ..., output_dim)
+
             x_list.append(x)
             y_list.append(y)
-        x = np.concatenate(x_list)
-        y = np.concatenate(y_list)
+
+        # -------- concat 优化 --------
+        if len(x_list) == 1:
+            x, y = x_list[0], y_list[0]
+        else:
+            # 一次性拼接（避免链式 concat）
+            x = np.concatenate(x_list, axis=0)
+            y = np.concatenate(y_list, axis=0)
+
+        # -------- logging（避免字符串拼接开销）--------
         self._logger.info("Dataset created")
-        self._logger.info("x shape: " + str(x.shape) + ", y shape: " + str(y.shape))
+        self._logger.info("x shape: %s, y shape: %s", x.shape, y.shape)
+
         return x, y
+
 
     def _split_train_val_test(self, x, y):
         """
