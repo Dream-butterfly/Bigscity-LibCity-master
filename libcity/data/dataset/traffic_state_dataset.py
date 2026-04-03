@@ -50,10 +50,10 @@ class TrafficStateDataset(AbstractDataset):
                                             'traffic_state_{}.npz'.format(self.parameters_str))
         self.cache_file_folder = get_dataset_cache_dir()
         ensure_dir(self.cache_file_folder)
-        self.data_path = './raw_data/' + self.dataset + '/'
+        self.data_path = './resource_data/' + self.dataset + '/'
         if not os.path.exists(self.data_path):
             raise ValueError("Dataset {} not exist! Please ensure the path "
-                             "'./raw_data/{}/' exist!".format(self.dataset, self.dataset))
+                             "'./resource_data/{}/' exist!".format(self.dataset, self.dataset))
         # 加载数据集的config.json文件
         self.weight_col = self.config.get('weight_col', '')
         self.data_col = self.config.get('data_col', '')

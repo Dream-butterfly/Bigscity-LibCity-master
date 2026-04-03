@@ -27,7 +27,7 @@ config = {
 
 def get_data(dataset):
     # path
-    path = 'raw_data/' + dataset + '/'
+    path = 'resource_data/' + dataset + '/'
     config_path = path + 'config.json'
     dyna_path = path + dataset + '.dyna'
     geo_path = path + dataset + '.geo'

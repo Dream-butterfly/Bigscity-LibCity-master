@@ -94,7 +94,10 @@ class ConfigParser(object):
                     if key not in self.config:
                         self.config[key] = x[key]
         # 加载数据集config.json
-        with open('./raw_data/{}/config.json'.format(self.config['dataset']), 'r') as f:
+        # with open('./resource_data/{}/config.json'.format(self.config['dataset']), 'r') as f:
+        # 不要使用硬编码，而是通过项目根目录下的raw_data
+        dataset_config_path = os.path.join('resource_data', self.config['dataset'], 'config.json')
+        with open(dataset_config_path, 'r') as f:
             x = json.load(f)
             for key in x:
                 if key == 'info':

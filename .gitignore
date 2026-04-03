@@ -1,16 +1,26 @@
-/.vscode
-/.idea
-/raw_data/*
-/raw_data/
-/visualized_data/*
-/visualized_data/
-/cache/
-/outputs/
-/libcity/tmp/*
-/libcity/__pycache__
-/libcity/*/__pycache__
-/libcity/data/dataset/__pycache__
-/libcity/model/*/__pycache__
-/libcity/data/dataset/*/__pycache__
-/uv.lock
-/newmini/
+# IDE/editor settings
+.vscode/
+.idea/
+*.iml
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local environments
+.venv/
+venv/
+env/
+
+# Project-generated data and artifacts
+resource_data/
+visualized_data/
+cache/
+outputs/
+
+# Dependency lock file kept local in this repository
+uv.lock
