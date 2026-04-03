@@ -7,10 +7,11 @@ import pandas as pd
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 from tqdm import tqdm
 from statsmodels.tsa.arima.model import ARIMA
-root_path = os.path.abspath(__file__)
-root_path = '/'.join(root_path.split('/')[:-2])
+from baseline_utils import get_project_root, load_dataset_3d
+
+root_path = get_project_root(__file__)
 sys.path.append(root_path)
-from libcity.evaluator.utils import evaluate_model
+from libcity.common.evaluator_utils import evaluate_model
 from libcity.utils import preprocess_data
 
 
@@ -30,50 +31,8 @@ config = {
 
 
 def get_data(dataset):
-    # path
-    path = 'resource_data/' + dataset + '/'
-    config_path = path + 'config.json'
-    dyna_path = path + dataset + '.dyna'
-    geo_path = path + dataset + '.geo'
-
-    # read config
-    with open(config_path, 'r') as f:
-        json_obj = json.load(f)
-        for key in json_obj:
-            if key not in config:
-                config[key] = json_obj[key]
-
-    # read geo
-    geo_file = pd.read_csv(geo_path)
-    geo_ids = list(geo_file['geo_id'])
-
-    # read dyna
-    dyna_file = pd.read_csv(dyna_path)
-    data_col = config.get('data_col', '')
-    if data_col != '':  # 根据指定的列加载数据集
-        if isinstance(data_col, list):
-            data_col = data_col.copy()
-        else:  # str
-            data_col = [data_col].copy()
-        data_col.insert(0, 'time')
-        data_col.insert(1, 'entity_id')
-        dyna_file = dyna_file[data_col]
-    else:  # 不指定则加载所有列
-        dyna_file = dyna_file[dyna_file.columns[2:]]  # 从time列开始所有列
-
-    # 求时间序列
-    time_slots = list(dyna_file['time'][:int(dyna_file.shape[0] / len(geo_ids))])
-
-    # 转3-d数组
-    feature_dim = len(dyna_file.columns) - 2
-    df = dyna_file[dyna_file.columns[-feature_dim:]]
-    len_time = len(time_slots)
-    data = []
-    for i in range(0, df.shape[0], len_time):
-        data.append(df[i:i + len_time].values)
-    data = np.array(data, dtype=float)  # (N, T, F)
-    data = data.swapaxes(0, 1)  # (T, N, F)
-    return data
+    config['dataset'] = dataset
+    return load_dataset_3d(config)
 
 
 # Try to find the best (p,d,q) parameters for ARIMA
