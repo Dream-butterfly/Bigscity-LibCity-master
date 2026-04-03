@@ -193,6 +193,7 @@ class CosineLRScheduler(Scheduler):
 class PDFormerExecutor(TrafficStateExecutor):
 
     def __init__(self, config, model, data_feature):
+        self.grad_accmu_steps = config.get('grad_accmu_steps', 1)
         self.no_load = config.get('no_load', [])
         self.lr_warmup_epoch = config.get("lr_warmup_epoch", 5)
         self.lr_warmup_init = config.get("lr_warmup_init", 1e-6)
