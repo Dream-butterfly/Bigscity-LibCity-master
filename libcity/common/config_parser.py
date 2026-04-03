@@ -109,12 +109,21 @@ class ConfigParser(object):
                         self.config[key] = x[key]
 
     def _init_device(self):
-        use_gpu = self.config.get('gpu', True)
+        # use_gpu = self.config.get('gpu', True)
+        # gpu_id = self.config.get('gpu_id', 0)
+        # if use_gpu:
+        #     torch.cuda.set_device(gpu_id)
+        # self.config['device'] = torch.device(
+        #     "cuda:%d" % gpu_id if torch.cuda.is_available() and use_gpu else "cpu")
+        use_gpu = self.config.get('use_gpu', True)
         gpu_id = self.config.get('gpu_id', 0)
         if use_gpu:
-            torch.cuda.set_device(gpu_id)
-        self.config['device'] = torch.device(
-            "cuda:%d" % gpu_id if torch.cuda.is_available() and use_gpu else "cpu")
+            if torch.cuda.is_available():
+                torch.cuda.set_device(gpu_id)
+                self.config['device'] = torch.device("cuda:%d" % gpu_id)
+            else:
+                print("Warning: GPU is not available, using CPU instead.")
+                self.config['device'] = torch.device("cpu")
 
     def _get_model_default_config_path(self):
         if not has_model_resource(self.config['task'], self.config['model'], 'config.json'):
