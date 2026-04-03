@@ -737,32 +737,72 @@ class TrafficStateDataset(AbstractDataset):
         data = np.concatenate(data_list, axis=-1)
         return data
 
+    # def _generate_input_data(self, df):
+    #     """
+    #     根据全局参数`input_window`和`output_window`切分输入，产生模型需要的张量输入，
+    #     即使用过去`input_window`长度的时间序列去预测未来`output_window`长度的时间序列
+    #
+    #     Args:
+    #         df(np.ndarray): 数据数组，shape: (len_time, ..., feature_dim)
+    #
+    #     Returns:
+    #         tuple: tuple contains:
+    #             x(np.ndarray): 模型输入数据，(epoch_size, input_length, ..., feature_dim) \n
+    #             y(np.ndarray): 模型输出数据，(epoch_size, output_length, ..., feature_dim)
+    #     """
+    #     num_samples = df.shape[0]
+    #     total_window = self.input_window + self.output_window
+    #     num_windows = num_samples - total_window + 1
+    #     if num_windows <= 0:
+    #         raise ValueError(
+    #             "Input data is shorter than input_window + output_window: "
+    #             f"{num_samples} < {total_window}"
+    #         )
+    #     windows = np.lib.stride_tricks.sliding_window_view(df, total_window, axis=0)
+    #     windows = np.moveaxis(windows, -1, 1)[:num_windows]
+    #     x = windows[:, :self.input_window, ...]
+    #     y = windows[:, self.input_window:, ...]
+    #     return x.copy(), y.copy()
+
     def _generate_input_data(self, df):
-        """
-        根据全局参数`input_window`和`output_window`切分输入，产生模型需要的张量输入，
-        即使用过去`input_window`长度的时间序列去预测未来`output_window`长度的时间序列
-
-        Args:
-            df(np.ndarray): 数据数组，shape: (len_time, ..., feature_dim)
-
-        Returns:
-            tuple: tuple contains:
-                x(np.ndarray): 模型输入数据，(epoch_size, input_length, ..., feature_dim) \n
-                y(np.ndarray): 模型输出数据，(epoch_size, output_length, ..., feature_dim)
-        """
         num_samples = df.shape[0]
-        total_window = self.input_window + self.output_window
-        num_windows = num_samples - total_window + 1
+        input_w = self.input_window
+        output_w = self.output_window
+        total_w = input_w + output_w
+
+        # -------- 边界检查 --------
+        num_windows = num_samples - total_w + 1
         if num_windows <= 0:
             raise ValueError(
-                "Input data is shorter than input_window + output_window: "
-                f"{num_samples} < {total_window}"
+                f"Input data length ({num_samples}) is smaller than "
+                f"input_window + output_window ({total_w})"
             )
-        windows = np.lib.stride_tricks.sliding_window_view(df, total_window, axis=0)
-        windows = np.moveaxis(windows, -1, 1)[:num_windows]
-        x = windows[:, :self.input_window, ...]
-        y = windows[:, self.input_window:, ...]
-        return x.copy(), y.copy()
+
+        # -------- 核心：stride window --------
+        windows = np.lib.stride_tricks.sliding_window_view(
+            df, window_shape=total_w, axis=0
+        )
+
+        # windows shape:
+        # (num_samples - total_w + 1, ..., total_w, feature_dim)
+
+        # -------- 调整维度顺序（关键优化点）--------
+        # 把时间维提前，避免后续切片产生非连续内存
+        windows = np.moveaxis(windows, -1, 1)
+
+        # 截断有效窗口（理论上已对齐，但保持严谨）
+        windows = windows[:num_windows]
+
+        # -------- 切分 x / y --------
+        x = windows[:, :input_w, ...]
+        y = windows[:, input_w:, ...]
+
+        # -------- 关键：一次性 contiguous copy --------
+        # 比 x.copy() 更可控（尤其对 PyTorch 友好）
+        x = np.ascontiguousarray(x)
+        y = np.ascontiguousarray(y)
+
+        return x, y
 
     def _generate_data(self):
         """
