@@ -1,10 +1,30 @@
-import copy
-
 import numpy as np
 from torch.utils.data import DataLoader
 
 from libcity.data.core.batch import Batch, BatchPAD
-from libcity.data.core.list_dataset import ListDataset
+from libcity.data.core.list_dataset import ArrayTupleDataset, ListDataset
+
+
+def _pad_with_last_sample(data, batch_size):
+    if len(data) == 0:
+        return data
+    num_padding = (batch_size - (len(data) % batch_size)) % batch_size
+    if num_padding == 0:
+        return data
+    if isinstance(data, tuple):
+        padded = []
+        for array in data:
+            data_padding = np.repeat(array[-1:], num_padding, axis=0)
+            padded.append(np.concatenate([array, data_padding], axis=0))
+        return tuple(padded)
+    data_padding = np.repeat(data[-1:], num_padding, axis=0)
+    return np.concatenate([data, data_padding], axis=0)
+
+
+def _build_dataset(data):
+    if isinstance(data, tuple):
+        return ArrayTupleDataset(*data)
+    return ListDataset(data)
 
 
 def generate_dataloader(train_data, eval_data, test_data, feature_name,
@@ -30,24 +50,18 @@ def generate_dataloader(train_data, eval_data, test_data, feature_name,
             test_dataloader: Dataloader composed of Batch (class)
     """
     if pad_with_last_sample:
-        num_padding = (batch_size - (len(train_data) % batch_size)) % batch_size
-        data_padding = np.repeat(train_data[-1:], num_padding, axis=0)
-        train_data = np.concatenate([train_data, data_padding], axis=0)
-        num_padding = (batch_size - (len(eval_data) % batch_size)) % batch_size
-        data_padding = np.repeat(eval_data[-1:], num_padding, axis=0)
-        eval_data = np.concatenate([eval_data, data_padding], axis=0)
-        num_padding = (batch_size - (len(test_data) % batch_size)) % batch_size
-        data_padding = np.repeat(test_data[-1:], num_padding, axis=0)
-        test_data = np.concatenate([test_data, data_padding], axis=0)
+        train_data = _pad_with_last_sample(train_data, batch_size)
+        eval_data = _pad_with_last_sample(eval_data, batch_size)
+        test_data = _pad_with_last_sample(test_data, batch_size)
 
-    train_dataset = ListDataset(train_data)
-    eval_dataset = ListDataset(eval_data)
-    test_dataset = ListDataset(test_data)
+    train_dataset = _build_dataset(train_data)
+    eval_dataset = _build_dataset(eval_data)
+    test_dataset = _build_dataset(test_data)
 
     def collator(indices):
         batch = Batch(feature_name)
         for item in indices:
-            batch.append(copy.deepcopy(item))
+            batch.append(item)
         return batch
 
     train_dataloader = DataLoader(dataset=train_dataset, batch_size=batch_size,
@@ -85,14 +99,14 @@ def generate_dataloader_pad(train_data, eval_data, test_data, feature_name,
             eval_dataloader: Dataloader composed of Batch (class) \n
             test_dataloader: Dataloader composed of Batch (class)
     """
-    train_dataset = ListDataset(train_data)
-    eval_dataset = ListDataset(eval_data)
-    test_dataset = ListDataset(test_data)
+    train_dataset = _build_dataset(train_data)
+    eval_dataset = _build_dataset(eval_data)
+    test_dataset = _build_dataset(test_data)
 
     def collator(indices):
         batch = BatchPAD(feature_name, pad_item, pad_max_len)
         for item in indices:
-            batch.append(copy.deepcopy(item))
+            batch.append(item)
         batch.padding()
         return batch
 

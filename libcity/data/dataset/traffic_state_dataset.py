@@ -751,22 +751,18 @@ class TrafficStateDataset(AbstractDataset):
                 y(np.ndarray): 模型输出数据，(epoch_size, output_length, ..., feature_dim)
         """
         num_samples = df.shape[0]
-        # 预测用的过去时间窗口长度 取决于self.input_window
-        x_offsets = np.sort(np.concatenate((np.arange(-self.input_window + 1, 1, 1),)))
-        # 未来时间窗口长度 取决于self.output_window
-        y_offsets = np.sort(np.arange(1, self.output_window + 1, 1))
-
-        x, y = [], []
-        min_t = abs(min(x_offsets))
-        max_t = abs(num_samples - abs(max(y_offsets)))
-        for t in range(min_t, max_t):
-            x_t = df[t + x_offsets, ...]
-            y_t = df[t + y_offsets, ...]
-            x.append(x_t)
-            y.append(y_t)
-        x = np.stack(x, axis=0)
-        y = np.stack(y, axis=0)
-        return x, y
+        total_window = self.input_window + self.output_window
+        num_windows = num_samples - total_window + 1
+        if num_windows <= 0:
+            raise ValueError(
+                "Input data is shorter than input_window + output_window: "
+                f"{num_samples} < {total_window}"
+            )
+        windows = np.lib.stride_tricks.sliding_window_view(df, total_window, axis=0)
+        windows = np.moveaxis(windows, -1, 1)[:num_windows]
+        x = windows[:, :self.input_window, ...]
+        y = windows[:, self.input_window:, ...]
+        return x.copy(), y.copy()
 
     def _generate_data(self):
         """
@@ -993,9 +989,9 @@ class TrafficStateDataset(AbstractDataset):
         # 把训练集的X和y聚合在一起成为list，测试集验证集同理
         # x_train/y_train: (num_samples, input_length, ..., feature_dim)
         # train_data(list): train_data[i]是一个元组，由x_train[i]和y_train[i]组成
-        train_data = list(zip(x_train, y_train))
-        eval_data = list(zip(x_val, y_val))
-        test_data = list(zip(x_test, y_test))
+        train_data = (x_train, y_train)
+        eval_data = (x_val, y_val)
+        test_data = (x_test, y_test)
         # 转Dataloader
         self.train_dataloader, self.eval_dataloader, self.test_dataloader = \
             generate_dataloader(train_data, eval_data, test_data, self.feature_name,
