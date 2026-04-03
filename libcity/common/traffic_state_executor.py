@@ -5,13 +5,11 @@ import torch
 from logging import getLogger
 from torch.utils.tensorboard import SummaryWriter
 from libcity.common.abstract_executor import AbstractExecutor
-from libcity.common.registry_executor import register_executor
 from libcity.utils import get_evaluator, ensure_dir, get_run_dir, get_run_subdir, tune
 from libcity.models import loss
 from functools import partial
 
 
-@register_executor()
 class TrafficStateExecutor(AbstractExecutor):
     def __init__(self, config, model, data_feature):
         self.evaluator = get_evaluator(config)

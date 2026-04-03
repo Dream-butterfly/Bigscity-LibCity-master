@@ -10,5 +10,7 @@ def get_dataset(config):
     """
     from libcity.data.registry import get_dataset_class
 
-    dataset_class = get_dataset_class(config['dataset_class'])
+    dataset_class = get_dataset_class(
+        config['dataset_class'], task=config['task'], model_name=config['model']
+    )
     return dataset_class(config)

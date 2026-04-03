@@ -1,7 +1,11 @@
 {
   "task": "traffic_state_pred",
   "model": "NEW_MODEL",
+  "model_entry": "libcity.models.new.NEW_MODEL.model:NEW_MODEL",
   "dataset_class": "TrafficStatePointDataset",
+  "dataset_entry": "libcity.data.dataset.traffic_state_point_dataset:TrafficStatePointDataset",
   "executor": "TrafficStateExecutor",
-  "evaluator": "TrafficStateEvaluator"
+  "executor_entry": "libcity.common.traffic_state_executor:TrafficStateExecutor",
+  "evaluator": "TrafficStateEvaluator",
+  "evaluator_entry": "libcity.common.traffic_state_evaluator:TrafficStateEvaluator"
 }

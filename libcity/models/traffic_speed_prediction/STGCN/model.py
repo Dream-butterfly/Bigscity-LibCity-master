@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
-from libcity.models.registry import register_model
 from libcity.models import loss
 from libcity.models.abstract_traffic_state_model import AbstractTrafficStateModel
 
@@ -211,7 +210,6 @@ class OutputLayer(nn.Module):
         # (batch_size, output_dim, 1, num_nodes)
 
 
-@register_model("traffic_state_pred")
 class STGCN(AbstractTrafficStateModel):
     def __init__(self, config, data_feature):
         super().__init__(config, data_feature)

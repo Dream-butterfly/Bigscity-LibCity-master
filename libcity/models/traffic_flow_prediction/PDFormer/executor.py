@@ -4,7 +4,6 @@ import torch
 import os
 import math
 from logging import getLogger
-from libcity.common.registry_executor import register_executor
 from libcity.common.traffic_state_executor import TrafficStateExecutor
 from libcity.utils import tune
 import scipy.sparse as sp
@@ -189,7 +188,6 @@ class CosineLRScheduler(Scheduler):
             return int(math.floor(-self.t_initial * (self.t_mul ** cycles - 1) / (1 - self.t_mul)))
 
 
-@register_executor()
 class PDFormerExecutor(TrafficStateExecutor):
 
     def __init__(self, config, model, data_feature):

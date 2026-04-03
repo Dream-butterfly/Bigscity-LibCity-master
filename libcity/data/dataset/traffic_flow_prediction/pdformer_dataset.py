@@ -3,13 +3,11 @@ import os
 import numpy as np
 from tqdm import tqdm
 from libcity.data.dataset import TrafficStatePointDataset
-from libcity.data.registry import register_dataset
 from libcity.data.dataloader import generate_dataloader
 from tslearn.clustering import TimeSeriesKMeans, KShape
 from libcity.utils.dtw import dtw_distance_ndim
 
 
-@register_dataset()
 class PDFormerDataset(TrafficStatePointDataset):
 
     def __init__(self, config):

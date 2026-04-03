@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from functools import partial
 from logging import getLogger
-from libcity.models.registry import register_model
 from libcity.models import loss
 from libcity.models.abstract_traffic_state_model import AbstractTrafficStateModel
 
@@ -306,7 +305,6 @@ class STEncoderBlock(nn.Module):
         return x
 
 
-@register_model("traffic_state_pred")
 class PDFormer(AbstractTrafficStateModel):
     def __init__(self, config, data_feature):
         super().__init__(config, data_feature)

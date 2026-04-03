@@ -2,14 +2,12 @@ import os
 import json
 import datetime
 import pandas as pd
-from libcity.common.registry_evaluator import register_evaluator
 from libcity.utils import ensure_dir
 from libcity.models import loss
 from logging import getLogger
 from libcity.common.abstract_evaluator import AbstractEvaluator
 
 
-@register_evaluator()
 class TrafficStateEvaluator(AbstractEvaluator):
 
     def __init__(self, config):

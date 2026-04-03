@@ -114,7 +114,9 @@ def get_evaluator(config):
     """
     from libcity.common.registry_evaluator import get_evaluator_class
 
-    evaluator_class = get_evaluator_class(config['evaluator'])
+    evaluator_class = get_evaluator_class(
+        config['evaluator'], task=config['task'], model_name=config['model']
+    )
     return evaluator_class(config)
 
 

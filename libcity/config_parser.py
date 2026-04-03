@@ -144,19 +144,25 @@ class ConfigParser(object):
         return get_model_resource_path(self.config['task'], self.config['model'], 'config.json')
 
     def _get_dataset_default_config_path(self):
-        dataset_class = get_dataset_class(self.config['dataset_class'])
+        dataset_class = get_dataset_class(
+            self.config['dataset_class'], task=self.config['task'], model_name=self.config['model']
+        )
         dataset_module_dir = os.path.dirname(inspect.getfile(dataset_class))
         return os.path.join(dataset_module_dir, '{}.json'.format(self.config['dataset_class']))
 
     def _get_executor_default_config_path(self):
         if has_model_resource(self.config['task'], self.config['model'], 'executor.json'):
             return get_model_resource_path(self.config['task'], self.config['model'], 'executor.json')
-        executor_class = get_executor_class(self.config['executor'])
+        executor_class = get_executor_class(
+            self.config['executor'], task=self.config['task'], model_name=self.config['model']
+        )
         executor_module_dir = os.path.dirname(inspect.getfile(executor_class))
         return os.path.join(executor_module_dir, '{}.json'.format(self.config['executor']))
 
     def _get_evaluator_default_config_path(self):
-        evaluator_class = get_evaluator_class(self.config['evaluator'])
+        evaluator_class = get_evaluator_class(
+            self.config['evaluator'], task=self.config['task'], model_name=self.config['model']
+        )
         evaluator_module_dir = os.path.dirname(inspect.getfile(evaluator_class))
         return os.path.join(evaluator_module_dir, '{}.json'.format(self.config['evaluator']))
 

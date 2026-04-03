@@ -1,7 +1,11 @@
 {
   "task": "traffic_state_pred",
   "model": "PDFormer",
+  "model_entry": "libcity.models.traffic_flow_prediction.PDFormer.model:PDFormer",
   "dataset_class": "PDFormerDataset",
+  "dataset_entry": "libcity.data.dataset.traffic_flow_prediction.pdformer_dataset:PDFormerDataset",
   "executor": "PDFormerExecutor",
-  "evaluator": "TrafficStateEvaluator"
+  "executor_entry": "libcity.models.traffic_flow_prediction.PDFormer.executor:PDFormerExecutor",
+  "evaluator": "TrafficStateEvaluator",
+  "evaluator_entry": "libcity.common.traffic_state_evaluator:TrafficStateEvaluator"
 }

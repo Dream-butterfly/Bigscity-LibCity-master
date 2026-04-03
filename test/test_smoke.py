@@ -1,5 +1,5 @@
 import torch
-from libcity.config import ConfigParser
+from libcity.config_parser import ConfigParser
 from libcity.data import get_dataset
 from libcity.utils import get_model
 

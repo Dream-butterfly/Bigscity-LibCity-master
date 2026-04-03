@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from libcity.models import loss
 from libcity.models.abstract_traffic_state_model import AbstractTrafficStateModel
-from libcity.models.registry import register_model
 
 
 class SSelfAttention(nn.Module):
@@ -277,7 +276,6 @@ class Transformer(nn.Module):
         enc_src = self.encoder(src)
         return enc_src
 
-@register_model("traffic_state_pred")
 class STTN(AbstractTrafficStateModel):
     def __init__(self, config, data_feature):
         super().__init__(config, data_feature)

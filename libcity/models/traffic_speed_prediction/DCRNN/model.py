@@ -4,7 +4,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from logging import getLogger
-from libcity.models.registry import register_model
 from libcity.models.abstract_traffic_state_model import AbstractTrafficStateModel
 from libcity.models import loss
 
@@ -340,7 +339,6 @@ class DecoderModel(nn.Module, Seq2SeqAttrs):
         return output, torch.stack(hidden_states)
 
 
-@register_model("traffic_state_pred")
 class DCRNN(AbstractTrafficStateModel, Seq2SeqAttrs):
     def __init__(self, config, data_feature):
         self.adj_mx = data_feature.get('adj_mx')

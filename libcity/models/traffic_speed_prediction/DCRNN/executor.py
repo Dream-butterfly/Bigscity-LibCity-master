@@ -4,12 +4,10 @@ import torch
 import os
 from libcity.models import loss
 from functools import partial
-from libcity.common.registry_executor import register_executor
 from libcity.common.traffic_state_executor import TrafficStateExecutor
 from libcity.utils import tune
 
 
-@register_executor()
 class DCRNNExecutor(TrafficStateExecutor):
     def __init__(self, config, model, data_feature):
         TrafficStateExecutor.__init__(self, config, model, data_feature)

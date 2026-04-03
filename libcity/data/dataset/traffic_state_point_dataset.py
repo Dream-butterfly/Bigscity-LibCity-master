@@ -2,10 +2,6 @@ from libcity.utils import get_dataset_cache_dir
 import os
 
 from libcity.data.dataset import TrafficStateDataset
-from libcity.data.registry import register_dataset
-
-
-@register_dataset()
 class TrafficStatePointDataset(TrafficStateDataset):
 
     def __init__(self, config):

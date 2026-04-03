@@ -1,7 +1,11 @@
 {
   "task": "traffic_state_pred",
   "model": "DCRNN",
+  "model_entry": "libcity.models.traffic_speed_prediction.DCRNN.model:DCRNN",
   "dataset_class": "TrafficStatePointDataset",
+  "dataset_entry": "libcity.data.dataset.traffic_state_point_dataset:TrafficStatePointDataset",
   "executor": "DCRNNExecutor",
-  "evaluator": "TrafficStateEvaluator"
+  "executor_entry": "libcity.models.traffic_speed_prediction.DCRNN.executor:DCRNNExecutor",
+  "evaluator": "TrafficStateEvaluator",
+  "evaluator_entry": "libcity.common.traffic_state_evaluator:TrafficStateEvaluator"
 }

@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from logging import getLogger
 
-from libcity.models.registry import register_model
 from libcity.models.abstract_traffic_state_model import AbstractTrafficStateModel
 from libcity.models import loss
 
@@ -206,7 +205,6 @@ class ContextRefinement(nn.Module):
         return refined_features
 
 
-@register_model("traffic_state_pred")
 class NEW_MODEL(AbstractTrafficStateModel):
     """
     New spatio-temporal traffic prediction model
