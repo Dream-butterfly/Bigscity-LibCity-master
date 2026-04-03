@@ -4,9 +4,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from logging import getLogger
 
-from libcity.model.registry import register_model
-from libcity.model.abstract_traffic_state_model import AbstractTrafficStateModel
-from libcity.model import loss
+from libcity.models.registry import register_model
+from libcity.models.abstract_traffic_state_model import AbstractTrafficStateModel
+from libcity.models import loss
 
 
 class DynamicGraphConstructor(nn.Module):

@@ -1,27 +1,49 @@
 import importlib
 import importlib.util
+import json
 import os
+from functools import lru_cache
 
 
 _MODELS_ROOT = os.path.dirname(__file__)
+_MANIFEST_NAME = "manifest.json"
+
+
+@lru_cache(maxsize=1)
+def _load_manifest_index():
+    manifest_index = []
+    for root, _, files in os.walk(_MODELS_ROOT):
+        if _MANIFEST_NAME not in files:
+            continue
+        manifest_path = os.path.join(root, _MANIFEST_NAME)
+        with open(manifest_path, "r", encoding="utf-8") as manifest_file:
+            metadata = json.load(manifest_file)
+        metadata["directory"] = root
+        metadata["package"] = "libcity.models." + os.path.relpath(root, _MODELS_ROOT).replace(os.sep, ".")
+        manifest_index.append(metadata)
+    return tuple(manifest_index)
+
+
+def _iter_model_manifests():
+    return _load_manifest_index()
+
+
+def get_model_metadata(task, model_name):
+    for metadata in _iter_model_manifests():
+        if metadata.get("model") != model_name:
+            continue
+        if task is not None and metadata.get("task") != task:
+            continue
+        return metadata
+    raise FileNotFoundError(f"Model metadata for task={task}, model={model_name} is not found under {_MODELS_ROOT}.")
 
 
 def get_model_dir(task, model_name):
-    direct_path = os.path.join(_MODELS_ROOT, task, model_name)
-    if os.path.isdir(direct_path):
-        return direct_path
-    for entry in os.listdir(_MODELS_ROOT):
-        candidate = os.path.join(_MODELS_ROOT, entry, model_name)
-        if os.path.isdir(candidate):
-            return candidate
-    return direct_path
+    return get_model_metadata(task, model_name)["directory"]
 
 
 def get_model_package(task, model_name):
-    model_dir = get_model_dir(task, model_name)
-    relative_dir = os.path.relpath(model_dir, _MODELS_ROOT)
-    package_suffix = relative_dir.replace(os.sep, ".")
-    return f"libcity.models.{package_suffix}"
+    return get_model_metadata(task, model_name)["package"]
 
 
 def get_model_resource_path(task, model_name, resource_name):
@@ -33,7 +55,10 @@ def has_model_resource(task, model_name, resource_name):
 
 
 def import_model_resource(task, model_name, module_name):
-    model_dir = get_model_dir(task, model_name)
+    try:
+        model_dir = get_model_dir(task, model_name)
+    except FileNotFoundError:
+        return False
     if not os.path.isdir(model_dir):
         return False
     package = get_model_package(task, model_name)

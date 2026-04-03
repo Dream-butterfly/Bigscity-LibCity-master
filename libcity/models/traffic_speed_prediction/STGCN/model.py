@@ -5,9 +5,9 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
-from libcity.model.registry import register_model
-from libcity.model import loss
-from libcity.model.abstract_traffic_state_model import AbstractTrafficStateModel
+from libcity.models.registry import register_model
+from libcity.models import loss
+from libcity.models.abstract_traffic_state_model import AbstractTrafficStateModel
 
 
 def calculate_scaled_laplacian(adj):

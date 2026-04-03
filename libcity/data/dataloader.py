@@ -1,25 +1,10 @@
-import numpy as np
-from torch.utils.data import DataLoader
 import copy
 
-from libcity.data.list_dataset import ListDataset
-from libcity.data.batch import Batch, BatchPAD
+import numpy as np
+from torch.utils.data import DataLoader
 
-
-def get_dataset(config):
-    """
-    according the config['dataset_class'] to create the dataset
-
-    Args:
-        config(ConfigParser): config
-
-    Returns:
-        AbstractDataset: the loaded dataset
-    """
-    from libcity.data.registry import get_dataset_class
-
-    dataset_class = get_dataset_class(config['dataset_class'])
-    return dataset_class(config)
+from libcity.data.core.batch import Batch, BatchPAD
+from libcity.data.core.list_dataset import ListDataset
 
 
 def generate_dataloader(train_data, eval_data, test_data, feature_name,

@@ -4,7 +4,7 @@ import datetime
 import pandas as pd
 from libcity.common.registry_evaluator import register_evaluator
 from libcity.utils import ensure_dir
-from libcity.model import loss
+from libcity.models import loss
 from logging import getLogger
 from libcity.common.abstract_evaluator import AbstractEvaluator
 
@@ -67,11 +67,11 @@ class TrafficStateEvaluator(AbstractEvaluator):
                     elif metric == 'masked_RMSE':
                         self.intermediate_result[metric + '@' + str(i)].append(
                             loss.masked_rmse_torch(y_pred[:, :i], y_true[:, :i], 0,
-                                                  mask_val=self.mask_val).item())
+                                                   mask_val=self.mask_val).item())
                     elif metric == 'masked_MAPE':
                         self.intermediate_result[metric + '@' + str(i)].append(
                             loss.masked_mape_torch(y_pred[:, :i], y_true[:, :i], 0,
-                                                  mask_val=self.mask_val).item())
+                                                   mask_val=self.mask_val).item())
                     elif metric == 'MAE':
                         self.intermediate_result[metric + '@' + str(i)].append(
                             loss.masked_mae_torch(y_pred[:, :i], y_true[:, :i]).item())
@@ -104,11 +104,11 @@ class TrafficStateEvaluator(AbstractEvaluator):
                     elif metric == 'masked_RMSE':
                         self.intermediate_result[metric + '@' + str(i)].append(
                             loss.masked_rmse_torch(y_pred[:, i - 1], y_true[:, i - 1], 0,
-                                                  mask_val=self.mask_val).item())
+                                                   mask_val=self.mask_val).item())
                     elif metric == 'masked_MAPE':
                         self.intermediate_result[metric + '@' + str(i)].append(
                             loss.masked_mape_torch(y_pred[:, i - 1], y_true[:, i - 1], 0,
-                                                  mask_val=self.mask_val).item())
+                                                   mask_val=self.mask_val).item())
                     elif metric == 'MAE':
                         self.intermediate_result[metric + '@' + str(i)].append(
                             loss.masked_mae_torch(y_pred[:, i - 1], y_true[:, i - 1]).item())

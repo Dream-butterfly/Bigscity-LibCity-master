@@ -20,7 +20,7 @@ def _bootstrap_point_datasets():
 def _bootstrap_pdformer_dataset():
     if "pdformer" in _BOOTSTRAPPED:
         return
-    import libcity.data.dataset.dataset_subclass  # noqa: F401
+    import libcity.data.dataset.traffic_flow_prediction  # noqa: F401
 
     _BOOTSTRAPPED.add("pdformer")
 

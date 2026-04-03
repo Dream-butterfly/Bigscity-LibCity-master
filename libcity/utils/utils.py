@@ -96,7 +96,7 @@ def get_model(config, data_feature):
     Returns:
         AbstractModel: the loaded model
     """
-    from libcity.model.registry import get_model_class
+    from libcity.models.registry import get_model_class
 
     model_class = get_model_class(config['task'], config['model'])
     return model_class(config, data_feature)

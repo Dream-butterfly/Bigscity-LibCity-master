@@ -6,7 +6,7 @@ import datetime
 from logging import getLogger
 
 from libcity.data.dataset import AbstractDataset
-from libcity.data.utils import generate_dataloader
+from libcity.data.dataloader import generate_dataloader
 from libcity.utils import StandardScaler, NormalScaler, NoneScaler, \
     MinMax01Scaler, MinMax11Scaler, LogScaler, ensure_dir, zero_noise, gaussian_noise
 

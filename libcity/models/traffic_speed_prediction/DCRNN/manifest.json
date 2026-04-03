@@ -1,0 +1,7 @@
+{
+  "task": "traffic_state_pred",
+  "model": "DCRNN",
+  "dataset_class": "TrafficStatePointDataset",
+  "executor": "DCRNNExecutor",
+  "evaluator": "TrafficStateEvaluator"
+}

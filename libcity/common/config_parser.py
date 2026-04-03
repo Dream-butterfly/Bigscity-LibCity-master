@@ -1,7 +1,11 @@
 import os
 import json
+import inspect
 import torch
-from libcity.models.locator import get_model_resource_path, has_model_resource
+from libcity.models.locator import get_model_metadata, get_model_resource_path, has_model_resource
+from libcity.data.registry import get_dataset_class
+from libcity.common.registry_evaluator import get_evaluator_class
+from libcity.common.registry_executor import get_executor_class
 
 
 class ConfigParser(object):
@@ -65,42 +69,22 @@ class ConfigParser(object):
                     file.'.format(config_file))
 
     def _load_default_config(self):
-        # 首先加载 task config
-        with open('./libcity/config/task_config.json', 'r') as f:
-            task_config = json.load(f)
-            if self.config['task'] not in task_config:
-                raise ValueError(
-                    'task {} is not supported.'.format(self.config['task']))
-            task_config = task_config[self.config['task']]
-            # check model and dataset
-            if self.config['model'] not in task_config['allowed_model']:
-                raise ValueError('task {} do not support model {}'.format(
-                    self.config['task'], self.config['model']))
-            model = self.config['model']
-            # 加载 dataset、executor、evaluator 的模块
-            if 'dataset_class' not in self.config:
-                self.config['dataset_class'] = task_config[model]['dataset_class']
-            if self.config['task'] == 'traj_loc_pred' and 'traj_encoder' not in self.config:
-                self.config['traj_encoder'] = task_config[model]['traj_encoder']
-            if self.config['task'] == 'eta' and 'eta_encoder' not in self.config:
-                self.config['eta_encoder'] = task_config[model]['eta_encoder']
-            if 'executor' not in self.config:
-                self.config['executor'] = task_config[model]['executor']
-            if 'evaluator' not in self.config:
-                self.config['evaluator'] = task_config[model]['evaluator']
-            # 对于 LSTM RNN GRU 使用的都是同一个类，只是 RNN 模块不一样而已，这里做一下修改
-            if self.config['model'].upper() in ['LSTM', 'GRU', 'RNN']:
-                self.config['rnn_type'] = self.config['model']
-                self.config['model'] = 'RNN'
-            # if self.config['dataset'] not in task_config['allowed_dataset']:
-            #     raise ValueError('task {} do not support dataset {}'.format(
-            #         self.config['task'], self.config['dataset']))
+        model_metadata = get_model_metadata(self.config['task'], self.config['model'])
+        if 'dataset_class' not in self.config:
+            self.config['dataset_class'] = model_metadata['dataset_class']
+        if 'executor' not in self.config:
+            self.config['executor'] = model_metadata['executor']
+        if 'evaluator' not in self.config:
+            self.config['evaluator'] = model_metadata['evaluator']
+        if self.config['model'].upper() in ['LSTM', 'GRU', 'RNN']:
+            self.config['rnn_type'] = self.config['model']
+            self.config['model'] = 'RNN'
         # 接着加载每个阶段的 default config
         default_file_list = [
             self._get_model_default_config_path(),
-            './libcity/config/data/{}.json'.format(self.config['dataset_class']),
+            self._get_dataset_default_config_path(),
             self._get_executor_default_config_path(),
-            './libcity/config/evaluator/{}.json'.format(self.config['evaluator']),
+            self._get_evaluator_default_config_path(),
         ]
         # 加载所有默认配置
         for file_name in default_file_list:
@@ -130,14 +114,30 @@ class ConfigParser(object):
             "cuda:%d" % gpu_id if torch.cuda.is_available() and use_gpu else "cpu")
 
     def _get_model_default_config_path(self):
-        if has_model_resource(self.config['task'], self.config['model'], 'config.json'):
-            return get_model_resource_path(self.config['task'], self.config['model'], 'config.json')
-        return './libcity/config/model/{}/{}.json'.format(self.config['task'], self.config['model'])
+        if not has_model_resource(self.config['task'], self.config['model'], 'config.json'):
+            raise FileNotFoundError(
+                'Model config.json is required in model directory for task={}, model={}.'.format(
+                    self.config['task'], self.config['model']
+                )
+            )
+        return get_model_resource_path(self.config['task'], self.config['model'], 'config.json')
+
+    def _get_dataset_default_config_path(self):
+        dataset_class = get_dataset_class(self.config['dataset_class'])
+        dataset_module_dir = os.path.dirname(inspect.getfile(dataset_class))
+        return os.path.join(dataset_module_dir, '{}.json'.format(self.config['dataset_class']))
 
     def _get_executor_default_config_path(self):
         if has_model_resource(self.config['task'], self.config['model'], 'executor.json'):
             return get_model_resource_path(self.config['task'], self.config['model'], 'executor.json')
-        return './libcity/config/executor/{}.json'.format(self.config['executor'])
+        executor_class = get_executor_class(self.config['executor'])
+        executor_module_dir = os.path.dirname(inspect.getfile(executor_class))
+        return os.path.join(executor_module_dir, '{}.json'.format(self.config['executor']))
+
+    def _get_evaluator_default_config_path(self):
+        evaluator_class = get_evaluator_class(self.config['evaluator'])
+        evaluator_module_dir = os.path.dirname(inspect.getfile(evaluator_class))
+        return os.path.join(evaluator_module_dir, '{}.json'.format(self.config['evaluator']))
 
     def get(self, key, default=None):
         return self.config.get(key, default)
