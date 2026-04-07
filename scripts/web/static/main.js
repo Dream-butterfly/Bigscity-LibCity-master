@@ -1,0 +1,791 @@
+const query = new URLSearchParams(window.location.search);
+const DEFAULT_LANG = query.get('lang') || window.localStorage.getItem('train_web_lang') || 'zh-CN';
+const DEFAULT_THEME = query.get('theme') || window.localStorage.getItem('train_web_theme') || 'light';
+const DEFAULT_MODEL_PLOT_TOPK_PIE = Number(window.localStorage.getItem('train_web_model_plot_topk_pie') || 8);
+const DEFAULT_MODEL_PLOT_TOPK_BAR = Number(window.localStorage.getItem('train_web_model_plot_topk_bar') || 12);
+const state = {
+    models: [],
+    datasets: [],
+    paramRowsConfig: [],
+    paramRowsExecutor: [],
+    i18n: {params: {}, ui: {}},
+    lang: DEFAULT_LANG,
+    theme: DEFAULT_THEME,
+    logAutoScroll: true,
+    modelPlotType: 'pie',
+    modelPlotTopKPie: Number.isFinite(DEFAULT_MODEL_PLOT_TOPK_PIE) ? DEFAULT_MODEL_PLOT_TOPK_PIE : 8,
+    modelPlotTopKBar: Number.isFinite(DEFAULT_MODEL_PLOT_TOPK_BAR) ? DEFAULT_MODEL_PLOT_TOPK_BAR : 12,
+    activeRunKey: '',
+    lossRenderedEpochCount: -1,
+    resultRenderedRunKey: '',
+    modelPlot: {},
+    modelPlotOptionPie: {},
+    modelPlotOptionBar: {},
+    lossPlot: {},
+    compareRuns: [],
+    activeTab: 'train',
+};
+const byId = (id) => document.getElementById(id);
+const esc = (s) => String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+const CLI_FIELDS = ["config_file", "exp_id", "seed", "gpu", "gpu_id", "train_rate", "eval_rate", "batch_size", "learning_rate", "max_epoch", "dataset_class", "executor", "evaluator"];
+const normalizeLang = (lang) => {
+    const x = String(lang || '').trim();
+    if (!x) return 'zh-CN';
+    const lower = x.toLowerCase();
+    if (lower === 'ja-jp') return 'ja-JP';
+    if (lower === 'en-us') return 'en-US';
+    if (lower === 'zh-cn') return 'zh-CN';
+    return x;
+};
+const t = (key, fallback) => state.i18n?.ui?.[key] || fallback || key;
+const tf = (key, vars, fallback) => {
+    const text = t(key, fallback);
+    return String(text).replace(/\{(\w+)\}/g, (_, k) => String(vars?.[k] ?? ''));
+};
+
+function getParamDisplayName(key) {
+    return state.i18n?.params?.[key] || key;
+}
+
+function applyI18nLabels() {
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+        const key = el.getAttribute('data-i18n');
+        if (!key) return;
+        if (!el.dataset.i18nFallback) el.dataset.i18nFallback = el.innerText;
+        el.innerText = t(key, el.dataset.i18nFallback);
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (!key) return;
+        if (!el.dataset.i18nPlaceholderFallback) el.dataset.i18nPlaceholderFallback = el.getAttribute('placeholder') || '';
+        el.setAttribute('placeholder', t(key, el.dataset.i18nPlaceholderFallback));
+    });
+    document.querySelectorAll('[data-param-label]').forEach((el) => {
+        const key = el.getAttribute('data-param-label');
+        if (!key) return;
+        el.innerText = getParamDisplayName(key);
+    });
+    byId('param_title_config').innerText = getParamDisplayName('config');
+    byId('param_title_executor').innerText = getParamDisplayName('executor');
+    const localizedName = getParamDisplayName('localized_name');
+    const rawName = getParamDisplayName('raw_name');
+    const typeName = getParamDisplayName('type');
+    const valueName = getParamDisplayName('value');
+    byId('th_config_name_localized').innerText = localizedName;
+    byId('th_config_name_raw').innerText = rawName;
+    byId('th_config_type').innerText = typeName;
+    byId('th_config_value').innerText = valueName;
+    byId('th_executor_name_localized').innerText = localizedName;
+    byId('th_executor_name_raw').innerText = rawName;
+    byId('th_executor_type').innerText = typeName;
+    byId('th_executor_value').innerText = valueName;
+    updateAutoScrollBtnText();
+}
+
+async function loadI18n(lang) {
+    const normalized = normalizeLang(lang);
+    state.lang = normalized;
+    window.localStorage.setItem('train_web_lang', normalized);
+    try {
+        const r = await fetch(`/static/i18n/${encodeURIComponent(normalized)}.json`);
+        if (r.ok) {
+            state.i18n = await r.json();
+            document.documentElement.lang = state.i18n?.lang || normalized;
+        } else {
+            state.i18n = {params: {}, ui: {}};
+        }
+    } catch (_) {
+        state.i18n = {params: {}, ui: {}};
+    }
+    applyI18nLabels();
+    // Parameter rows use localized labels from i18n map, so re-render after language switch.
+    renderParamTable();
+    drawModelParamChart(state.modelPlot, state.modelPlotOptionPie, state.modelPlotOptionBar);
+    updateLossSummary(state.lossPlot || {});
+    const select = byId('lang_select');
+    if (select) select.value = normalized;
+}
+
+function applyTheme(theme) {
+    const mode = theme === 'dark' ? 'dark' : 'light';
+    state.theme = mode;
+    window.localStorage.setItem('train_web_theme', mode);
+    const href = mode === 'dark' ? '/static/train_web_flask_dark.css' : '/static/train_web_flask.css';
+    byId('theme_stylesheet').setAttribute('href', href);
+}
+
+function clampTopK(v, d) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return d;
+    return Math.max(1, Math.min(100, Math.floor(n)));
+}
+
+function persistModelPlotTopK() {
+    window.localStorage.setItem('train_web_model_plot_topk_pie', String(state.modelPlotTopKPie));
+    window.localStorage.setItem('train_web_model_plot_topk_bar', String(state.modelPlotTopKBar));
+}
+
+async function pushModelPlotTopK() {
+    try {
+        await fetch('/api/plot_settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                pie_topk: state.modelPlotTopKPie,
+                bar_topk: state.modelPlotTopKBar,
+            }),
+        });
+    } catch (_) {
+        // Keep local setting even if server sync temporarily fails.
+    }
+}
+
+function inferType(v) {
+    if (v === null || v === undefined) return 'str';
+    if (typeof v === 'boolean') return 'bool';
+    if (typeof v === 'number') return Number.isInteger(v) ? 'int' : 'float';
+    if (typeof v === 'object') return 'json';
+    return 'str';
+}
+
+function toInputString(v) {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'object') return JSON.stringify(v);
+    return String(v);
+}
+
+function parseValue(type, raw) {
+    const t = (type || 'str').toLowerCase();
+    if (t === 'bool') {
+        const x = String(raw).trim().toLowerCase();
+        if (['true', '1', 'yes'].includes(x)) return true;
+        if (['false', '0', 'no'].includes(x)) return false;
+        throw new Error(tf('error_bool_value', {raw}, `布尔值错误: ${raw}`));
+    }
+    if (t === 'int') {
+        const n = parseInt(String(raw).trim(), 10);
+        if (Number.isNaN(n)) throw new Error(tf('error_int_value', {raw}, `整数错误: ${raw}`));
+        return n;
+    }
+    if (t === 'float') {
+        const n = Number(String(raw).trim());
+        if (Number.isNaN(n)) throw new Error(tf('error_float_value', {raw}, `浮点数错误: ${raw}`));
+        return n;
+    }
+    if (t === 'json') {
+        const txt = String(raw).trim();
+        return txt ? JSON.parse(txt) : null;
+    }
+    return String(raw);
+}
+
+function renderTasks() {
+    const tasks = [...new Set(state.models.map(x => x.task))].sort();
+    byId('task').innerHTML = tasks.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+    const stgcnMeta = state.models.find((x) => x.model === 'STGCN');
+    if (stgcnMeta && tasks.includes(stgcnMeta.task)) {
+        byId('task').value = stgcnMeta.task;
+    }
+}
+
+function renderModelsForTask() {
+    const task = byId('task').value;
+    const models = [...new Set(state.models.filter(x => x.task === task).map(x => x.model))].sort();
+    byId('model').innerHTML = models.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+    if (models.includes('STGCN')) byId('model').value = 'STGCN';
+}
+
+function renderDatasets() {
+    byId('dataset').innerHTML = state.datasets.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+    if (state.datasets.includes('PEMSD4')) byId('dataset').value = 'PEMSD4';
+}
+
+function renderParamCell(section, idx) {
+    if (idx === null) return '';
+    const rows = section === 'executor' ? state.paramRowsExecutor : state.paramRowsConfig;
+    const row = rows[idx];
+    return `
+    <td class="param-localized">${esc(getParamDisplayName(row.key))}</td>
+    <td class="mono param-key">${esc(row.key)}</td>
+    <td>
+      <select class="type-select" data-section="${section}" data-idx="${idx}">
+        <option value="str" ${row.type === 'str' ? 'selected' : ''}>str</option>
+        <option value="bool" ${row.type === 'bool' ? 'selected' : ''}>bool</option>
+        <option value="int" ${row.type === 'int' ? 'selected' : ''}>int</option>
+        <option value="float" ${row.type === 'float' ? 'selected' : ''}>float</option>
+        <option value="json" ${row.type === 'json' ? 'selected' : ''}>json</option>
+      </select>
+    </td>
+    <td><input class="param-value mono value-input" data-section="${section}" data-idx="${idx}" value="${esc(row.value)}"/></td>
+  `;
+}
+
+function renderParamTable() {
+    const filter = byId('param_filter').value.trim().toLowerCase();
+    const configIds = state.paramRowsConfig
+        .map((r, i) => ({r, i}))
+        .filter(x => !filter || x.r.key.toLowerCase().includes(filter))
+        .map(x => x.i);
+    const executorIds = state.paramRowsExecutor
+        .map((r, i) => ({r, i}))
+        .filter(x => !filter || x.r.key.toLowerCase().includes(filter))
+        .map(x => x.i);
+    byId('param_count').innerText = String(configIds.length + executorIds.length);
+    byId('param_count_config').innerText = String(configIds.length);
+    byId('param_count_executor').innerText = String(executorIds.length);
+    const bodyConfig = byId('param_tbody_config');
+    const bodyExecutor = byId('param_tbody_executor');
+    bodyConfig.innerHTML = configIds.map((idx) => `<tr>${renderParamCell('config', idx)}</tr>`).join('')
+        || `<tr><td colspan="4" class="small">${esc(t('table_no_params', '无参数'))}</td></tr>`;
+    bodyExecutor.innerHTML = executorIds.map((idx) => `<tr>${renderParamCell('executor', idx)}</tr>`).join('')
+        || `<tr><td colspan="4" class="small">${esc(t('table_no_params', '无参数'))}</td></tr>`;
+
+    document.querySelectorAll('#param_tbody_config .type-select, #param_tbody_executor .type-select').forEach(el => {
+        el.addEventListener('change', (e) => {
+            const section = e.target.getAttribute('data-section');
+            const idx = Number(e.target.getAttribute('data-idx'));
+            const rows = section === 'executor' ? state.paramRowsExecutor : state.paramRowsConfig;
+            rows[idx].type = e.target.value;
+        });
+    });
+    document.querySelectorAll('#param_tbody_config .value-input, #param_tbody_executor .value-input').forEach(el => {
+        el.addEventListener('input', (e) => {
+            const section = e.target.getAttribute('data-section');
+            const idx = Number(e.target.getAttribute('data-idx'));
+            const rows = section === 'executor' ? state.paramRowsExecutor : state.paramRowsConfig;
+            rows[idx].value = e.target.value;
+        });
+    });
+}
+
+function resetParamTypes() {
+    state.paramRowsConfig.forEach(r => r.type = inferType(r.defaultValue));
+    state.paramRowsExecutor.forEach(r => r.type = inferType(r.defaultValue));
+    renderParamTable();
+}
+
+function collectConfigFromTable() {
+    const cfg = {};
+    for (const r of state.paramRowsConfig) cfg[r.key] = parseValue(r.type, r.value);
+    for (const r of state.paramRowsExecutor) cfg[r.key] = parseValue(r.type, r.value);
+    return cfg;
+}
+
+function applyDefaultToCliFields(config) {
+    const setIf = (k, v) => {
+        if (v !== undefined && v !== null && byId(k)) byId(k).value = String(v);
+    };
+    setIf('max_epoch', config.max_epoch ?? 10);
+    setIf('seed', config.seed);
+    setIf('gpu_id', config.gpu_id);
+    setIf('train_rate', config.train_rate);
+    setIf('eval_rate', config.eval_rate);
+    setIf('batch_size', config.batch_size);
+    setIf('learning_rate', config.learning_rate);
+    setIf('dataset_class', config.dataset_class);
+    setIf('executor', config.executor);
+    setIf('evaluator', config.evaluator);
+    if (config.gpu !== undefined && byId('gpu')) byId('gpu').value = String(config.gpu).toLowerCase();
+}
+
+function collectCliOptions() {
+    const out = {};
+    for (const k of CLI_FIELDS) {
+        const el = byId(k);
+        if (!el) continue;
+        const v = (el.value ?? '').trim();
+        if (v !== '') out[k] = v;
+    }
+    return out;
+}
+
+async function loadDefaults() {
+    const body = {task: byId('task').value, model: byId('model').value, dataset: byId('dataset').value};
+    const r = await fetch('/api/default_config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    });
+    const data = await r.json();
+    if (!r.ok) {
+        alert(data.error || t('error_load_defaults_failed', '加载默认参数失败'));
+        return;
+    }
+    const cfg = data.config || {};
+    cfg.max_epoch = 10;
+    const executorKeys = new Set(data.executor_keys || []);
+    const allRows = Object.keys(cfg).sort().map(k => ({
+        key: k,
+        defaultValue: cfg[k],
+        type: inferType(cfg[k]),
+        value: toInputString(cfg[k])
+    }));
+    state.paramRowsExecutor = allRows.filter((row) => executorKeys.has(row.key));
+    state.paramRowsConfig = allRows.filter((row) => !executorKeys.has(row.key));
+    applyDefaultToCliFields(cfg);
+    renderParamTable();
+}
+
+async function startTrain() {
+    let config;
+    try {
+        config = collectConfigFromTable();
+    } catch (e) {
+        alert(`${t('error_param_parse_failed', '参数解析失败')}: ${e.message}`);
+        return;
+    }
+    // Keep command-line form fields synchronized into config.
+    const cliOptions = collectCliOptions();
+    for (const [k, v] of Object.entries(cliOptions)) {
+        if (k === 'config_file' || k === 'exp_id') continue;
+        config[k] = v;
+    }
+
+    const body = {
+        task: byId('task').value,
+        model: byId('model').value,
+        dataset: byId('dataset').value,
+        saved_model: byId('saved_model').value,
+        train: byId('train').value,
+        extra_args: byId('extra_args').value || '',
+        cli_options: cliOptions,
+        config: config,
+    };
+    const r = await fetch('/api/start', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    });
+    const data = await r.json();
+    if (!r.ok) alert(data.error || t('error_start_failed', '启动失败'));
+}
+
+async function stopTrain() {
+    const r = await fetch('/api/stop', {method: 'POST'});
+    const data = await r.json();
+    if (!r.ok) alert(data.error || t('error_stop_failed', '停止失败'));
+}
+
+async function clearState() {
+    const r = await fetch('/api/clear', {method: 'POST'});
+    const data = await r.json();
+    if (!r.ok) {
+        alert(data.error || t('error_clear_failed', '清空状态失败'));
+        return;
+    }
+    state.activeRunKey = '';
+    state.lossRenderedEpochCount = -1;
+    state.resultRenderedRunKey = '';
+    await refreshStatus();
+}
+
+const charts = {
+    model_param_chart: null,
+    loss_chart: null,
+    chart: null,
+    compare_chart: null,
+};
+
+function resizeAllCharts() {
+    Object.values(charts).forEach((chart) => {
+        if (chart) chart.resize();
+    });
+}
+
+function renderEChart(containerId, option) {
+    const dom = byId(containerId);
+    if (!dom || typeof echarts === 'undefined') return;
+    let chart = charts[containerId];
+    if (!chart) {
+        chart = echarts.init(dom);
+        charts[containerId] = chart;
+    }
+    const reviveFn = (node) => {
+        if (!node || typeof node !== 'object') return;
+        if (Array.isArray(node)) {
+            node.forEach((item) => reviveFn(item));
+            return;
+        }
+        for (const [k, v] of Object.entries(node)) {
+            if ((k === 'formatter' || k === 'valueFormatter') && typeof v === 'string') {
+                const s = v.trim();
+                if (s.startsWith('function(') || s.startsWith('(function(')) {
+                    try {
+                        node[k] = new Function(`return (${s});`)();
+                    } catch (_) {
+                        // Keep original string if conversion fails.
+                    }
+                }
+            } else if (v && typeof v === 'object') {
+                reviveFn(v);
+            }
+        }
+    };
+    const opt = option || {};
+    reviveFn(opt);
+    try {
+        chart.setOption(opt, true);
+    } catch (err) {
+        console.warn(`Failed to render chart: ${containerId}`, err);
+    }
+}
+
+function initPaneResizers() {
+    document.querySelectorAll('.pane').forEach((pane) => {
+        const left = pane.querySelector('.pane-left');
+        const right = pane.querySelector('.pane-right');
+        const handle = pane.querySelector('.pane-resizer');
+        if (!left || !right || !handle) return;
+
+        const storageKey = pane.id ? `pane_ratio_${pane.id}` : '';
+        if (storageKey) {
+            const ratioRaw = window.localStorage.getItem(storageKey);
+            const ratio = Number(ratioRaw);
+            if (Number.isFinite(ratio) && ratio > 0.15 && ratio < 0.85) {
+                pane.style.gridTemplateColumns = `${(ratio * 100).toFixed(3)}% 8px ${(100 - ratio * 100).toFixed(3)}%`;
+            }
+        }
+
+        handle.addEventListener('pointerdown', (ev) => {
+            if (window.matchMedia('(max-width: 1050px)').matches) return;
+            ev.preventDefault();
+            handle.setPointerCapture(ev.pointerId);
+            document.body.style.userSelect = 'none';
+            const paneRect = pane.getBoundingClientRect();
+            const startX = ev.clientX;
+            const startLeft = left.getBoundingClientRect().width;
+            const minWidth = 280;
+
+            const onPointerMove = (moveEv) => {
+                const delta = moveEv.clientX - startX;
+                const total = paneRect.width - 8;
+                let nextLeft = startLeft + delta;
+                nextLeft = Math.max(minWidth, Math.min(total - minWidth, nextLeft));
+                const ratio = nextLeft / Math.max(1, total);
+                pane.style.gridTemplateColumns = `${(ratio * 100).toFixed(3)}% 8px ${(100 - ratio * 100).toFixed(3)}%`;
+                resizeAllCharts();
+            };
+
+            const onPointerUp = () => {
+                document.body.style.userSelect = '';
+                window.removeEventListener('pointermove', onPointerMove);
+                window.removeEventListener('pointerup', onPointerUp);
+                const totalWidth = left.getBoundingClientRect().width + right.getBoundingClientRect().width;
+                const ratio = left.getBoundingClientRect().width / Math.max(1, totalWidth);
+                if (storageKey && Number.isFinite(ratio)) {
+                    window.localStorage.setItem(storageKey, String(ratio));
+                }
+            };
+
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
+        });
+    });
+}
+
+function renderMetrics(result) {
+    const summary = result.metrics_summary || {};
+    const rows = result.metrics_rows || [];
+    const columns = Array.isArray(result.metrics_columns) ? result.metrics_columns : [];
+    const summaryOrder = columns.filter((c) => c !== 'horizon' && summary[c] !== undefined);
+    const fallbackSummaryOrder = Object.keys(summary).filter((k) => !summaryOrder.includes(k));
+    const summaryKeys = summaryOrder.concat(fallbackSummaryOrder);
+    byId('summary').innerText = summaryKeys
+        .map(k => `${k}: h1=${summary[k].h1.toFixed(4)}, avg=${summary[k].avg.toFixed(4)}, best=${summary[k].best.toFixed(4)}`)
+        .join(' | ');
+    byId('metrics').innerHTML = result.metrics_table_html || (rows.length ? '' : `<div class="small">${esc(t('table_no_data', '无数据'))}</div>`);
+}
+
+function drawChart(option) {
+    renderEChart('chart', option || {});
+}
+
+function drawModelParamChart(plot, pieOption, barOption) {
+    const total = plot?.total_params;
+    byId('model_param_summary').innerText = total
+        ? tf('summary_total_params', {total: total.toLocaleString()}, `总参数量: ${total.toLocaleString()} | 展示: Top 参数分布`)
+        : t('summary_no_param_data', '暂无参数分布数据');
+    const useBar = state.modelPlotType === 'bar';
+    let option = useBar ? (barOption || {}) : (pieOption || {});
+    if (!useBar) {
+        const hasSeries = Array.isArray(option?.series) && option.series.length > 0;
+        if (!hasSeries) {
+            const labels = Array.isArray(plot?.labels) ? plot.labels : [];
+            const counts = Array.isArray(plot?.counts) ? plot.counts : [];
+            const pairs = labels.map((name, i) => ({name, value: Number(counts[i] || 0)}))
+                .filter((x) => Number.isFinite(x.value) && x.value > 0)
+                .sort((a, b) => b.value - a.value);
+            const k = Math.max(1, state.modelPlotTopKPie || 8);
+            const top = pairs.slice(0, k);
+            const rest = pairs.slice(k).reduce((s, x) => s + x.value, 0);
+            if (rest > 0) top.push({name: t('chart_others', 'Others'), value: rest});
+            const fallbackData = top.length ? top : [{name: t('table_no_data', '暂无数据'), value: 1}];
+            option = {
+                tooltip: {trigger: 'item', formatter: '{b}: {c} ({d}%)'},
+                legend: {type: 'scroll', orient: 'vertical', left: '68%', top: '12%'},
+                series: [{
+                    type: 'pie',
+                    radius: ['35%', '65%'],
+                    center: ['40%', '55%'],
+                    data: fallbackData,
+                    label: {formatter: '{b}: {d}%'}
+                }]
+            };
+        }
+    }
+    renderEChart('model_param_chart', option);
+}
+
+function updateLossSummary(plot) {
+    const xs = plot?.epochs || [];
+    const maxEpoch = plot?.max_epoch;
+    const maxText = maxEpoch ? ` / ${maxEpoch}` : '';
+    byId('loss_summary').innerText = xs.length
+        ? tf('summary_loss_recorded', {count: xs.length, max: maxText}, `已记录 ${xs.length} 个 epoch${maxText}`)
+        : t('summary_loss_empty', '暂无 loss 数据');
+}
+
+function drawLossChart(option, plot) {
+    updateLossSummary(plot);
+    renderEChart('loss_chart', option || {});
+}
+
+function clearResultPanels() {
+    byId('summary').innerText = t('summary_wait_train_done', '等待训练全部完成后展示');
+    byId('metrics').innerHTML = `<div class="small">${esc(t('summary_wait_train_done', '等待训练全部完成后展示'))}</div>`;
+    const chart = charts.chart;
+    if (chart) chart.clear();
+}
+
+function switchTab(tabName) {
+    state.activeTab = tabName === 'compare' ? 'compare' : 'train';
+    byId('tab_btn_train').classList.toggle('active', state.activeTab === 'train');
+    byId('tab_btn_compare').classList.toggle('active', state.activeTab === 'compare');
+    byId('tab_train').classList.toggle('active', state.activeTab === 'train');
+    byId('tab_compare').classList.toggle('active', state.activeTab === 'compare');
+    setTimeout(resizeAllCharts, 60);
+}
+
+function renderCompareRunOptions() {
+    const list = state.compareRuns || [];
+    const render = (id, selected) => {
+        const el = byId(id);
+        const opts = ['<option value=""></option>'].concat(
+            list.map((r) => {
+                const tag = `${r.run_id} | ${r.model || '-'} | ${r.dataset || '-'}`;
+                const sel = selected && selected === r.run_id ? 'selected' : '';
+                return `<option value="${esc(r.run_id)}" ${sel}>${esc(tag)}</option>`;
+            })
+        );
+        el.innerHTML = opts.join('');
+    };
+    const a = byId('compare_run_a').value;
+    const b = byId('compare_run_b').value;
+    const c = byId('compare_run_c').value;
+    render('compare_run_a', a);
+    render('compare_run_b', b);
+    render('compare_run_c', c);
+    if (!byId('compare_run_a').value && list.length) byId('compare_run_a').value = list[0].run_id;
+    if (!byId('compare_run_b').value && list.length > 1) byId('compare_run_b').value = list[1].run_id;
+}
+
+async function loadCompareRuns() {
+    const r = await fetch('/api/runs');
+    const data = await r.json();
+    state.compareRuns = Array.isArray(data.runs) ? data.runs : [];
+    renderCompareRunOptions();
+}
+
+function renderCompareMetrics(items) {
+    const table = byId('compare_metrics');
+    if (!items || !items.length) {
+        table.innerHTML = `<tr><td>${esc(t('compare_no_data', '无可对比数据'))}</td></tr>`;
+        return;
+    }
+    const metrics = new Set();
+    items.forEach((it) => Object.keys(it.metrics_summary || {}).forEach((k) => metrics.add(k)));
+    const metricList = Array.from(metrics);
+    let html = `<tr><th>${esc(t('compare_run_header', 'run'))}</th>`;
+    metricList.forEach((m) => {
+        html += `<th>${esc(m)}(${esc(t('compare_h1', 'h1'))})</th><th>${esc(m)}(${esc(t('compare_avg', 'avg'))})</th><th>${esc(m)}(${esc(t('compare_best', 'best'))})</th>`;
+    });
+    html += '</tr>';
+    items.forEach((it) => {
+        html += `<tr><td class="mono">${esc(it.run_id)}</td>`;
+        metricList.forEach((m) => {
+            const x = it.metrics_summary?.[m];
+            if (!x) html += '<td>-</td><td>-</td><td>-</td>';
+            else html += `<td>${Number(x.h1).toFixed(4)}</td><td>${Number(x.avg).toFixed(4)}</td><td>${Number(x.best).toFixed(4)}</td>`;
+        });
+        html += '</tr>';
+    });
+    table.innerHTML = html;
+}
+
+async function loadComparison() {
+    const runIds = [byId('compare_run_a').value, byId('compare_run_b').value, byId('compare_run_c').value]
+        .filter((x) => !!x);
+    if (!runIds.length) {
+        byId('compare_metrics').innerHTML = `<tr><td>${esc(t('compare_select_model_first', '请先选择模型'))}</td></tr>`;
+        return;
+    }
+    const r = await fetch('/api/compare', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({run_ids: runIds}),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+        alert(data.error || t('compare_failed', '对比失败'));
+        return;
+    }
+    renderCompareMetrics(data.items || []);
+    renderEChart('compare_chart', data.chart_option || {});
+}
+
+function updateAutoScrollBtnText() {
+    const btn = byId('log_autoscroll_btn');
+    if (!btn) return;
+    btn.innerText = tf(
+        'log_autoscroll',
+        {state: state.logAutoScroll ? t('state_on', '开') : t('state_off', '关')},
+        `自动滚动: ${state.logAutoScroll ? '开' : '关'}`
+    );
+}
+
+function renderLogs(lines) {
+    const logEl = byId('logs');
+    if (!logEl) return;
+    const shouldStickBottom = state.logAutoScroll && (logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 28);
+    const html = (lines || []).map((rawLine, idx) => {
+        const line = String(rawLine ?? '');
+        const levelMatch = line.match(/\b(INFO|WARNING|ERROR|DEBUG)\b/);
+        const level = levelMatch ? levelMatch[1] : '';
+        const cls = level ? level.toLowerCase() : (line.trim().startsWith('$') ? 'cmd' : 'plain');
+        return `
+                <div class="log-line">
+                    <span class="log-index">${idx + 1}</span>
+                    <span class="log-level log-level-${cls}">${level || (cls === 'cmd' ? t('log_cmd', 'CMD') : t('log_log', 'LOG'))}</span>
+                    <span class="log-message">${esc(line)}</span>
+                </div>
+            `;
+    }).join('');
+    logEl.innerHTML = html || `<div class="log-empty">${esc(t('log_empty', '暂无日志'))}</div>`;
+    if (shouldStickBottom) logEl.scrollTop = logEl.scrollHeight;
+}
+
+function setStatus(stateName, extra) {
+    const el = byId('status');
+    el.className = 'badge';
+    if (stateName === 'running') el.classList.add('status-running');
+    else if (stateName === 'finished') el.classList.add('status-finished');
+    else el.classList.add('status-idle');
+    const localizedState = t(`status_${stateName}`, stateName);
+    el.innerText = extra ? `${localizedState} (${extra})` : localizedState;
+}
+
+async function refreshStatus() {
+    const r = await fetch('/api/status');
+    const s = await r.json();
+    const st = s.running ? 'running' : (s.return_code === 0 ? 'finished' : 'idle');
+    const runKey = `${s.started_at || ''}__${s.exp_id || ''}__${s.ended_at || ''}__${s.return_code || ''}`;
+    if (runKey !== state.activeRunKey) {
+        state.activeRunKey = runKey;
+        state.lossRenderedEpochCount = -1;
+        state.resultRenderedRunKey = '';
+    }
+    setStatus(st, s.error ? tf('status_error', {error: s.error}, `error: ${s.error}`) : '');
+    renderLogs(s.logs_tail || []);
+    state.modelPlot = s.model_plot || {};
+    state.lossPlot = s.loss_plot || {};
+    state.modelPlotOptionPie = s.model_plot_option_pie || {};
+    state.modelPlotOptionBar = s.model_plot_option_bar || {};
+    drawModelParamChart(state.modelPlot, state.modelPlotOptionPie, state.modelPlotOptionBar);
+    const epochsCount = Array.isArray(s.loss_plot?.epochs) ? s.loss_plot.epochs.length : 0;
+    if (epochsCount !== state.lossRenderedEpochCount) {
+        drawLossChart(s.loss_plot_option || {}, s.loss_plot || {});
+        state.lossRenderedEpochCount = epochsCount;
+    }
+    if (!s.result_ready) clearResultPanels();
+    if (s.result_ready && state.resultRenderedRunKey !== runKey) {
+        const rr = await fetch('/api/result');
+        if (rr.ok) {
+            const result = await rr.json();
+            renderMetrics(result);
+            drawChart(result.chart_option || {});
+            state.resultRenderedRunKey = runKey;
+        }
+    }
+}
+
+async function init() {
+    byId('lang_select').value = normalizeLang(state.lang);
+    byId('theme_select').value = state.theme;
+    applyTheme(state.theme);
+    byId('lang_select').addEventListener('change', async (e) => {
+        const lang = e.target.value || 'zh-CN';
+        await loadI18n(lang);
+    });
+    byId('theme_select').addEventListener('change', (e) => {
+        applyTheme(e.target.value || 'light');
+        setTimeout(resizeAllCharts, 60);
+    });
+    byId('tab_btn_train').addEventListener('click', () => switchTab('train'));
+    byId('tab_btn_compare').addEventListener('click', async () => {
+        switchTab('compare');
+        if (!state.compareRuns.length) await loadCompareRuns();
+    });
+    await loadI18n(state.lang);
+    const r = await fetch('/api/meta');
+    const meta = await r.json();
+    state.models = meta.models || [];
+    state.datasets = meta.datasets || [];
+    renderTasks();
+    renderModelsForTask();
+    renderDatasets();
+    byId('task').addEventListener('change', async () => {
+        renderModelsForTask();
+        await loadDefaults();
+    });
+    byId('model').addEventListener('change', loadDefaults);
+    await loadDefaults();
+    byId('param_filter').addEventListener('input', renderParamTable);
+    byId('model_plot_type').addEventListener('change', (e) => {
+        state.modelPlotType = e.target.value === 'bar' ? 'bar' : 'pie';
+        drawModelParamChart(state.modelPlot, state.modelPlotOptionPie, state.modelPlotOptionBar);
+    });
+    state.modelPlotTopKPie = clampTopK(state.modelPlotTopKPie, 8);
+    state.modelPlotTopKBar = clampTopK(state.modelPlotTopKBar, 12);
+    byId('model_plot_topk_pie').value = String(state.modelPlotTopKPie);
+    byId('model_plot_topk_bar').value = String(state.modelPlotTopKBar);
+    persistModelPlotTopK();
+    await pushModelPlotTopK();
+    byId('model_plot_topk_pie').addEventListener('change', async (e) => {
+        const n = clampTopK(e.target.value, 8);
+        e.target.value = String(n);
+        state.modelPlotTopKPie = n;
+        persistModelPlotTopK();
+        await pushModelPlotTopK();
+        await refreshStatus();
+    });
+    byId('model_plot_topk_bar').addEventListener('change', async (e) => {
+        const n = clampTopK(e.target.value, 12);
+        e.target.value = String(n);
+        state.modelPlotTopKBar = n;
+        persistModelPlotTopK();
+        await pushModelPlotTopK();
+        await refreshStatus();
+    });
+    updateAutoScrollBtnText();
+    byId('log_autoscroll_btn').addEventListener('click', () => {
+        state.logAutoScroll = !state.logAutoScroll;
+        updateAutoScrollBtnText();
+    });
+    initPaneResizers();
+    switchTab('train');
+    await refreshStatus();
+    setInterval(refreshStatus, 2000);
+}
+
+window.addEventListener('resize', resizeAllCharts);
+init();
