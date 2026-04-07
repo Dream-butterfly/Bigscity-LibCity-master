@@ -94,25 +94,9 @@ python run_model.py --task traffic_state_pred --model GRU --dataset METR_LA
 
 该脚本将在默认配置下，在 METR_LA 数据集上运行 GRU 模型，以进行交通状态预测任务。**目前我们已经在 [文档](https://bigscity-libcity-docs.readthedocs.io/zh_CN/latest/user_guide/data/dataset_for_task.html) 发布了数据集、模型和任务之间的对应关系表格供用户参考。**更多细节请访问 [文档](https://bigscity-libcity-docs.readthedocs.io/zh_CN/latest/get_started/quick_start.html) 。
 
-## TensorBoard Visualization
+## Training Visualization
 
-在模型训练过程中，LibCity 会记录每个 epoch 的损失，并支持 tensorboard 可视化。
-
-模型运行一次后，可以使用以下命令进行可视化：
-
-```shell
-tensorboard --logdir 'libcity/cache'
-```
-
-```
-TensorFlow installation not found - running with reduced feature set.
-Serving TensorBoard on localhost; to expose to the network, use a proxy or pass --bind_all
-TensorBoard 2.4.1 at http://localhost:6006/ (Press CTRL+C to quit)
-```
-
-在浏览器中访问这个地址（[http://localhost:6006/](http://localhost:6006/)） 可以看到可视化的结果。
-
-![](https://bigscity-libcity-docs.readthedocs.io/en/latest/_images/tensorboard.png)
+当前版本不再依赖 TensorBoard。训练可视化可通过项目内置 Web 界面和输出目录中的结果文件查看（如 `outputs/*/evaluate_cache`）。
 
 ## Reproduced Model List
 

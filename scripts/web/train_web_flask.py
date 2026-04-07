@@ -1,5 +1,5 @@
 """
-Flask web demo for LibCity model training and result visualization.
+FastAPI web demo for LibCity model training and result visualization.
 """
 
 from __future__ import annotations
@@ -22,7 +22,11 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from flask import Flask, jsonify, render_template, request
+import uvicorn
+from fastapi import FastAPI, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from pyecharts_views import (
     build_loss_line_option,
     build_model_param_bar_option,
@@ -64,8 +68,9 @@ CLI_OPTION_KEYS = [
     "evaluator",
 ]
 
-app = Flask(__name__, template_folder=str(WEB_ROOT / "templates"))
-app.json.sort_keys = False
+app = FastAPI(title="LibCity Web Trainer")
+app.mount("/static", StaticFiles(directory=str(WEB_ROOT / "static")), name="static")
+templates = Jinja2Templates(directory=str(WEB_ROOT / "templates"))
 
 
 def _to_jsonable(value: Any) -> Any:
@@ -743,19 +748,19 @@ def _run_training_background(
         _remove_runtime_config(runtime_config_path)
 
 
-@app.route("/")
-def index():
-    return render_template("train_web_flask.html")
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return templates.TemplateResponse(request=request, name="train_web_flask.html")
 
 
-@app.route("/api/meta", methods=["GET"])
+@app.get("/api/meta")
 def api_meta():
-    return jsonify({"models": _discover_models(), "datasets": _discover_datasets()})
+    return {"models": _discover_models(), "datasets": _discover_datasets()}
 
 
-@app.route("/api/default_config", methods=["POST"])
-def api_default_config():
-    body = request.get_json(silent=True) or {}
+@app.post("/api/default_config")
+async def api_default_config(request: Request):
+    body = await request.json()
     task = str(body.get("task", "traffic_state_pred")).strip()
     model = str(body.get("model", "STGCN")).strip()
     dataset = str(body.get("dataset", "PEMSD4")).strip()
@@ -768,26 +773,24 @@ def api_default_config():
         if not executor_cfg and executor:
             executor_cfg = _load_json_if_exists(PROJECT_ROOT / "libcity" / "common" / f"{executor}.json")
         executor_keys = sorted([str(k) for k in executor_cfg.keys()])
-        return jsonify(
-            {
-                "task": task,
-                "model": model,
-                "dataset": dataset,
-                "config": _to_jsonable(cfg),
-                "executor_keys": executor_keys,
-            }
-        )
+        return {
+            "task": task,
+            "model": model,
+            "dataset": dataset,
+            "config": _to_jsonable(cfg),
+            "executor_keys": executor_keys,
+        }
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 400
+        return JSONResponse(status_code=400, content={"error": str(exc)})
 
 
-@app.route("/api/start", methods=["POST"])
-def api_start():
+@app.post("/api/start")
+async def api_start(request: Request):
     with STATE.lock:
         if STATE.running:
-            return jsonify({"error": "A training task is already running."}), 409
+            return JSONResponse(status_code=409, content={"error": "A training task is already running."})
 
-    body = request.get_json(silent=True) or {}
+    body = await request.json()
     task = str(body.get("task", "traffic_state_pred")).strip() or "traffic_state_pred"
     model = str(body.get("model", "STGCN")).strip() or "STGCN"
     dataset = str(body.get("dataset", "PEMSD4")).strip() or "PEMSD4"
@@ -797,9 +800,9 @@ def api_start():
     config_payload = body.get("config", {})
     cli_options = body.get("cli_options", {})
     if not isinstance(config_payload, dict):
-        return jsonify({"error": "config must be an object."}), 400
+        return JSONResponse(status_code=400, content={"error": "config must be an object."})
     if not isinstance(cli_options, dict):
-        return jsonify({"error": "cli_options must be an object."}), 400
+        return JSONResponse(status_code=400, content={"error": "cli_options must be an object."})
 
     t = threading.Thread(
         target=_run_training_background,
@@ -807,17 +810,17 @@ def api_start():
         daemon=True,
     )
     t.start()
-    return jsonify({"message": "Training started."})
+    return {"message": "Training started."}
 
 
-@app.route("/api/stop", methods=["POST"])
+@app.post("/api/stop")
 def api_stop():
     with STATE.lock:
         proc = STATE.process
         running = STATE.running
         STATE.stop_requested = True
     if not running or proc is None:
-        return jsonify({"error": "No running training task."}), 409
+        return JSONResponse(status_code=409, content={"error": "No running training task."})
     try:
         if os.name == "nt":
             subprocess.run(
@@ -831,21 +834,21 @@ def api_stop():
                 os.killpg(proc.pid, signal.SIGTERM)
             except Exception:
                 proc.terminate()
-        return jsonify({"message": "Stop signal sent to process tree."})
+        return {"message": "Stop signal sent to process tree."}
     except Exception as exc:
-        return jsonify({"error": f"Failed to stop process: {exc}"}), 500
+        return JSONResponse(status_code=500, content={"error": f"Failed to stop process: {exc}"})
 
 
-@app.route("/api/clear", methods=["POST"])
+@app.post("/api/clear")
 def api_clear():
     with STATE.lock:
         if STATE.running:
-            return jsonify({"error": "Training is running. Stop it before clearing state."}), 409
+            return JSONResponse(status_code=409, content={"error": "Training is running. Stop it before clearing state."})
     STATE.clear()
-    return jsonify({"message": "State cleared."})
+    return {"message": "State cleared."}
 
 
-@app.route("/api/status", methods=["GET"])
+@app.get("/api/status")
 def api_status():
     with STATE.lock:
         pie_topk = max(1, min(100, int(STATE.model_plot_topk_pie)))
@@ -884,32 +887,30 @@ def api_status():
         except Exception as exc:
             loss_plot_option = {}
             option_errors.append(f"loss_plot_option: {exc}")
-        return jsonify(
-            {
-                "running": STATE.running,
-                "command": STATE.command,
-                "exp_id": STATE.exp_id,
-                "return_code": STATE.return_code,
-                "error": STATE.error,
-                "result_ready": STATE.result is not None,
-                "logs_tail": STATE.logs[-400:],
-                "model_logs_tail": STATE.model_logs[-300:],
-                "model_plot": model_plot,
-                "model_plot_option_pie": model_plot_option_pie,
-                "model_plot_option_bar": model_plot_option_bar,
-                "model_plot_topk": {"pie": pie_topk, "bar": bar_topk},
-                "loss_plot": loss_plot,
-                "loss_plot_option": loss_plot_option,
-                "option_errors": option_errors,
-                "started_at": STATE.started_at,
-                "ended_at": STATE.ended_at,
-            }
-        )
+        return {
+            "running": STATE.running,
+            "command": STATE.command,
+            "exp_id": STATE.exp_id,
+            "return_code": STATE.return_code,
+            "error": STATE.error,
+            "result_ready": STATE.result is not None,
+            "logs_tail": STATE.logs[-400:],
+            "model_logs_tail": STATE.model_logs[-300:],
+            "model_plot": model_plot,
+            "model_plot_option_pie": model_plot_option_pie,
+            "model_plot_option_bar": model_plot_option_bar,
+            "model_plot_topk": {"pie": pie_topk, "bar": bar_topk},
+            "loss_plot": loss_plot,
+            "loss_plot_option": loss_plot_option,
+            "option_errors": option_errors,
+            "started_at": STATE.started_at,
+            "ended_at": STATE.ended_at,
+        }
 
 
-@app.route("/api/plot_settings", methods=["POST"])
-def api_plot_settings():
-    body = request.get_json(silent=True) or {}
+@app.post("/api/plot_settings")
+async def api_plot_settings(request: Request):
+    body = await request.json()
 
     def _parse_topk(value: Any, default: int) -> int:
         try:
@@ -923,51 +924,46 @@ def api_plot_settings():
         bar = _parse_topk(body.get("bar_topk", STATE.model_plot_topk_bar), STATE.model_plot_topk_bar)
         STATE.model_plot_topk_pie = pie
         STATE.model_plot_topk_bar = bar
-    return jsonify({"model_plot_topk": {"pie": pie, "bar": bar}})
+    return {"model_plot_topk": {"pie": pie, "bar": bar}}
 
 
-@app.route("/api/result", methods=["GET"])
+@app.get("/api/result")
 def api_result():
     with STATE.lock:
         if STATE.result is None:
-            return jsonify({"error": "Result not ready."}), 404
-        return jsonify(STATE.result)
+            return JSONResponse(status_code=404, content={"error": "Result not ready."})
+        return STATE.result
 
 
-@app.route("/api/runs", methods=["GET"])
+@app.get("/api/runs")
 def api_runs():
     runs = _collect_completed_runs(limit=300)
-    return jsonify({"runs": runs})
+    return {"runs": runs}
 
 
-@app.route("/api/history", methods=["GET"])
-def api_history():
-    raw = request.args.get("limit", 20)
-    try:
-        limit = int(raw)
-    except Exception:
-        limit = 20
+@app.get("/api/history")
+def api_history(limit: int = Query(default=20, ge=1, le=200)):
     limit = max(1, min(200, limit))
-    return jsonify({"items": _build_history_items(limit)})
+    return {"items": _build_history_items(limit)}
 
 
-@app.route("/api/compare", methods=["POST"])
-def api_compare():
-    body = request.get_json(silent=True) or {}
+@app.post("/api/compare")
+async def api_compare(request: Request):
+    body = await request.json()
     run_ids = body.get("run_ids", [])
     if not isinstance(run_ids, list):
-        return jsonify({"error": "run_ids must be an array."}), 400
+        return JSONResponse(status_code=400, content={"error": "run_ids must be an array."})
     run_ids = [str(x).strip() for x in run_ids if str(x).strip()]
     if not run_ids:
-        return jsonify({"error": "No run_ids provided."}), 400
+        return JSONResponse(status_code=400, content={"error": "No run_ids provided."})
     try:
-        return jsonify(_build_compare_payload(run_ids))
+        return _build_compare_payload(run_ids)
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 400
+        return JSONResponse(status_code=400, content={"error": str(exc)})
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Flask web demo for LibCity training")
+    parser = argparse.ArgumentParser(description="FastAPI web demo for LibCity training")
     parser.add_argument("--host", type=str, default="127.0.0.1")
     parser.add_argument("--port", type=int, default=7817)
     parser.add_argument("--debug", action="store_true")
@@ -975,7 +971,7 @@ def main() -> None:
 
     os.chdir(PROJECT_ROOT)
     print(f"Web server: http://{args.host}:{args.port}")
-    app.run(host=args.host, port=args.port, debug=args.debug, threaded=True)
+    uvicorn.run(app, host=args.host, port=args.port, log_level="debug" if args.debug else "info")
 
 
 if __name__ == "__main__":

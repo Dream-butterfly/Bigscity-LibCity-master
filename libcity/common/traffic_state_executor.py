@@ -3,11 +3,18 @@ import time
 import numpy as np
 import torch
 from logging import getLogger
-from torch.utils.tensorboard import SummaryWriter
 from libcity.common.abstract_executor import AbstractExecutor
 from libcity.utils import get_evaluator, ensure_dir, get_run_dir, get_run_subdir, tune
 from libcity.models import loss
 from functools import partial
+
+
+class _NoopSummaryWriter:
+    def add_scalar(self, *args, **kwargs):
+        return None
+
+    def close(self):
+        return None
 
 
 class TrafficStateExecutor(AbstractExecutor):
@@ -22,9 +29,8 @@ class TrafficStateExecutor(AbstractExecutor):
         self.run_dir = get_run_dir(self.exp_id)
         self.cache_dir = get_run_subdir(self.exp_id, 'model_cache')
         self.evaluate_res_dir = get_run_subdir(self.exp_id, 'evaluate_cache')
-        self.summary_writer_dir = get_run_subdir(self.exp_id, 'tensorboard')
 
-        self._writer = SummaryWriter(self.summary_writer_dir)
+        self._writer = _NoopSummaryWriter()
         self._logger = getLogger()
         self._scaler = self.data_feature.get('scaler')
         self._logger.info(self.model)

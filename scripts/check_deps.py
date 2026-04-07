@@ -12,13 +12,13 @@ DEPENDENCIES = {
     ],
     "optional": [
         ("optuna", "optuna"),
-        ("gensim", "gensim"),
         ("torch_geometric", "torch-geometric"),
         ("tslearn", "tslearn"),
         ("dtaidistance", "dtaidistance"),
         ("infomap", "infomap"),
         ("geopy", "geopy"),
-        ("aiohttp", "aiohttp"),
+        ("fastapi", "fastapi"),
+        ("uvicorn", "uvicorn"),
     ],
 }
 
