@@ -55,6 +55,37 @@ h1 {
     width: 120px;
 }
 
+.tabs {
+    display: flex;
+    gap: 8px;
+    margin: 8px 0 12px;
+}
+
+.tab-btn {
+    width: auto;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--text);
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.tab-btn.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+
+.tab-panel {
+    display: none;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
 .card {
     background: var(--card);
     border: 1px solid var(--line);
@@ -92,7 +123,7 @@ h1 {
 
 .group-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(140px, 1fr));
+    grid-template-columns: repeat(3, minmax(120px, 1fr));
     gap: 10px;
 }
 
@@ -528,6 +559,14 @@ th {
     border: 1px solid var(--line);
     border-radius: 10px;
     background: #fff
+}
+
+#compare_chart {
+    width: 100%;
+    height: 360px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
 }
 
 #model_param_chart {

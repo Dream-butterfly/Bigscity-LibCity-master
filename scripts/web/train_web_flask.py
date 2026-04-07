@@ -215,6 +215,53 @@ def _find_run_dir(task: str, model: str, dataset: str, exp_id: str | None) -> Pa
     return candidates[0]
 
 
+def _parse_run_dir_name(name: str) -> dict[str, str]:
+    parts = name.split("__", 3)
+    if len(parts) == 4:
+        return {"exp_id": parts[0], "task": parts[1], "model": parts[2], "dataset": parts[3]}
+    return {"exp_id": name, "task": "", "model": "", "dataset": ""}
+
+
+def _collect_completed_runs(limit: int = 200) -> list[dict[str, Any]]:
+    if not OUTPUTS_DIR.exists():
+        return []
+    runs: list[dict[str, Any]] = []
+    dirs = [p for p in OUTPUTS_DIR.iterdir() if p.is_dir()]
+    dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    for run_dir in dirs:
+        eval_dir = run_dir / "evaluate_cache"
+        if not eval_dir.exists():
+            continue
+        csv_files = sorted(eval_dir.glob("*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
+        npz_files = sorted(eval_dir.glob("*_predictions.npz"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if not csv_files or not npz_files:
+            continue
+        meta = _parse_run_dir_name(run_dir.name)
+        runs.append(
+            {
+                "run_id": run_dir.name,
+                "run_dir": str(run_dir),
+                "task": meta["task"],
+                "model": meta["model"],
+                "dataset": meta["dataset"],
+                "mtime": run_dir.stat().st_mtime,
+                "metrics_csv": str(csv_files[0]),
+                "predictions_npz": str(npz_files[0]),
+            }
+        )
+        if len(runs) >= limit:
+            break
+    return runs
+
+
+def _downsample_xy(y1: list[float], y2: list[float], max_points: int = 600) -> tuple[list[float], list[float]]:
+    n = min(len(y1), len(y2))
+    if n <= max_points:
+        return y1[:n], y2[:n]
+    step = max(1, n // max_points)
+    return y1[:n:step], y2[:n:step]
+
+
 def _load_result_payload(run_dir: Path) -> dict[str, Any]:
     eval_dir = run_dir / "evaluate_cache"
     if not eval_dir.exists():
@@ -269,6 +316,59 @@ def _load_result_payload(run_dir: Path) -> dict[str, Any]:
         "chart_option": build_prediction_line_option(chart_payload),
         "shapes": {"prediction": list(pred.shape), "truth": list(truth.shape)},
     }
+
+
+def _build_compare_payload(run_ids: list[str]) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    for rid in run_ids:
+        if any(sep in rid for sep in ["/", "\\"]) or ".." in rid:
+            continue
+        run_dir = OUTPUTS_DIR / rid
+        if not run_dir.exists() or not run_dir.is_dir():
+            continue
+        payload = _load_result_payload(run_dir)
+        meta = _parse_run_dir_name(rid)
+        pred = [float(v) for v in (payload.get("chart", {}).get("prediction") or [])]
+        truth = [float(v) for v in (payload.get("chart", {}).get("truth") or [])]
+        pred, truth = _downsample_xy(pred, truth, max_points=600)
+        items.append(
+            {
+                "run_id": rid,
+                "task": meta["task"],
+                "model": meta["model"],
+                "dataset": meta["dataset"],
+                "metrics_summary": payload.get("metrics_summary", {}),
+                "prediction": pred,
+                "truth": truth,
+            }
+        )
+    if not items:
+        return {"items": [], "chart_option": {}}
+
+    max_len = max(max(len(x["prediction"]), len(x["truth"])) for x in items)
+    xaxis = [str(i + 1) for i in range(max_len)]
+    series: list[dict[str, Any]] = []
+    for it in items:
+        base = f"{it['model']}@{it['run_id'][:8]}"
+        series.append({"name": f"{base}-pred", "type": "line", "symbol": "none", "data": it["prediction"]})
+        series.append(
+            {
+                "name": f"{base}-truth",
+                "type": "line",
+                "symbol": "none",
+                "lineStyle": {"type": "dashed"},
+                "data": it["truth"],
+            }
+        )
+    chart_option = {
+        "tooltip": {"trigger": "axis"},
+        "legend": {"type": "scroll", "top": "4%"},
+        "xAxis": {"type": "category", "name": "step", "data": xaxis},
+        "yAxis": {"type": "value"},
+        "dataZoom": [{"type": "inside", "start": 0, "end": 100}, {"type": "slider", "start": 0, "end": 100}],
+        "series": series,
+    }
+    return {"items": items, "chart_option": chart_option}
 
 
 @dataclass
@@ -763,6 +863,27 @@ def api_result():
         if STATE.result is None:
             return jsonify({"error": "Result not ready."}), 404
         return jsonify(STATE.result)
+
+
+@app.route("/api/runs", methods=["GET"])
+def api_runs():
+    runs = _collect_completed_runs(limit=300)
+    return jsonify({"runs": runs})
+
+
+@app.route("/api/compare", methods=["POST"])
+def api_compare():
+    body = request.get_json(silent=True) or {}
+    run_ids = body.get("run_ids", [])
+    if not isinstance(run_ids, list):
+        return jsonify({"error": "run_ids must be an array."}), 400
+    run_ids = [str(x).strip() for x in run_ids if str(x).strip()]
+    if not run_ids:
+        return jsonify({"error": "No run_ids provided."}), 400
+    try:
+        return jsonify(_build_compare_payload(run_ids))
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 def main() -> None:

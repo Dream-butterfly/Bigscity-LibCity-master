@@ -28,6 +28,12 @@
         </div>
     </div>
 
+    <div class="tabs">
+        <button id="tab_btn_train" class="tab-btn active" type="button">训练</button>
+        <button id="tab_btn_compare" class="tab-btn" type="button">模型对比</button>
+    </div>
+
+    <div id="tab_train" class="tab-panel active">
     <div class="card resizable-card">
         <div class="config-groups">
             <div class="config-group">
@@ -204,6 +210,46 @@
             <div id="chart"></div>
         </div>
     </div>
+    </div>
+
+    <div id="tab_compare" class="tab-panel">
+        <div class="card resizable-card">
+            <div class="toolbar">
+                <strong>已训练模型效果对比（来自 outputs）</strong>
+                <div class="toolbar-controls">
+                    <button class="btn btn-auto" type="button" onclick="loadCompareRuns()">刷新模型列表</button>
+                    <button class="btn btn-primary btn-auto" type="button" onclick="loadComparison()">开始对比</button>
+                </div>
+            </div>
+            <div class="group-grid">
+                <div>
+                    <label>模型A</label>
+                    <select id="compare_run_a"></select>
+                </div>
+                <div>
+                    <label>模型B</label>
+                    <select id="compare_run_b"></select>
+                </div>
+                <div>
+                    <label>模型C（可选）</label>
+                    <select id="compare_run_c"></select>
+                </div>
+            </div>
+        </div>
+        <div class="pane">
+            <div class="card resizable-card pane-left">
+                <div class="toolbar"><strong>指标对比</strong></div>
+                <div class="table-wrap table-wrap-300">
+                    <table id="compare_metrics"></table>
+                </div>
+            </div>
+            <div class="pane-resizer" aria-label="resize"></div>
+            <div class="card resizable-card pane-right">
+                <div class="toolbar"><strong>预测曲线对比</strong></div>
+                <div id="compare_chart"></div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -228,6 +274,8 @@
         modelPlot: {},
         modelPlotOptionPie: {},
         modelPlotOptionBar: {},
+        compareRuns: [],
+        activeTab: 'train',
     };
     const byId = (id) => document.getElementById(id);
     const esc = (s) => String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
@@ -274,6 +322,8 @@
             state.i18n = {params: {}};
         }
         applyI18nLabels();
+        // Parameter rows use localized labels from i18n map, so re-render after language switch.
+        renderParamTable();
     }
 
     function applyTheme(theme) {
@@ -527,6 +577,7 @@
         model_param_chart: null,
         loss_chart: null,
         chart: null,
+        compare_chart: null,
     };
 
     function resizeAllCharts() {
@@ -695,6 +746,92 @@
         if (chart) chart.clear();
     }
 
+    function switchTab(tabName) {
+        state.activeTab = tabName === 'compare' ? 'compare' : 'train';
+        byId('tab_btn_train').classList.toggle('active', state.activeTab === 'train');
+        byId('tab_btn_compare').classList.toggle('active', state.activeTab === 'compare');
+        byId('tab_train').classList.toggle('active', state.activeTab === 'train');
+        byId('tab_compare').classList.toggle('active', state.activeTab === 'compare');
+        setTimeout(resizeAllCharts, 60);
+    }
+
+    function renderCompareRunOptions() {
+        const list = state.compareRuns || [];
+        const render = (id, selected) => {
+            const el = byId(id);
+            const opts = ['<option value=""></option>'].concat(
+                list.map((r) => {
+                    const tag = `${r.run_id} | ${r.model || '-'} | ${r.dataset || '-'}`;
+                    const sel = selected && selected === r.run_id ? 'selected' : '';
+                    return `<option value="${esc(r.run_id)}" ${sel}>${esc(tag)}</option>`;
+                })
+            );
+            el.innerHTML = opts.join('');
+        };
+        const a = byId('compare_run_a').value;
+        const b = byId('compare_run_b').value;
+        const c = byId('compare_run_c').value;
+        render('compare_run_a', a);
+        render('compare_run_b', b);
+        render('compare_run_c', c);
+        if (!byId('compare_run_a').value && list.length) byId('compare_run_a').value = list[0].run_id;
+        if (!byId('compare_run_b').value && list.length > 1) byId('compare_run_b').value = list[1].run_id;
+    }
+
+    async function loadCompareRuns() {
+        const r = await fetch('/api/runs');
+        const data = await r.json();
+        state.compareRuns = Array.isArray(data.runs) ? data.runs : [];
+        renderCompareRunOptions();
+    }
+
+    function renderCompareMetrics(items) {
+        const table = byId('compare_metrics');
+        if (!items || !items.length) {
+            table.innerHTML = '<tr><td>无可对比数据</td></tr>';
+            return;
+        }
+        const metrics = new Set();
+        items.forEach((it) => Object.keys(it.metrics_summary || {}).forEach((k) => metrics.add(k)));
+        const metricList = Array.from(metrics);
+        let html = '<tr><th>run</th>';
+        metricList.forEach((m) => {
+            html += `<th>${esc(m)}(h1)</th><th>${esc(m)}(avg)</th><th>${esc(m)}(best)</th>`;
+        });
+        html += '</tr>';
+        items.forEach((it) => {
+            html += `<tr><td class="mono">${esc(it.run_id)}</td>`;
+            metricList.forEach((m) => {
+                const x = it.metrics_summary?.[m];
+                if (!x) html += '<td>-</td><td>-</td><td>-</td>';
+                else html += `<td>${Number(x.h1).toFixed(4)}</td><td>${Number(x.avg).toFixed(4)}</td><td>${Number(x.best).toFixed(4)}</td>`;
+            });
+            html += '</tr>';
+        });
+        table.innerHTML = html;
+    }
+
+    async function loadComparison() {
+        const runIds = [byId('compare_run_a').value, byId('compare_run_b').value, byId('compare_run_c').value]
+            .filter((x) => !!x);
+        if (!runIds.length) {
+            byId('compare_metrics').innerHTML = '<tr><td>请先选择模型</td></tr>';
+            return;
+        }
+        const r = await fetch('/api/compare', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({run_ids: runIds}),
+        });
+        const data = await r.json();
+        if (!r.ok) {
+            alert(data.error || '对比失败');
+            return;
+        }
+        renderCompareMetrics(data.items || []);
+        renderEChart('compare_chart', data.chart_option || {});
+    }
+
     function updateAutoScrollBtnText() {
         const btn = byId('log_autoscroll_btn');
         if (!btn) return;
@@ -780,6 +917,11 @@
             applyTheme(e.target.value || 'light');
             setTimeout(resizeAllCharts, 60);
         });
+        byId('tab_btn_train').addEventListener('click', () => switchTab('train'));
+        byId('tab_btn_compare').addEventListener('click', async () => {
+            switchTab('compare');
+            if (!state.compareRuns.length) await loadCompareRuns();
+        });
         await loadI18n(state.lang);
         const r = await fetch('/api/meta');
         const meta = await r.json();
@@ -822,6 +964,7 @@
             updateAutoScrollBtnText();
         });
         initPaneResizers();
+        switchTab('train');
         await refreshStatus();
         setInterval(refreshStatus, 2000);
     }
