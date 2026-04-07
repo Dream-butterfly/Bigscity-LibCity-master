@@ -23,6 +23,9 @@ const state = {
     modelPlotOptionBar: {},
     lossPlot: {},
     compareRuns: [],
+    latestLogs: [],
+    logFilterLevel: 'all',
+    logFilterKeyword: '',
     activeTab: 'train',
 };
 const byId = (id) => document.getElementById(id);
@@ -102,6 +105,8 @@ async function loadI18n(lang) {
     renderParamTable();
     drawModelParamChart(state.modelPlot, state.modelPlotOptionPie, state.modelPlotOptionBar);
     updateLossSummary(state.lossPlot || {});
+    renderLogs(state.latestLogs || []);
+    if (state.activeTab === 'history') await loadHistory();
     const select = byId('lang_select');
     if (select) select.value = normalized;
 }
@@ -558,11 +563,13 @@ function clearResultPanels() {
 }
 
 function switchTab(tabName) {
-    state.activeTab = tabName === 'compare' ? 'compare' : 'train';
+    state.activeTab = ['train', 'compare', 'history'].includes(tabName) ? tabName : 'train';
     byId('tab_btn_train').classList.toggle('active', state.activeTab === 'train');
     byId('tab_btn_compare').classList.toggle('active', state.activeTab === 'compare');
+    byId('tab_btn_history').classList.toggle('active', state.activeTab === 'history');
     byId('tab_train').classList.toggle('active', state.activeTab === 'train');
     byId('tab_compare').classList.toggle('active', state.activeTab === 'compare');
+    byId('tab_history').classList.toggle('active', state.activeTab === 'history');
     setTimeout(resizeAllCharts, 60);
 }
 
@@ -643,6 +650,65 @@ async function loadComparison() {
     renderEChart('compare_chart', data.chart_option || {});
 }
 
+function formatDuration(sec) {
+    if (!Number.isFinite(Number(sec)) || Number(sec) < 0) return '-';
+    const s = Math.floor(Number(sec));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const r = s % 60;
+    if (h > 0) return `${h}h ${m}m ${r}s`;
+    if (m > 0) return `${m}m ${r}s`;
+    return `${r}s`;
+}
+
+function formatTime(ts) {
+    if (!Number.isFinite(Number(ts))) return '-';
+    const d = new Date(Number(ts) * 1000);
+    if (Number.isNaN(d.getTime())) return '-';
+    return d.toLocaleString();
+}
+
+function renderHistoryTable(items) {
+    const table = byId('history_table');
+    if (!Array.isArray(items) || !items.length) {
+        table.innerHTML = `<tr><td>${esc(t('history_empty', '暂无历史记录'))}</td></tr>`;
+        return;
+    }
+    let html = `<tr>
+        <th>${esc(t('history_col_status', '状态'))}</th>
+        <th>${esc(t('history_col_run', 'Run'))}</th>
+        <th>${esc(t('history_col_model', '模型'))}</th>
+        <th>${esc(t('history_col_dataset', '数据集'))}</th>
+        <th>${esc(t('history_col_duration', '耗时'))}</th>
+        <th>${esc(t('history_col_metrics', '主要指标'))}</th>
+        <th>${esc(t('history_col_output', '输出目录'))}</th>
+        <th>${esc(t('history_col_end_time', '结束时间'))}</th>
+    </tr>`;
+    for (const it of items) {
+        const mm = it.major_metrics || {};
+        const metricText = Object.keys(mm).map((k) => `${k}=${Number(mm[k]).toFixed(4)}`).join(', ') || '-';
+        html += `<tr>
+            <td>${esc(t(`status_${it.status || 'finished'}`, it.status || 'finished'))}</td>
+            <td class="mono">${esc(it.run_id || '-')}</td>
+            <td>${esc(it.model || '-')}</td>
+            <td>${esc(it.dataset || '-')}</td>
+            <td>${esc(formatDuration(it.duration_sec))}</td>
+            <td>${esc(metricText)}</td>
+            <td class="mono history-path">${esc(it.output_dir || '-')}</td>
+            <td>${esc(formatTime(it.ended_at))}</td>
+        </tr>`;
+    }
+    table.innerHTML = html;
+}
+
+async function loadHistory() {
+    const n = clampTopK(byId('history_limit').value, 20);
+    byId('history_limit').value = String(n);
+    const r = await fetch(`/api/history?limit=${encodeURIComponent(n)}`);
+    const data = await r.json();
+    renderHistoryTable(Array.isArray(data.items) ? data.items : []);
+}
+
 function updateAutoScrollBtnText() {
     const btn = byId('log_autoscroll_btn');
     if (!btn) return;
@@ -656,20 +722,27 @@ function updateAutoScrollBtnText() {
 function renderLogs(lines) {
     const logEl = byId('logs');
     if (!logEl) return;
+    const keyword = (state.logFilterKeyword || '').trim().toLowerCase();
+    const levelFilter = (state.logFilterLevel || 'all').toLowerCase();
     const shouldStickBottom = state.logAutoScroll && (logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 28);
-    const html = (lines || []).map((rawLine, idx) => {
+    const filtered = (lines || []).map((rawLine) => {
         const line = String(rawLine ?? '');
         const levelMatch = line.match(/\b(INFO|WARNING|ERROR|DEBUG)\b/);
         const level = levelMatch ? levelMatch[1] : '';
         const cls = level ? level.toLowerCase() : (line.trim().startsWith('$') ? 'cmd' : 'plain');
-        return `
+        return {line, cls, level: level ? level.toLowerCase() : cls};
+    }).filter((x) => {
+        if (levelFilter !== 'all' && x.level !== levelFilter) return false;
+        if (keyword && !x.line.toLowerCase().includes(keyword)) return false;
+        return true;
+    });
+    const html = filtered.map((x, idx) => `
                 <div class="log-line">
                     <span class="log-index">${idx + 1}</span>
-                    <span class="log-level log-level-${cls}">${level || (cls === 'cmd' ? t('log_cmd', 'CMD') : t('log_log', 'LOG'))}</span>
-                    <span class="log-message">${esc(line)}</span>
+                    <span class="log-level log-level-${x.cls}">${x.cls === 'cmd' ? t('log_cmd', 'CMD') : (x.level === 'plain' ? t('log_log', 'LOG') : x.level.toUpperCase())}</span>
+                    <span class="log-message">${esc(x.line)}</span>
                 </div>
-            `;
-    }).join('');
+            `).join('');
     logEl.innerHTML = html || `<div class="log-empty">${esc(t('log_empty', '暂无日志'))}</div>`;
     if (shouldStickBottom) logEl.scrollTop = logEl.scrollHeight;
 }
@@ -695,7 +768,8 @@ async function refreshStatus() {
         state.resultRenderedRunKey = '';
     }
     setStatus(st, s.error ? tf('status_error', {error: s.error}, `error: ${s.error}`) : '');
-    renderLogs(s.logs_tail || []);
+    state.latestLogs = s.logs_tail || [];
+    renderLogs(state.latestLogs);
     state.modelPlot = s.model_plot || {};
     state.lossPlot = s.loss_plot || {};
     state.modelPlotOptionPie = s.model_plot_option_pie || {};
@@ -734,6 +808,10 @@ async function init() {
     byId('tab_btn_compare').addEventListener('click', async () => {
         switchTab('compare');
         if (!state.compareRuns.length) await loadCompareRuns();
+    });
+    byId('tab_btn_history').addEventListener('click', async () => {
+        switchTab('history');
+        await loadHistory();
     });
     await loadI18n(state.lang);
     const r = await fetch('/api/meta');
@@ -777,6 +855,14 @@ async function init() {
         await refreshStatus();
     });
     updateAutoScrollBtnText();
+    byId('log_level_filter').addEventListener('change', (e) => {
+        state.logFilterLevel = String(e.target.value || 'all').toLowerCase();
+        renderLogs(state.latestLogs);
+    });
+    byId('log_keyword_filter').addEventListener('input', (e) => {
+        state.logFilterKeyword = String(e.target.value || '');
+        renderLogs(state.latestLogs);
+    });
     byId('log_autoscroll_btn').addEventListener('click', () => {
         state.logAutoScroll = !state.logAutoScroll;
         updateAutoScrollBtnText();

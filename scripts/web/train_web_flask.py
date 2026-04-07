@@ -254,6 +254,62 @@ def _collect_completed_runs(limit: int = 200) -> list[dict[str, Any]]:
     return runs
 
 
+def _extract_major_metrics(metrics_csv: Path, limit: int = 3) -> dict[str, float]:
+    try:
+        df = pd.read_csv(metrics_csv)
+    except Exception:
+        return {}
+    preferred = ["MAE", "RMSE", "MAPE", "masked_MAE", "masked_RMSE", "masked_MAPE"]
+    cols: list[str] = []
+    for c in preferred:
+        if c in df.columns and c not in cols:
+            cols.append(c)
+    for c in df.columns:
+        if c not in cols:
+            cols.append(str(c))
+    out: dict[str, float] = {}
+    for c in cols[: max(1, limit)]:
+        try:
+            out[str(c)] = float(df[c].mean())
+        except Exception:
+            continue
+    return out
+
+
+def _build_history_items(limit: int = 20) -> list[dict[str, Any]]:
+    runs = _collect_completed_runs(limit=max(limit * 3, 50))
+    items: list[dict[str, Any]] = []
+    for run in runs:
+        run_dir = Path(run["run_dir"])
+        try:
+            st = run_dir.stat()
+            started_at = float(st.st_ctime)
+            ended_at = float(st.st_mtime)
+            duration_sec = max(0.0, ended_at - started_at)
+        except Exception:
+            started_at = None
+            ended_at = None
+            duration_sec = None
+        metrics = _extract_major_metrics(Path(run["metrics_csv"]), limit=3)
+        items.append(
+            {
+                "run_id": run["run_id"],
+                "task": run.get("task", ""),
+                "model": run.get("model", ""),
+                "dataset": run.get("dataset", ""),
+                "status": "finished",
+                "duration_sec": duration_sec,
+                "started_at": started_at,
+                "ended_at": ended_at,
+                "major_metrics": metrics,
+                "output_dir": run["run_dir"],
+            }
+        )
+        if len(items) >= limit:
+            break
+    return items
+
+
 def _downsample_xy(y1: list[float], y2: list[float], max_points: int = 600) -> tuple[list[float], list[float]]:
     n = min(len(y1), len(y2))
     if n <= max_points:
@@ -882,6 +938,17 @@ def api_result():
 def api_runs():
     runs = _collect_completed_runs(limit=300)
     return jsonify({"runs": runs})
+
+
+@app.route("/api/history", methods=["GET"])
+def api_history():
+    raw = request.args.get("limit", 20)
+    try:
+        limit = int(raw)
+    except Exception:
+        limit = 20
+    limit = max(1, min(200, limit))
+    return jsonify({"items": _build_history_items(limit)})
 
 
 @app.route("/api/compare", methods=["POST"])

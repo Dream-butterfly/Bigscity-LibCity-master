@@ -32,6 +32,7 @@
     <div class="tabs">
         <button id="tab_btn_train" class="tab-btn active" type="button" data-i18n="tab_train">训练</button>
         <button id="tab_btn_compare" class="tab-btn" type="button" data-i18n="tab_compare">模型对比</button>
+        <button id="tab_btn_history" class="tab-btn" type="button" data-i18n="tab_history">运行历史</button>
     </div>
 
     <div id="tab_train" class="tab-panel active">
@@ -156,6 +157,16 @@
                 <strong data-i18n="log_title">训练日志</strong>
                 <div class="toolbar-controls">
                     <span class="chip" data-i18n="realtime">实时</span>
+                    <label for="log_level_filter" class="small" data-i18n="log_filter_level">级别</label>
+                    <select id="log_level_filter" class="btn btn-auto" style="width:auto">
+                        <option value="all" data-i18n="log_level_all">全部</option>
+                        <option value="info">INFO</option>
+                        <option value="warning">WARNING</option>
+                        <option value="error">ERROR</option>
+                        <option value="debug">DEBUG</option>
+                        <option value="cmd">CMD</option>
+                    </select>
+                    <input id="log_keyword_filter" class="filter-input" style="max-width: 180px;" data-i18n-placeholder="log_filter_keyword_placeholder" placeholder="关键字过滤..."/>
                     <button id="log_autoscroll_btn" class="btn btn-auto log-btn" type="button">自动滚动: 开</button>
                 </div>
             </div>
@@ -248,6 +259,22 @@
             <div class="card resizable-card pane-right">
                 <div class="toolbar"><strong data-i18n="compare_prediction_title">预测曲线对比</strong></div>
                 <div id="compare_chart"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab_history" class="tab-panel">
+        <div class="card resizable-card">
+            <div class="toolbar">
+                <strong data-i18n="history_title">运行历史</strong>
+                <div class="toolbar-controls">
+                    <label for="history_limit" class="small" data-i18n="history_recent_n">最近 N 次</label>
+                    <input id="history_limit" class="topk-input" type="number" min="1" max="200" value="20"/>
+                    <button class="btn btn-auto" type="button" onclick="loadHistory()" data-i18n="btn_refresh_history">刷新历史</button>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table id="history_table"></table>
             </div>
         </div>
     </div>

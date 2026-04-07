@@ -589,3 +589,8 @@ th {
 .table-wrap-300 {
     max-height: 300px;
 }
+
+.history-path {
+    max-width: 520px;
+    word-break: break-all;
+}
