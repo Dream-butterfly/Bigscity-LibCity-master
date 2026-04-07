@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>模型训练网页版</title>
+    <link rel="stylesheet" href="/static/train_web_flask.css"/>
+</head>
+<body>
+<div class="wrap">
+    <h1>模型训练网页版</h1>
+    <div class="sub">模型自动检索 + 命令行参数可视化设置 + 全参数编辑 + 实时日志</div>
+
+    <div class="card">
+        <div class="grid">
+            <div><label data-param-label="task">task</label><select id="task"></select></div>
+            <div><label data-param-label="model">model</label><select id="model"></select></div>
+            <div><label data-param-label="dataset">dataset</label><select id="dataset"></select></div>
+            <div><label data-param-label="max_epoch">max_epoch</label><input id="max_epoch" value="10"/></div>
+            <div>
+                <label data-param-label="saved_model">saved_model</label>
+                <select id="saved_model">
+                    <option value="true" selected>true</option>
+                    <option value="false">false</option>
+                </select>
+            </div>
+            <div>
+                <label data-param-label="train">train</label>
+                <select id="train">
+                    <option value="true" selected>true</option>
+                    <option value="false">false</option>
+                </select>
+            </div>
+            <div><label data-param-label="config_file">config_file</label><input id="config_file" placeholder="可选，不带 .json"/></div>
+
+            <div><label data-param-label="exp_id">exp_id</label><input id="exp_id" placeholder="可选"/></div>
+            <div><label data-param-label="seed">seed</label><input id="seed" placeholder="0"/></div>
+            <div>
+                <label data-param-label="gpu">gpu</label>
+                <select id="gpu">
+                    <option value=""></option>
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                </select>
+            </div>
+            <div><label data-param-label="gpu_id">gpu_id</label><input id="gpu_id" placeholder="0"/></div>
+            <div><label data-param-label="train_rate">train_rate</label><input id="train_rate" placeholder="0.7"/></div>
+            <div><label data-param-label="eval_rate">eval_rate</label><input id="eval_rate" placeholder="0.1"/></div>
+            <div><label data-param-label="batch_size">batch_size</label><input id="batch_size" placeholder="64"/></div>
+
+            <div><label data-param-label="learning_rate">learning_rate</label><input id="learning_rate" placeholder="0.001"/></div>
+            <div><label data-param-label="dataset_class">dataset_class</label><input id="dataset_class" placeholder="TrafficStatePointDataset"/></div>
+            <div><label data-param-label="executor">executor</label><input id="executor" placeholder="TrafficStateExecutor"/></div>
+            <div><label data-param-label="evaluator">evaluator</label><input id="evaluator" placeholder="TrafficStateEvaluator"/></div>
+            <div class="span-3"><label data-param-label="extra_args">extra_args</label><input id="extra_args"
+                                                                                   placeholder="--log_level INFO"/></div>
+        </div>
+        <div class="actions">
+            <button class="btn btn-primary" onclick="startTrain()">开始训练</button>
+            <button class="btn btn-danger" onclick="stopTrain()">停止训练</button>
+            <span id="status" class="badge status-idle">idle</span>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="toolbar">
+            <strong>全部可选参数（默认值可编辑）</strong>
+            <div class="toolbar-controls">
+                <input id="param_filter" class="filter-input" placeholder="筛选参数名..."/>
+                <span class="small">共 <span id="param_count">0</span> 项</span>
+                <button class="btn btn-primary btn-auto" onclick="loadDefaults()">加载默认全参数</button>
+                <button class="btn btn-auto" onclick="resetParamTypes()">重置类型</button>
+            </div>
+        </div>
+        <div class="param-split">
+            <div>
+                <div class="small section-caption"><span id="param_title_config">config</span>（<span id="param_count_config">0</span>）</div>
+                <div class="table-wrap param-table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th id="th_config_name_localized">中文名</th>
+                            <th id="th_config_name_raw">原参数名</th>
+                            <th id="th_config_type" class="param-type">类型</th>
+                            <th id="th_config_value">值</th>
+                        </tr>
+                        </thead>
+                        <tbody id="param_tbody_config"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div>
+                <div class="small section-caption"><span id="param_title_executor">executor</span>（<span id="param_count_executor">0</span>）</div>
+                <div class="table-wrap param-table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th id="th_executor_name_localized">中文名</th>
+                            <th id="th_executor_name_raw">原参数名</th>
+                            <th id="th_executor_type" class="param-type">类型</th>
+                            <th id="th_executor_value">值</th>
+                        </tr>
+                        </thead>
+                        <tbody id="param_tbody_executor"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="pane">
+        <div class="card">
+            <div class="toolbar"><strong>训练日志</strong><span class="chip">实时</span></div>
+            <pre id="logs" class="mono"></pre>
+        </div>
+        <div class="card">
+            <div class="toolbar"><strong>模型参数量示意图（饼图）</strong><span class="chip">实时</span></div>
+            <div id="model_param_summary" class="small mb-6"></div>
+            <canvas id="model_param_chart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="toolbar"><strong>训练 Loss 曲线</strong><span id="loss_summary" class="small"></span></div>
+        <canvas id="loss_chart"></canvas>
+    </div>
+
+    <div class="pane">
+        <div class="card">
+            <div class="toolbar"><strong>评估指标（CSV）</strong><span id="summary" class="small"></span></div>
+            <div class="table-wrap table-wrap-300">
+                <table id="metrics"></table>
+            </div>
+        </div>
+
+        <div class="card">
+            <strong>预测效果演示</strong>
+            <canvas id="chart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+    const DEFAULT_LANG = new URLSearchParams(window.location.search).get('lang') || 'zh-CN';
+    const state = {models: [], datasets: [], paramRowsConfig: [], paramRowsExecutor: [], i18n: {params: {}}, lang: DEFAULT_LANG};
+    const byId = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    const CLI_FIELDS = ["config_file", "exp_id", "seed", "gpu", "gpu_id", "train_rate", "eval_rate", "batch_size", "learning_rate", "max_epoch", "dataset_class", "executor", "evaluator"];
+
+    function getParamDisplayName(key) {
+        return state.i18n?.params?.[key] || key;
+    }
+
+    function applyI18nLabels() {
+        document.querySelectorAll('[data-param-label]').forEach((el) => {
+            const key = el.getAttribute('data-param-label');
+            if (!key) return;
+            el.innerText = getParamDisplayName(key);
+        });
+        byId('param_title_config').innerText = getParamDisplayName('config');
+        byId('param_title_executor').innerText = getParamDisplayName('executor');
+        const localizedName = getParamDisplayName('localized_name');
+        const rawName = getParamDisplayName('raw_name');
+        const typeName = getParamDisplayName('type');
+        const valueName = getParamDisplayName('value');
+        byId('th_config_name_localized').innerText = localizedName;
+        byId('th_config_name_raw').innerText = rawName;
+        byId('th_config_type').innerText = typeName;
+        byId('th_config_value').innerText = valueName;
+        byId('th_executor_name_localized').innerText = localizedName;
+        byId('th_executor_name_raw').innerText = rawName;
+        byId('th_executor_type').innerText = typeName;
+        byId('th_executor_value').innerText = valueName;
+    }
+
+    async function loadI18n(lang) {
+        state.lang = lang;
+        try {
+            const r = await fetch(`/static/i18n/${encodeURIComponent(lang)}.json`);
+            if (r.ok) {
+                state.i18n = await r.json();
+            } else {
+                state.i18n = {params: {}};
+            }
+        } catch (_) {
+            state.i18n = {params: {}};
+        }
+        applyI18nLabels();
+    }
+
+    function inferType(v) {
+        if (v === null || v === undefined) return 'str';
+        if (typeof v === 'boolean') return 'bool';
+        if (typeof v === 'number') return Number.isInteger(v) ? 'int' : 'float';
+        if (typeof v === 'object') return 'json';
+        return 'str';
+    }
+
+    function toInputString(v) {
+        if (v === null || v === undefined) return '';
+        if (typeof v === 'object') return JSON.stringify(v);
+        return String(v);
+    }
+
+    function parseValue(type, raw) {
+        const t = (type || 'str').toLowerCase();
+        if (t === 'bool') {
+            const x = String(raw).trim().toLowerCase();
+            if (['true', '1', 'yes'].includes(x)) return true;
+            if (['false', '0', 'no'].includes(x)) return false;
+            throw new Error(`布尔值错误: ${raw}`);
+        }
+        if (t === 'int') {
+            const n = parseInt(String(raw).trim(), 10);
+            if (Number.isNaN(n)) throw new Error(`整数错误: ${raw}`);
+            return n;
+        }
+        if (t === 'float') {
+            const n = Number(String(raw).trim());
+            if (Number.isNaN(n)) throw new Error(`浮点数错误: ${raw}`);
+            return n;
+        }
+        if (t === 'json') {
+            const txt = String(raw).trim();
+            return txt ? JSON.parse(txt) : null;
+        }
+        return String(raw);
+    }
+
+    function renderTasks() {
+        const tasks = [...new Set(state.models.map(x => x.task))].sort();
+        byId('task').innerHTML = tasks.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+    }
+
+    function renderModelsForTask() {
+        const task = byId('task').value;
+        const models = [...new Set(state.models.filter(x => x.task === task).map(x => x.model))].sort();
+        byId('model').innerHTML = models.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+    }
+
+    function renderDatasets() {
+        byId('dataset').innerHTML = state.datasets.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+        if (state.datasets.includes('PEMSD4')) byId('dataset').value = 'PEMSD4';
+    }
+
+    function renderParamCell(section, idx) {
+        if (idx === null) return '';
+        const rows = section === 'executor' ? state.paramRowsExecutor : state.paramRowsConfig;
+        const row = rows[idx];
+        return `
+    <td class="param-localized">${esc(getParamDisplayName(row.key))}</td>
+    <td class="mono param-key">${esc(row.key)}</td>
+    <td>
+      <select class="type-select" data-section="${section}" data-idx="${idx}">
+        <option value="str" ${row.type === 'str' ? 'selected' : ''}>str</option>
+        <option value="bool" ${row.type === 'bool' ? 'selected' : ''}>bool</option>
+        <option value="int" ${row.type === 'int' ? 'selected' : ''}>int</option>
+        <option value="float" ${row.type === 'float' ? 'selected' : ''}>float</option>
+        <option value="json" ${row.type === 'json' ? 'selected' : ''}>json</option>
+      </select>
+    </td>
+    <td><input class="param-value mono value-input" data-section="${section}" data-idx="${idx}" value="${esc(row.value)}"/></td>
+  `;
+    }
+
+    function renderParamTable() {
+        const filter = byId('param_filter').value.trim().toLowerCase();
+        const configIds = state.paramRowsConfig
+            .map((r, i) => ({r, i}))
+            .filter(x => !filter || x.r.key.toLowerCase().includes(filter))
+            .map(x => x.i);
+        const executorIds = state.paramRowsExecutor
+            .map((r, i) => ({r, i}))
+            .filter(x => !filter || x.r.key.toLowerCase().includes(filter))
+            .map(x => x.i);
+        byId('param_count').innerText = String(configIds.length + executorIds.length);
+        byId('param_count_config').innerText = String(configIds.length);
+        byId('param_count_executor').innerText = String(executorIds.length);
+        const bodyConfig = byId('param_tbody_config');
+        const bodyExecutor = byId('param_tbody_executor');
+        bodyConfig.innerHTML = configIds.map((idx) => `<tr>${renderParamCell('config', idx)}</tr>`).join('')
+            || '<tr><td colspan="4" class="small">无参数</td></tr>';
+        bodyExecutor.innerHTML = executorIds.map((idx) => `<tr>${renderParamCell('executor', idx)}</tr>`).join('')
+            || '<tr><td colspan="4" class="small">无参数</td></tr>';
+
+        document.querySelectorAll('#param_tbody_config .type-select, #param_tbody_executor .type-select').forEach(el => {
+            el.addEventListener('change', (e) => {
+                const section = e.target.getAttribute('data-section');
+                const idx = Number(e.target.getAttribute('data-idx'));
+                const rows = section === 'executor' ? state.paramRowsExecutor : state.paramRowsConfig;
+                rows[idx].type = e.target.value;
+            });
+        });
+        document.querySelectorAll('#param_tbody_config .value-input, #param_tbody_executor .value-input').forEach(el => {
+            el.addEventListener('input', (e) => {
+                const section = e.target.getAttribute('data-section');
+                const idx = Number(e.target.getAttribute('data-idx'));
+                const rows = section === 'executor' ? state.paramRowsExecutor : state.paramRowsConfig;
+                rows[idx].value = e.target.value;
+            });
+        });
+    }
+
+    function resetParamTypes() {
+        state.paramRowsConfig.forEach(r => r.type = inferType(r.defaultValue));
+        state.paramRowsExecutor.forEach(r => r.type = inferType(r.defaultValue));
+        renderParamTable();
+    }
+
+    function collectConfigFromTable() {
+        const cfg = {};
+        for (const r of state.paramRowsConfig) cfg[r.key] = parseValue(r.type, r.value);
+        for (const r of state.paramRowsExecutor) cfg[r.key] = parseValue(r.type, r.value);
+        return cfg;
+    }
+
+    function applyDefaultToCliFields(config) {
+        const setIf = (k, v) => {
+            if (v !== undefined && v !== null && byId(k)) byId(k).value = String(v);
+        };
+        setIf('max_epoch', config.max_epoch ?? 10);
+        setIf('seed', config.seed);
+        setIf('gpu_id', config.gpu_id);
+        setIf('train_rate', config.train_rate);
+        setIf('eval_rate', config.eval_rate);
+        setIf('batch_size', config.batch_size);
+        setIf('learning_rate', config.learning_rate);
+        setIf('dataset_class', config.dataset_class);
+        setIf('executor', config.executor);
+        setIf('evaluator', config.evaluator);
+        if (config.gpu !== undefined && byId('gpu')) byId('gpu').value = String(config.gpu).toLowerCase();
+    }
+
+    function collectCliOptions() {
+        const out = {};
+        for (const k of CLI_FIELDS) {
+            const el = byId(k);
+            if (!el) continue;
+            const v = (el.value ?? '').trim();
+            if (v !== '') out[k] = v;
+        }
+        return out;
+    }
+
+    async function loadDefaults() {
+        const body = {task: byId('task').value, model: byId('model').value, dataset: byId('dataset').value};
+        const r = await fetch('/api/default_config', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        const data = await r.json();
+        if (!r.ok) {
+            alert(data.error || '加载默认参数失败');
+            return;
+        }
+        const cfg = data.config || {};
+        cfg.max_epoch = 10;
+        const executorKeys = new Set(data.executor_keys || []);
+        const allRows = Object.keys(cfg).sort().map(k => ({
+            key: k,
+            defaultValue: cfg[k],
+            type: inferType(cfg[k]),
+            value: toInputString(cfg[k])
+        }));
+        state.paramRowsExecutor = allRows.filter((row) => executorKeys.has(row.key));
+        state.paramRowsConfig = allRows.filter((row) => !executorKeys.has(row.key));
+        applyDefaultToCliFields(cfg);
+        renderParamTable();
+    }
+
+    async function startTrain() {
+        let config;
+        try {
+            config = collectConfigFromTable();
+        } catch (e) {
+            alert('参数解析失败: ' + e.message);
+            return;
+        }
+        // Keep command-line form fields synchronized into config.
+        const cliOptions = collectCliOptions();
+        for (const [k, v] of Object.entries(cliOptions)) {
+            if (k === 'config_file' || k === 'exp_id') continue;
+            config[k] = v;
+        }
+
+        const body = {
+            task: byId('task').value,
+            model: byId('model').value,
+            dataset: byId('dataset').value,
+            saved_model: byId('saved_model').value,
+            train: byId('train').value,
+            extra_args: byId('extra_args').value || '',
+            cli_options: cliOptions,
+            config: config,
+        };
+        const r = await fetch('/api/start', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        const data = await r.json();
+        if (!r.ok) alert(data.error || '启动失败');
+    }
+
+    async function stopTrain() {
+        const r = await fetch('/api/stop', {method: 'POST'});
+        const data = await r.json();
+        if (!r.ok) alert(data.error || '停止失败');
+    }
+
+    function renderMetrics(result) {
+        const summary = result.metrics_summary || {};
+        const rows = result.metrics_rows || [];
+        const columns = Array.isArray(result.metrics_columns) ? result.metrics_columns : [];
+        const summaryOrder = columns.filter((c) => c !== 'horizon' && summary[c] !== undefined);
+        const fallbackSummaryOrder = Object.keys(summary).filter((k) => !summaryOrder.includes(k));
+        const summaryKeys = summaryOrder.concat(fallbackSummaryOrder);
+        byId('summary').innerText = summaryKeys
+            .map(k => `${k}: h1=${summary[k].h1.toFixed(4)}, avg=${summary[k].avg.toFixed(4)}, best=${summary[k].best.toFixed(4)}`)
+            .join(' | ');
+        if (!rows.length) {
+            byId('metrics').innerHTML = '<tr><td>无数据</td></tr>';
+            return;
+        }
+        const cols = columns.length ? columns.filter((c) => c in rows[0]) : Object.keys(rows[0]);
+        let html = '<tr>' + cols.map(c => `<th>${esc(c)}</th>`).join('') + '</tr>';
+        for (const row of rows) html += '<tr>' + cols.map(c => `<td>${typeof row[c] === 'number' ? row[c].toFixed(6) : esc(row[c])}</td>`).join('') + '</tr>';
+        byId('metrics').innerHTML = html;
+    }
+
+    function drawChart(chart) {
+        const canvas = byId('chart'), ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth || 900, h = canvas.clientHeight || 330;
+        canvas.width = Math.floor(w * dpr);
+        canvas.height = Math.floor(h * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        const pred = chart.prediction || [], truth = chart.truth || [];
+        ctx.fillStyle = '#111827';
+        ctx.font = '14px Inter,Arial';
+        ctx.fillText(chart.title || 'Prediction vs Truth', 10, 20);
+        if (!pred.length || pred.length !== truth.length) {
+            ctx.fillText('暂无数据', 10, 46);
+            return;
+        }
+        const pad = {l: 48, r: 20, t: 36, b: 28}, plotW = w - pad.l - pad.r, plotH = h - pad.t - pad.b;
+        const vals = pred.concat(truth);
+        let vmin = Math.min(...vals), vmax = Math.max(...vals);
+        if (vmax === vmin) {
+            vmax += 1;
+            vmin -= 1;
+        }
+        const px = i => pad.l + i * plotW / Math.max(1, pred.length - 1);
+        const py = v => pad.t + (vmax - v) * plotH / (vmax - vmin);
+        ctx.strokeStyle = '#e5e7eb';
+        ctx.strokeRect(pad.l, pad.t, plotW, plotH);
+        ctx.strokeStyle = '#2563eb';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        pred.forEach((v, i) => {
+            const x = px(i), y = py(v);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+        });
+        ctx.stroke();
+        ctx.strokeStyle = '#dc2626';
+        ctx.beginPath();
+        truth.forEach((v, i) => {
+            const x = px(i), y = py(v);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+        });
+        ctx.stroke();
+    }
+
+    function drawModelParamChart(plot) {
+        const canvas = byId('model_param_chart'), ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth || 900, h = canvas.clientHeight || 300;
+        canvas.width = Math.floor(w * dpr);
+        canvas.height = Math.floor(h * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        const labels = plot?.labels || [], counts = plot?.counts || [];
+        const total = plot?.total_params;
+        byId('model_param_summary').innerText = total ? `总参数量: ${total.toLocaleString()} | 展示: Top 参数分布` : `暂无参数分布数据`;
+        ctx.fillStyle = '#111827';
+        ctx.font = '13px Inter,Arial';
+        ctx.fillText('Model Parameter Distribution', 10, 18);
+        if (!labels.length) {
+            ctx.fillText('暂无参数结构数据', 10, 40);
+            return;
+        }
+
+        const maxSlices = 8;
+        const pairs = labels.map((name, i) => ({name, count: counts[i]})).sort((a, b) => b.count - a.count);
+        const top = pairs.slice(0, maxSlices);
+        const rest = pairs.slice(maxSlices).reduce((s, x) => s + x.count, 0);
+        if (rest > 0) top.push({name: 'Others', count: rest});
+        const sum = top.reduce((s, x) => s + x.count, 0) || 1;
+        const colors = ['#2563eb', '#dc2626', '#16a34a', '#ea580c', '#7c3aed', '#0891b2', '#d946ef', '#65a30d', '#6b7280'];
+
+        const cx = Math.min(180, Math.floor(w * 0.32));
+        const cy = Math.floor(h * 0.55);
+        const r = Math.min(105, Math.floor(h * 0.34));
+        let start = -Math.PI / 2;
+        top.forEach((item, i) => {
+            const ang = (item.count / sum) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, r, start, start + ang);
+            ctx.closePath();
+            ctx.fillStyle = colors[i % colors.length];
+            ctx.fill();
+            start += ang;
+        });
+        // donut hole
+        ctx.beginPath();
+        ctx.arc(cx, cy, Math.floor(r * 0.45), 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.fillStyle = '#111827';
+        ctx.font = '12px Inter,Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Params', cx, cy - 4);
+        ctx.fillText((total || sum).toLocaleString(), cx, cy + 14);
+        ctx.textAlign = 'left';
+
+        const lx = cx + r + 30;
+        let ly = 46;
+        top.forEach((item, i) => {
+            const ratio = (item.count / sum) * 100;
+            ctx.fillStyle = colors[i % colors.length];
+            ctx.fillRect(lx, ly - 10, 12, 12);
+            ctx.fillStyle = '#1f2937';
+            ctx.font = '11px Inter,Arial';
+            const name = item.name.length > 26 ? item.name.slice(0, 23) + '...' : item.name;
+            ctx.fillText(`${name} (${ratio.toFixed(1)}%)`, lx + 18, ly);
+            ly += 18;
+        });
+    }
+
+    function drawLossChart(plot) {
+        const canvas = byId('loss_chart'), ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth || 900, h = canvas.clientHeight || 260;
+        canvas.width = Math.floor(w * dpr);
+        canvas.height = Math.floor(h * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+
+        const xs = plot?.epochs || [];
+        const train = plot?.train_loss || [];
+        const test = plot?.val_loss || [];
+        const savedEpochs = new Set(plot?.saved_epochs || []);
+        const maxEpoch = plot?.max_epoch;
+        byId('loss_summary').innerText = xs.length
+            ? `已记录 ${xs.length} 个 epoch${maxEpoch ? ` / ${maxEpoch}` : ''}`
+            : '暂无 loss 数据';
+        ctx.fillStyle = '#111827';
+        ctx.font = '13px Inter,Arial';
+        ctx.fillText('Train/Test Loss + Improvement(%)', 10, 18);
+        if (!xs.length || xs.length !== train.length || xs.length !== test.length) {
+            ctx.fillText('暂无 loss 数据', 10, 40);
+            return;
+        }
+
+        const improvePct = (series) => {
+            const out = [0];
+            for (let i = 1; i < series.length; i++) {
+                const prev = Number(series[i - 1]);
+                const curr = Number(series[i]);
+                if (!Number.isFinite(prev) || !Number.isFinite(curr) || Math.abs(prev) < 1e-12) {
+                    out.push(0);
+                } else {
+                    out.push(((prev - curr) / prev) * 100);
+                }
+            }
+            return out;
+        };
+        const trainImprove = improvePct(train);
+        const testImprove = improvePct(test);
+
+        const pad = {l: 52, r: 62, t: 30, b: 36};
+        const plotW = w - pad.l - pad.r;
+        const plotH = h - pad.t - pad.b;
+        const vals = train.concat(test);
+        const ymin = 0;
+        const ymax = Math.max(...vals, 1) * 1.1;
+        const improveAbsMax = Math.max(
+            5,
+            ...trainImprove.map((v) => Math.abs(v)),
+            ...testImprove.map((v) => Math.abs(v))
+        ) * 1.1;
+        const pctMin = -improveAbsMax;
+        const pctMax = improveAbsMax;
+        const epochStart = xs.length ? Math.min(...xs) : 0;
+        const xSeries = xs.map((e) => Number(e) - epochStart);
+        const savedEpochSeries = new Set(Array.from(savedEpochs).map((e) => Number(e) - epochStart));
+        const xmin = 0;
+        const configuredXMax = Number.isFinite(Number(maxEpoch)) ? Math.max(0, Number(maxEpoch) - 1) : 0;
+        const dataXMax = xSeries.length ? Math.max(...xSeries) : 0;
+        const xmax = Math.max(configuredXMax, dataXMax, 1);
+        const px = (x) => pad.l + ((x - xmin) * plotW) / Math.max(1, xmax - xmin);
+        const pyLoss = (v) => pad.t + ((ymax - v) * plotH) / Math.max(1e-9, ymax - ymin);
+        const pyPct = (v) => pad.t + ((pctMax - v) * plotH) / Math.max(1e-9, pctMax - pctMin);
+
+        // axes
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(pad.l, pad.t);
+        ctx.lineTo(pad.l, pad.t + plotH);
+        ctx.lineTo(pad.l + plotW, pad.t + plotH);
+        ctx.moveTo(pad.l + plotW, pad.t);
+        ctx.lineTo(pad.l + plotW, pad.t + plotH);
+        ctx.stroke();
+
+        // left y ticks: loss
+        for (let i = 0; i <= 4; i++) {
+            const v = ymin + ((ymax - ymin) * i) / 4;
+            const y = pyLoss(v);
+            ctx.strokeStyle = '#eef2f7';
+            ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + plotW, y); ctx.stroke();
+            ctx.fillStyle = '#64748b';
+            ctx.font = '10px Inter,Arial';
+            ctx.fillText(v.toFixed(1), 4, y + 3);
+        }
+
+        // right y ticks: improvement%
+        for (let i = 0; i <= 4; i++) {
+            const v = pctMin + ((pctMax - pctMin) * i) / 4;
+            const y = pyPct(v);
+            ctx.fillStyle = '#64748b';
+            ctx.font = '10px Inter,Arial';
+            ctx.fillText(`${v.toFixed(1)}%`, pad.l + plotW + 6, y + 3);
+        }
+        // 0% center line
+        const y0 = pyPct(0);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(pad.l, y0); ctx.lineTo(pad.l + plotW, y0); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // x ticks
+        for (let i = 0; i <= 5; i++) {
+            const xval = xmin + ((xmax - xmin) * i) / 5;
+            const x = px(xval);
+            ctx.strokeStyle = '#eef2f7';
+            ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + plotH); ctx.stroke();
+            ctx.fillStyle = '#64748b';
+            ctx.font = '10px Inter,Arial';
+            ctx.fillText(String(Math.round(xval)), x - 4, pad.t + plotH + 14);
+        }
+
+        // loss lines
+        ctx.strokeStyle = '#2563eb';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        train.forEach((v, i) => {
+            const x = px(xSeries[i]), y = pyLoss(v);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        ctx.strokeStyle = '#dc2626';
+        ctx.beginPath();
+        test.forEach((v, i) => {
+            const x = px(xSeries[i]), y = pyLoss(v);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // improvement% lines (right axis)
+        ctx.strokeStyle = '#0ea5e9';
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        trainImprove.forEach((v, i) => {
+            const x = px(xSeries[i]), y = pyPct(v);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        ctx.strokeStyle = '#f97316';
+        ctx.beginPath();
+        testImprove.forEach((v, i) => {
+            const x = px(xSeries[i]), y = pyPct(v);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // points + value labels + saved markers
+        const drawSeriesPoints = (series, color, dyText) => {
+            ctx.fillStyle = color;
+            series.forEach((v, i) => {
+                const x = px(xSeries[i]), y = pyLoss(v);
+                ctx.beginPath(); ctx.arc(x, y, 2.8, 0, Math.PI * 2); ctx.fill();
+                ctx.font = '9px Inter,Arial';
+                ctx.fillText(v.toFixed(2), x + 3, y + dyText);
+            });
+        };
+        drawSeriesPoints(train, '#2563eb', -5);
+        drawSeriesPoints(test, '#dc2626', 11);
+
+        // saved-epoch vertical marks
+        savedEpochSeries.forEach((e) => {
+            const x = px(e);
+            ctx.strokeStyle = '#f59e0b';
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + plotH); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#b45309';
+            ctx.font = '9px Inter,Arial';
+            ctx.fillText('save', x + 2, pad.t + 10);
+        });
+
+        // legend (top-left)
+        const lx = pad.l + 4, ly = pad.t + 10;
+        ctx.fillStyle = '#2563eb'; ctx.fillRect(lx, ly - 7, 12, 2);
+        ctx.fillStyle = '#111827'; ctx.font = '10px Inter,Arial'; ctx.fillText('train_loss', lx + 16, ly - 2);
+        ctx.fillStyle = '#dc2626'; ctx.fillRect(lx + 86, ly - 7, 12, 2);
+        ctx.fillStyle = '#111827'; ctx.fillText('test_loss', lx + 102, ly - 2);
+        ctx.fillStyle = '#0ea5e9'; ctx.fillRect(lx + 162, ly - 7, 12, 2);
+        ctx.fillStyle = '#111827'; ctx.fillText('train_improve_%', lx + 178, ly - 2);
+        ctx.fillStyle = '#f97316'; ctx.fillRect(lx + 278, ly - 7, 12, 2);
+        ctx.fillStyle = '#111827'; ctx.fillText('test_improve_%', lx + 294, ly - 2);
+        ctx.fillStyle = '#f59e0b'; ctx.fillRect(lx + 388, ly - 7, 12, 2);
+        ctx.fillStyle = '#111827'; ctx.fillText('saved_model', lx + 404, ly - 2);
+    }
+
+    function setStatus(stateName, extra) {
+        const el = byId('status');
+        el.className = 'badge';
+        if (stateName === 'running') el.classList.add('status-running');
+        else if (stateName === 'finished') el.classList.add('status-finished');
+        else el.classList.add('status-idle');
+        el.innerText = extra ? `${stateName} (${extra})` : stateName;
+    }
+
+    async function refreshStatus() {
+        const r = await fetch('/api/status');
+        const s = await r.json();
+        const st = s.running ? 'running' : (s.return_code === 0 ? 'finished' : 'idle');
+        setStatus(st, s.error ? `error: ${s.error}` : '');
+        byId('logs').innerText = (s.logs_tail || []).join('\n');
+        drawModelParamChart(s.model_plot || {});
+        drawLossChart(s.loss_plot || {});
+        if (s.result_ready) {
+            const rr = await fetch('/api/result');
+            if (rr.ok) {
+                const result = await rr.json();
+                renderMetrics(result);
+                drawChart(result.chart || {});
+            }
+        }
+    }
+
+    async function init() {
+        await loadI18n(state.lang);
+        const r = await fetch('/api/meta');
+        const meta = await r.json();
+        state.models = meta.models || [];
+        state.datasets = meta.datasets || [];
+        renderTasks();
+        renderModelsForTask();
+        renderDatasets();
+        byId('task').addEventListener('change', async () => {
+            renderModelsForTask();
+            await loadDefaults();
+        });
+        byId('model').addEventListener('change', loadDefaults);
+        await loadDefaults();
+        byId('param_filter').addEventListener('input', renderParamTable);
+        await refreshStatus();
+        setInterval(refreshStatus, 2000);
+    }
+
+    window.addEventListener('resize', refreshStatus);
+    init();
+</script>
+</body>
+</html>
+
