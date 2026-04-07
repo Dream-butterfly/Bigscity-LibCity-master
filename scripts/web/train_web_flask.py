@@ -12,6 +12,7 @@ import shlex
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from dataclasses import dataclass, field
@@ -22,6 +23,13 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from flask import Flask, jsonify, render_template, request
+from pyecharts_views import (
+    build_loss_line_option,
+    build_model_param_bar_option,
+    build_metrics_table_html,
+    build_model_param_pie_option,
+    build_prediction_line_option,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -31,7 +39,6 @@ if str(PROJECT_ROOT) not in sys.path:
 MODELS_ROOT = PROJECT_ROOT / "libcity" / "models"
 RESOURCE_DATA_ROOT = PROJECT_ROOT / "resource_data"
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
-WEB_TMP_DIR = WEB_ROOT / ".tmp_configs"
 EXP_ID_RE = re.compile(r"exp_id=([A-Za-z0-9_.:-]+)")
 LOG_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2} [\d:,]+ - (?:INFO|WARNING|ERROR|DEBUG) - (.*)$")
 MODEL_START_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\($")
@@ -244,12 +251,12 @@ def _load_result_payload(run_dir: Path) -> dict[str, Any]:
     pred_series = pred[:, 0, 0, 0].astype(float)
     truth_series = truth[:, 0, 0, 0].astype(float)
 
-    max_points = 200
-    if len(pred_series) > max_points:
-        step = max(1, len(pred_series) // max_points)
-        pred_series = pred_series[::step]
-        truth_series = truth_series[::step]
-
+    chart_payload = {
+        "title": "Prediction vs Truth (horizon=1, node=0, feature=0)",
+        "labels": list(range(1, len(pred_series) + 1)),
+        "prediction": pred_series.tolist(),
+        "truth": truth_series.tolist(),
+    }
     return {
         "run_dir": str(run_dir),
         "metrics_csv": str(csv_files[0]),
@@ -257,12 +264,9 @@ def _load_result_payload(run_dir: Path) -> dict[str, Any]:
         "metrics_summary": metrics_summary,
         "metrics_rows": metrics_rows,
         "metrics_columns": metrics_columns,
-        "chart": {
-            "title": "Prediction vs Truth (horizon=1, node=0, feature=0)",
-            "labels": list(range(1, len(pred_series) + 1)),
-            "prediction": pred_series.tolist(),
-            "truth": truth_series.tolist(),
-        },
+        "metrics_table_html": build_metrics_table_html(metrics_columns, metrics_rows),
+        "chart": chart_payload,
+        "chart_option": build_prediction_line_option(chart_payload),
         "shapes": {"prediction": list(pred.shape), "truth": list(truth.shape)},
     }
 
@@ -374,7 +378,7 @@ class TrainState:
             return
         if "torch.Size(" in msg or "Total parameter numbers" in msg:
             self._append_model_log(msg)
-        pm = PARAM_LINE_RE.match(msg)
+        pm = PARAM_LINE_RE.match(msg.strip())
         if pm:
             dims = [int(x.strip()) for x in pm.group(2).split(",") if x.strip()]
             if dims:
@@ -409,17 +413,48 @@ class TrainState:
             self.process = None
             self._capturing_model_repr = False
 
+    def clear(self) -> None:
+        with self.lock:
+            self.running = False
+            self.command = []
+            self.logs = []
+            self.model_logs = []
+            self.model_param_rows = []
+            self.model_total_params = None
+            self.loss_points = []
+            self.saved_epochs = []
+            self.process = None
+            self.exp_id = None
+            self.return_code = None
+            self.error = None
+            self.result = None
+            self.started_at = None
+            self.ended_at = None
+            self._capturing_model_repr = False
+            self.stop_requested = False
+
 
 STATE = TrainState()
 
 
-def _write_temp_config(config_data: dict[str, Any]) -> str:
-    WEB_TMP_DIR.mkdir(parents=True, exist_ok=True)
-    path = WEB_TMP_DIR / f"webcfg_{int(time.time() * 1000)}_{os.getpid()}.json"
+def _write_runtime_config(config_data: dict[str, Any]) -> tuple[str, Path]:
+    fd, tmp_path = tempfile.mkstemp(prefix="webcfg_", suffix=".json", dir=str(PROJECT_ROOT))
+    os.close(fd)
+    path = Path(tmp_path)
     with path.open("w", encoding="utf-8") as f:
         json.dump(_to_jsonable(config_data), f, ensure_ascii=False, indent=2)
-    rel = path.relative_to(PROJECT_ROOT).as_posix()
-    return rel[:-5] if rel.endswith(".json") else rel
+    # config_parser loads './<config_file>.json'; pass file stem only.
+    return path.stem, path
+
+
+def _remove_runtime_config(path: Path | None) -> None:
+    if path is None:
+        return
+    try:
+        if path.exists():
+            path.unlink()
+    except Exception:
+        pass
 
 
 def _load_base_config(config_file_name: str) -> dict[str, Any]:
@@ -446,6 +481,7 @@ def _run_training_background(
     cli_options: dict[str, Any],
     extra_args: str,
 ) -> None:
+    runtime_config_path: Path | None = None
     try:
         effective_config = {}
         base_name = str(cli_options.get("config_file", "")).strip()
@@ -457,7 +493,12 @@ def _run_training_background(
         STATE.finish(return_code=-1, error=f"Config preparation failed: {exc}", result=None)
         return
 
-    config_file = _write_temp_config(effective_config)
+    try:
+        config_file, runtime_config_path = _write_runtime_config(effective_config)
+    except Exception as exc:
+        STATE.reset([])
+        STATE.finish(return_code=-1, error=f"Config write failed: {exc}", result=None)
+        return
     cmd = [
         "uv",
         "run",
@@ -508,6 +549,7 @@ def _run_training_background(
             creationflags=creationflags,
         )
     except Exception as exc:
+        _remove_runtime_config(runtime_config_path)
         STATE.finish(return_code=-1, error=f"Failed to start process: {exc}", result=None)
         return
 
@@ -539,6 +581,8 @@ def _run_training_background(
         STATE.finish(code, None, _load_result_payload(run_dir))
     except Exception as exc:
         STATE.finish(code, f"Result parse error: {exc}", None)
+    finally:
+        _remove_runtime_config(runtime_config_path)
 
 
 @app.route("/")
@@ -634,14 +678,62 @@ def api_stop():
         return jsonify({"error": f"Failed to stop process: {exc}"}), 500
 
 
+@app.route("/api/clear", methods=["POST"])
+def api_clear():
+    with STATE.lock:
+        if STATE.running:
+            return jsonify({"error": "Training is running. Stop it before clearing state."}), 409
+    STATE.clear()
+    return jsonify({"message": "State cleared."})
+
+
 @app.route("/api/status", methods=["GET"])
 def api_status():
+    def _parse_topk(name: str, default: int) -> int:
+        raw = request.args.get(name, default)
+        try:
+            v = int(raw)
+        except Exception:
+            return default
+        return max(1, min(100, v))
+
+    pie_topk = _parse_topk("pie_topk", 8)
+    bar_topk = _parse_topk("bar_topk", 12)
     with STATE.lock:
         top_rows = sorted(STATE.model_param_rows, key=lambda x: int(x["count"]), reverse=True)[:20]
         loss_epochs = [int(p["epoch"]) for p in STATE.loss_points]
         train_losses = [float(p["train_loss"]) for p in STATE.loss_points]
         val_losses = [float(p["val_loss"]) for p in STATE.loss_points]
         max_epoch = max([int(p["total_epoch"]) for p in STATE.loss_points], default=None)
+        model_plot = {
+            "labels": [row["name"] for row in top_rows],
+            "counts": [int(row["count"]) for row in top_rows],
+            "shapes": [row["shape"] for row in top_rows],
+            "total_params": STATE.model_total_params,
+        }
+        loss_plot = {
+            "epochs": loss_epochs,
+            "train_loss": train_losses,
+            "val_loss": val_losses,
+            "max_epoch": max_epoch,
+            "saved_epochs": STATE.saved_epochs,
+        }
+        option_errors: list[str] = []
+        try:
+            model_plot_option_pie = build_model_param_pie_option(model_plot, topk=pie_topk)
+        except Exception as exc:
+            model_plot_option_pie = {}
+            option_errors.append(f"model_plot_option_pie: {exc}")
+        try:
+            model_plot_option_bar = build_model_param_bar_option(model_plot, topk=bar_topk)
+        except Exception as exc:
+            model_plot_option_bar = {}
+            option_errors.append(f"model_plot_option_bar: {exc}")
+        try:
+            loss_plot_option = build_loss_line_option(loss_plot)
+        except Exception as exc:
+            loss_plot_option = {}
+            option_errors.append(f"loss_plot_option: {exc}")
         return jsonify(
             {
                 "running": STATE.running,
@@ -652,19 +744,13 @@ def api_status():
                 "result_ready": STATE.result is not None,
                 "logs_tail": STATE.logs[-400:],
                 "model_logs_tail": STATE.model_logs[-300:],
-                "model_plot": {
-                    "labels": [row["name"] for row in top_rows],
-                    "counts": [int(row["count"]) for row in top_rows],
-                    "shapes": [row["shape"] for row in top_rows],
-                    "total_params": STATE.model_total_params,
-                },
-                "loss_plot": {
-                    "epochs": loss_epochs,
-                    "train_loss": train_losses,
-                    "val_loss": val_losses,
-                    "max_epoch": max_epoch,
-                    "saved_epochs": STATE.saved_epochs,
-                },
+                "model_plot": model_plot,
+                "model_plot_option_pie": model_plot_option_pie,
+                "model_plot_option_bar": model_plot_option_bar,
+                "model_plot_topk": {"pie": pie_topk, "bar": bar_topk},
+                "loss_plot": loss_plot,
+                "loss_plot_option": loss_plot_option,
+                "option_errors": option_errors,
                 "started_at": STATE.started_at,
                 "ended_at": STATE.ended_at,
             }
