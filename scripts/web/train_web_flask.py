@@ -391,6 +391,8 @@ class TrainState:
     ended_at: float | None = None
     _capturing_model_repr: bool = False
     stop_requested: bool = False
+    model_plot_topk_pie: int = 8
+    model_plot_topk_bar: int = 12
 
     def reset(self, command: list[str]) -> None:
         with self.lock:
@@ -789,17 +791,9 @@ def api_clear():
 
 @app.route("/api/status", methods=["GET"])
 def api_status():
-    def _parse_topk(name: str, default: int) -> int:
-        raw = request.args.get(name, default)
-        try:
-            v = int(raw)
-        except Exception:
-            return default
-        return max(1, min(100, v))
-
-    pie_topk = _parse_topk("pie_topk", 8)
-    bar_topk = _parse_topk("bar_topk", 12)
     with STATE.lock:
+        pie_topk = max(1, min(100, int(STATE.model_plot_topk_pie)))
+        bar_topk = max(1, min(100, int(STATE.model_plot_topk_bar)))
         top_rows = sorted(STATE.model_param_rows, key=lambda x: int(x["count"]), reverse=True)[:20]
         loss_epochs = [int(p["epoch"]) for p in STATE.loss_points]
         train_losses = [float(p["train_loss"]) for p in STATE.loss_points]
@@ -855,6 +849,25 @@ def api_status():
                 "ended_at": STATE.ended_at,
             }
         )
+
+
+@app.route("/api/plot_settings", methods=["POST"])
+def api_plot_settings():
+    body = request.get_json(silent=True) or {}
+
+    def _parse_topk(value: Any, default: int) -> int:
+        try:
+            v = int(value)
+        except Exception:
+            return default
+        return max(1, min(100, v))
+
+    with STATE.lock:
+        pie = _parse_topk(body.get("pie_topk", STATE.model_plot_topk_pie), STATE.model_plot_topk_pie)
+        bar = _parse_topk(body.get("bar_topk", STATE.model_plot_topk_bar), STATE.model_plot_topk_bar)
+        STATE.model_plot_topk_pie = pie
+        STATE.model_plot_topk_bar = bar
+    return jsonify({"model_plot_topk": {"pie": pie, "bar": bar}})
 
 
 @app.route("/api/result", methods=["GET"])
