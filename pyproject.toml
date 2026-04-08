@@ -1,21 +1,16 @@
 [project]
 name = "GNN-TP"
-version = "0.2.0"
+version = "1.0.0"
 description = "Graph Neural Network-based Traffic Prediction"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "dtaidistance>=2.4.0",
-    "einops>=0.8.2",
     "fastapi>=0.115.0",
-    "geopy>=2.4.1",
-    "infomap>=2.9.2",
     "numpy>=2.4.3",
     "optuna>=4.8.0",
     "pandas>=3.0.1",
     "pyecharts>=2.1.0",
-    "pytest>=9.0.2",
-    "ruff>=0.15.7",
     "scikit-learn>=1.8.0",
     "scipy>=1.17.1",
     "statsmodels>=0.14.3",
