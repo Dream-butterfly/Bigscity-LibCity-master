@@ -68,6 +68,21 @@ CLI_OPTION_KEYS = [
     "executor",
     "evaluator",
 ]
+CLI_OPTION_TYPE = {
+    "config_file": "str",
+    "exp_id": "str",
+    "seed": "int",
+    "gpu": "bool",
+    "gpu_id": "int",
+    "train_rate": "float",
+    "eval_rate": "float",
+    "batch_size": "int",
+    "learning_rate": "float",
+    "max_epoch": "int",
+    "dataset_class": "str",
+    "executor": "str",
+    "evaluator": "str",
+}
 
 app = FastAPI(title="LibCity Web Trainer")
 app.mount("/static", StaticFiles(directory=str(WEB_ROOT / "static")), name="static")
@@ -98,6 +113,40 @@ def _bool_from_any(v: Any, default: bool) -> bool:
         if v.lower() in {"0", "false", "no"}:
             return False
     return default
+
+
+def _normalize_cli_options(raw: dict[str, Any], allow_config_file: bool = True) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for key in CLI_OPTION_KEYS:
+        if key == "config_file" and not allow_config_file:
+            continue
+        if key not in raw:
+            continue
+        value = raw.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text == "":
+            continue
+        typ = CLI_OPTION_TYPE.get(key, "str")
+        if typ == "bool":
+            b = _bool_from_any(value, default=False)
+            if isinstance(value, str) and value.strip().lower() not in {"1", "0", "true", "false", "yes", "no"}:
+                raise ValueError(f"Invalid boolean value for --{key}: {value}")
+            out[key] = str(b).lower()
+        elif typ == "int":
+            try:
+                out[key] = str(int(text))
+            except Exception as exc:
+                raise ValueError(f"Invalid integer value for --{key}: {value}") from exc
+        elif typ == "float":
+            try:
+                out[key] = str(float(text))
+            except Exception as exc:
+                raise ValueError(f"Invalid float value for --{key}: {value}") from exc
+        else:
+            out[key] = text
+    return out
 
 
 @lru_cache(maxsize=1)
@@ -723,6 +772,7 @@ def _run_training_background(
     train: bool,
     cli_options: dict[str, Any],
     extra_args: str,
+    entry_script: str = "run_model.py",
 ) -> None:
     runtime_config_path: Path | None = None
     try:
@@ -745,7 +795,7 @@ def _run_training_background(
     cmd = [
         "uv",
         "run",
-        "run_model.py",
+        entry_script,
         "--task",
         task,
         "--model",
@@ -883,14 +933,67 @@ async def api_start(request: Request):
         return JSONResponse(status_code=400, content={"error": "config must be an object."})
     if not isinstance(cli_options, dict):
         return JSONResponse(status_code=400, content={"error": "cli_options must be an object."})
+    try:
+        cli_options = _normalize_cli_options(cli_options, allow_config_file=True)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
 
     t = threading.Thread(
         target=_run_training_background,
-        args=(task, model, dataset, config_payload, saved_model, train, cli_options, extra_args),
+        args=(task, model, dataset, config_payload, saved_model, train, cli_options, extra_args, "run_model.py"),
         daemon=True,
     )
     t.start()
     return {"message": "Training started."}
+
+
+@app.post("/api/start_resume")
+async def api_start_resume(request: Request):
+    with STATE.lock:
+        if STATE.running:
+            return JSONResponse(status_code=409, content={"error": "A training task is already running."})
+
+    body = await request.json()
+    task = str(body.get("task", "traffic_state_pred")).strip() or "traffic_state_pred"
+    model = str(body.get("model", "STGCN")).strip() or "STGCN"
+    dataset = str(body.get("dataset", "PEMSD4")).strip() or "PEMSD4"
+    saved_model = _bool_from_any(body.get("saved_model", True), True)
+    extra_args = str(body.get("extra_args", ""))
+    config_payload = body.get("config", {})
+    cli_options = body.get("cli_options", {})
+    if not isinstance(config_payload, dict):
+        return JSONResponse(status_code=400, content={"error": "config must be an object."})
+    if not isinstance(cli_options, dict):
+        return JSONResponse(status_code=400, content={"error": "cli_options must be an object."})
+    try:
+        cli_options = _normalize_cli_options(cli_options, allow_config_file=False)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+
+    exp_id = str(cli_options.get("exp_id", "")).strip()
+    if not exp_id:
+        return JSONResponse(status_code=400, content={"error": "Resume training requires cli_options.exp_id."})
+    cli_options = {"exp_id": exp_id}
+
+    epoch_raw = config_payload.get("epoch", None)
+    max_epoch_raw = config_payload.get("max_epoch", None)
+    try:
+        epoch = int(epoch_raw)
+        max_epoch = int(max_epoch_raw)
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "Resume training requires integer config.epoch and config.max_epoch."})
+    if epoch < 0:
+        return JSONResponse(status_code=400, content={"error": "config.epoch must be >= 0."})
+    if max_epoch <= epoch:
+        return JSONResponse(status_code=400, content={"error": "config.max_epoch must be greater than config.epoch."})
+
+    t = threading.Thread(
+        target=_run_training_background,
+        args=(task, model, dataset, config_payload, saved_model, True, cli_options, extra_args, "run_resume.py"),
+        daemon=True,
+    )
+    t.start()
+    return {"message": "Resume training started."}
 
 
 @app.post("/api/stop")

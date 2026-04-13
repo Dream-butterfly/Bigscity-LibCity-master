@@ -507,7 +507,7 @@ async function startResumeTrain() {
             max_epoch: targetMaxEpoch,
         },
     };
-    const r = await fetch('/api/start', {
+    const r = await fetch('/api/start_resume', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(body),
@@ -960,8 +960,8 @@ function updateAutoScrollBtnText() {
     );
 }
 
-function renderLogs(lines) {
-    const logEl = byId('logs');
+function renderLogsInto(lines, containerId) {
+    const logEl = byId(containerId);
     if (!logEl) return;
     const keyword = (state.logFilterKeyword || '').trim().toLowerCase();
     const levelFilter = (state.logFilterLevel || 'all').toLowerCase();
@@ -986,6 +986,11 @@ function renderLogs(lines) {
             `).join('');
     logEl.innerHTML = html || `<div class="log-empty">${esc(t('log_empty', '暂无日志'))}</div>`;
     if (shouldStickBottom) logEl.scrollTop = logEl.scrollHeight;
+}
+
+function renderLogs(lines) {
+    renderLogsInto(lines, 'logs');
+    renderLogsInto(lines, 'resume_logs');
 }
 
 function setStatus(stateName, extra) {
