@@ -103,8 +103,8 @@ class DCRNNExecutor(TrafficStateExecutor):
 
             if (epoch_idx % self.log_every) == 0:
                 log_lr = self.optimizer.param_groups[0]['lr']
-                message = 'Epoch [{}/{}] ({}) train_loss: {:.4f}, val_loss: {:.4f}, lr: {:.6f}, {:.2f}s'. \
-                    format(epoch_idx, self.epochs, batches_seen, np.mean(losses), val_loss,
+                message = 'Epoch [{}/{}] train_loss: {:.4f}, val_loss: {:.4f}, lr: {:.6f}, {:.2f}s'. \
+                    format(epoch_idx, self.epochs, np.mean(losses), val_loss,
                            log_lr, (end_time - start_time))
                 self._logger.info(message)
 
