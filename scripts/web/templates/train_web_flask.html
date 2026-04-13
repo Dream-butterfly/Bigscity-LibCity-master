@@ -218,7 +218,17 @@
         <div class="pane-resizer" aria-label="resize"></div>
 
         <div class="card resizable-card pane-right">
-            <strong data-i18n="prediction_demo_title">预测效果演示</strong>
+            <div class="toolbar prediction-toolbar">
+                <strong data-i18n="prediction_demo_title">预测效果演示</strong>
+                <div class="toolbar-controls prediction-controls">
+                    <label for="pred_horizon" data-i18n="prediction_horizon">horizon</label>
+                    <select id="pred_horizon" class="btn-auto"></select>
+                    <label for="pred_node" data-i18n="prediction_node">node</label>
+                    <select id="pred_node" class="btn-auto"></select>
+                    <label for="pred_feature" data-i18n="prediction_feature">feature</label>
+                    <select id="pred_feature" class="btn-auto"></select>
+                </div>
+            </div>
             <div id="chart"></div>
         </div>
     </div>

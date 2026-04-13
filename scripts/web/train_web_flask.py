@@ -323,6 +323,52 @@ def _downsample_xy(y1: list[float], y2: list[float], max_points: int = 600) -> t
     return y1[:n:step], y2[:n:step]
 
 
+def _extract_prediction_series(
+    npz_path: Path, horizon: int | None = None, node: int | None = None, feature: int | None = None
+) -> dict[str, Any]:
+    with np.load(npz_path) as arr:
+        pred = arr["prediction"]
+        truth = arr["truth"]
+    if pred.shape != truth.shape:
+        raise ValueError(f"prediction/truth shape mismatch: {pred.shape} vs {truth.shape}")
+    if pred.ndim != 4:
+        raise ValueError(f"prediction array must be 4-D, got shape: {pred.shape}")
+
+    _, out_steps, num_nodes, num_features = pred.shape
+
+    def _pick(value: int | None, upper: int, name: str) -> int:
+        if upper <= 0:
+            raise ValueError(f"{name} upper bound must be positive, got {upper}.")
+        if value is None:
+            return 1
+        v = int(value)
+        if v < 1 or v > upper:
+            raise ValueError(f"{name} must be in [1, {upper}], got {v}.")
+        return v
+
+    horizon_sel = _pick(horizon, out_steps, "horizon")
+    node_sel = _pick(node, num_nodes, "node")
+    feature_sel = _pick(feature, num_features, "feature")
+
+    pred_series = pred[:, horizon_sel - 1, node_sel - 1, feature_sel - 1].astype(float).tolist()
+    truth_series = truth[:, horizon_sel - 1, node_sel - 1, feature_sel - 1].astype(float).tolist()
+    pred_series, truth_series = _downsample_xy(pred_series, truth_series, max_points=600)
+
+    chart_payload = {
+        "title": "",
+        "labels": list(range(1, len(pred_series) + 1)),
+        "prediction": pred_series,
+        "truth": truth_series,
+    }
+    return {
+        "chart": chart_payload,
+        "chart_option": build_prediction_line_option(chart_payload),
+        "selection": {"horizon": horizon_sel, "node": node_sel, "feature": feature_sel},
+        "ranges": {"horizon": out_steps, "node": num_nodes, "feature": num_features},
+        "shapes": {"prediction": list(pred.shape), "truth": list(truth.shape)},
+    }
+
+
 def _load_result_payload(run_dir: Path) -> dict[str, Any]:
     eval_dir = run_dir / "evaluate_cache"
     if not eval_dir.exists():
@@ -353,18 +399,7 @@ def _load_result_payload(run_dir: Path) -> dict[str, Any]:
         for col in metrics_df.columns
     }
 
-    arr = np.load(npz_files[0])
-    pred = arr["prediction"]
-    truth = arr["truth"]
-    pred_series = pred[:, 0, 0, 0].astype(float)
-    truth_series = truth[:, 0, 0, 0].astype(float)
-
-    chart_payload = {
-        "title": "Prediction vs Truth (horizon=1, node=0, feature=0)",
-        "labels": list(range(1, len(pred_series) + 1)),
-        "prediction": pred_series.tolist(),
-        "truth": truth_series.tolist(),
-    }
+    series_payload = _extract_prediction_series(npz_files[0], horizon=1, node=1, feature=1)
     return {
         "run_dir": str(run_dir),
         "metrics_csv": str(csv_files[0]),
@@ -373,9 +408,13 @@ def _load_result_payload(run_dir: Path) -> dict[str, Any]:
         "metrics_rows": metrics_rows,
         "metrics_columns": metrics_columns,
         "metrics_table_html": build_metrics_table_html(metrics_columns, metrics_rows),
-        "chart": chart_payload,
-        "chart_option": build_prediction_line_option(chart_payload),
-        "shapes": {"prediction": list(pred.shape), "truth": list(truth.shape)},
+        "chart": series_payload["chart"],
+        "chart_option": series_payload["chart_option"],
+        "shapes": series_payload["shapes"],
+        "prediction_selector": {
+            "selection": series_payload["selection"],
+            "ranges": series_payload["ranges"],
+        },
     }
 
 
@@ -933,6 +972,24 @@ def api_result():
         if STATE.result is None:
             return JSONResponse(status_code=404, content={"error": "Result not ready."})
         return STATE.result
+
+
+@app.get("/api/result_series")
+def api_result_series(
+    horizon: int = Query(default=1, ge=1),
+    node: int = Query(default=1, ge=1),
+    feature: int = Query(default=1, ge=1),
+):
+    with STATE.lock:
+        if STATE.result is None:
+            return JSONResponse(status_code=404, content={"error": "Result not ready."})
+        npz_path = STATE.result.get("predictions_npz")
+    if not npz_path:
+        return JSONResponse(status_code=404, content={"error": "Prediction npz path is missing."})
+    try:
+        return _extract_prediction_series(Path(str(npz_path)), horizon=horizon, node=node, feature=feature)
+    except Exception as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
 
 
 @app.get("/api/runs")

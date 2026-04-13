@@ -73,7 +73,15 @@ class STGformerExecutor(TrafficStateExecutor):
             if val_loss < min_val_loss:
                 wait = 0
                 best_state_dict = copy.deepcopy(self.model.state_dict())
-                self._logger.info("Val loss decrease from {:.4f} to {:.4f}".format(min_val_loss, val_loss))
+                if self.saved:
+                    model_file_name = self.save_model_with_epoch(epoch_idx)
+                    self._logger.info(
+                        "Val loss decrease from {:.4f} to {:.4f}, saving to {}".format(
+                            min_val_loss, val_loss, model_file_name
+                        )
+                    )
+                else:
+                    self._logger.info("Val loss decrease from {:.4f} to {:.4f}".format(min_val_loss, val_loss))
                 min_val_loss = val_loss
                 best_epoch = epoch_idx
             else:

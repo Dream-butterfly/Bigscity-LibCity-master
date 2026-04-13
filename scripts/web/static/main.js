@@ -27,6 +27,8 @@ const state = {
     logFilterLevel: 'all',
     logFilterKeyword: '',
     activeTab: 'train',
+    predictionRanges: {horizon: 0, node: 0, feature: 0},
+    predictionSelection: {horizon: 1, node: 1, feature: 1},
 };
 const byId = (id) => document.getElementById(id);
 const esc = (s) => String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
@@ -505,6 +507,89 @@ function drawChart(option) {
     renderEChart('chart', option || {});
 }
 
+function getPredictionSelectors() {
+    return {
+        horizon: byId('pred_horizon'),
+        node: byId('pred_node'),
+        feature: byId('pred_feature'),
+    };
+}
+
+function setPredictionSelectOptions(el, count, selected) {
+    if (!el) return;
+    const upper = Number.isFinite(Number(count)) ? Math.max(0, Math.floor(Number(count))) : 0;
+    if (upper <= 0) {
+        el.innerHTML = '<option value="1">1</option>';
+        el.value = '1';
+        el.disabled = true;
+        return;
+    }
+    const safe = Math.min(Math.max(1, Number(selected) || 1), upper);
+    const opts = [];
+    for (let i = 1; i <= upper; i += 1) {
+        opts.push(`<option value="${i}" ${i === safe ? 'selected' : ''}>${i}</option>`);
+    }
+    el.innerHTML = opts.join('');
+    el.value = String(safe);
+    el.disabled = false;
+}
+
+function resetPredictionSelectors() {
+    const selectors = getPredictionSelectors();
+    setPredictionSelectOptions(selectors.horizon, 0, 1);
+    setPredictionSelectOptions(selectors.node, 0, 1);
+    setPredictionSelectOptions(selectors.feature, 0, 1);
+    state.predictionRanges = {horizon: 0, node: 0, feature: 0};
+    state.predictionSelection = {horizon: 1, node: 1, feature: 1};
+}
+
+function applyPredictionSelectorMeta(result) {
+    const selectors = getPredictionSelectors();
+    const shape = Array.isArray(result?.shapes?.prediction) ? result.shapes.prediction : [];
+    const ranges = result?.prediction_selector?.ranges || {};
+    const selection = result?.prediction_selector?.selection || {};
+    const toPositiveInt = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+    };
+    const horizonMax = toPositiveInt(ranges.horizon || shape[1] || 0);
+    const nodeMax = toPositiveInt(ranges.node || shape[2] || 0);
+    const featureMax = toPositiveInt(ranges.feature || shape[3] || 0);
+    setPredictionSelectOptions(selectors.horizon, horizonMax, selection.horizon || state.predictionSelection.horizon);
+    setPredictionSelectOptions(selectors.node, nodeMax, selection.node || state.predictionSelection.node);
+    setPredictionSelectOptions(selectors.feature, featureMax, selection.feature || state.predictionSelection.feature);
+    state.predictionRanges = {horizon: horizonMax, node: nodeMax, feature: featureMax};
+    state.predictionSelection = {
+        horizon: Number(selectors.horizon?.value || 1),
+        node: Number(selectors.node?.value || 1),
+        feature: Number(selectors.feature?.value || 1),
+    };
+}
+
+async function refreshPredictionSeries() {
+    if ((state.predictionRanges.horizon || 0) <= 0 || (state.predictionRanges.node || 0) <= 0 || (state.predictionRanges.feature || 0) <= 0) {
+        return;
+    }
+    const selectors = getPredictionSelectors();
+    const horizon = Number(selectors.horizon?.value || 1);
+    const node = Number(selectors.node?.value || 1);
+    const feature = Number(selectors.feature?.value || 1);
+    state.predictionSelection = {horizon, node, feature};
+    const qs = new URLSearchParams({
+        horizon: String(horizon),
+        node: String(node),
+        feature: String(feature),
+    });
+    try {
+        const rr = await fetch(`/api/result_series?${qs.toString()}`);
+        if (!rr.ok) return;
+        const data = await rr.json();
+        drawChart(data.chart_option || {});
+    } catch (_) {
+        // Ignore transient network errors and keep current chart.
+    }
+}
+
 function drawModelParamChart(plot, pieOption, barOption) {
     const total = plot?.total_params;
     byId('model_param_summary').innerText = total
@@ -560,6 +645,7 @@ function clearResultPanels() {
     byId('metrics').innerHTML = `<div class="small">${esc(t('summary_wait_train_done', '等待训练全部完成后展示'))}</div>`;
     const chart = charts.chart;
     if (chart) chart.clear();
+    resetPredictionSelectors();
 }
 
 function switchTab(tabName) {
@@ -786,7 +872,8 @@ async function refreshStatus() {
         if (rr.ok) {
             const result = await rr.json();
             renderMetrics(result);
-            drawChart(result.chart_option || {});
+            applyPredictionSelectorMeta(result);
+            await refreshPredictionSeries();
             state.resultRenderedRunKey = runKey;
         }
     }
@@ -867,6 +954,10 @@ async function init() {
         state.logAutoScroll = !state.logAutoScroll;
         updateAutoScrollBtnText();
     });
+    byId('pred_horizon').addEventListener('change', refreshPredictionSeries);
+    byId('pred_node').addEventListener('change', refreshPredictionSeries);
+    byId('pred_feature').addEventListener('change', refreshPredictionSeries);
+    resetPredictionSelectors();
     initPaneResizers();
     switchTab('train');
     await refreshStatus();

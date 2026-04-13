@@ -122,7 +122,7 @@ def build_loss_line_option(plot: dict[str, Any]) -> dict[str, Any]:
         opts.MarkLineItem(
             name="s",
             x=str(e + epoch_shift),
-            linestyle_opts=opts.LineStyleOpts(type_="dashed", color="#f59e0b", opacity=0.85),
+            linestyle_opts=opts.LineStyleOpts(type_="dashed", color="#f59e0b", width=2, opacity=0.95),
             symbol="none",
         )
         for e in saved_epochs
@@ -141,7 +141,7 @@ def build_loss_line_option(plot: dict[str, Any]) -> dict[str, Any]:
                 data=mark_lines,
                 is_silent=True,
                 symbol="none",
-                label_opts=opts.LabelOpts(is_show=False),
+                label_opts=opts.LabelOpts(is_show=True, color="#b45309", formatter="{b}"),
             )
             if mark_lines
             else None
@@ -243,7 +243,7 @@ def build_loss_line_option(plot: dict[str, Any]) -> dict[str, Any]:
 def build_prediction_line_option(chart_payload: dict[str, Any]) -> dict[str, Any]:
     pred = [round(float(v), 2) for v in (chart_payload.get("prediction") or [])]
     truth = [round(float(v), 2) for v in (chart_payload.get("truth") or [])]
-    title = str(chart_payload.get("title") or "Prediction vs Truth")
+    title = str(chart_payload.get("title") or "").strip()
     x_series = [str(i + 1) for i in range(max(len(pred), len(truth)))]
 
     chart = Line()
@@ -254,17 +254,19 @@ def build_prediction_line_option(chart_payload: dict[str, Any]) -> dict[str, Any
     chart.add_xaxis(x_series)
     chart.add_yaxis("prediction", pred, is_smooth=False, label_opts=opts.LabelOpts(is_show=False))
     chart.add_yaxis("truth", truth, is_smooth=False, label_opts=opts.LabelOpts(is_show=False))
-    chart.set_global_opts(
-        title_opts=opts.TitleOpts(title=title),
-        tooltip_opts=opts.TooltipOpts(trigger="axis"),
-        xaxis_opts=opts.AxisOpts(name="step"),
-        yaxis_opts=opts.AxisOpts(type_="value"),
-        legend_opts=opts.LegendOpts(pos_top="6%"),
-        datazoom_opts=[
+    global_opts: dict[str, Any] = {
+        "tooltip_opts": opts.TooltipOpts(trigger="axis"),
+        "xaxis_opts": opts.AxisOpts(name="step"),
+        "yaxis_opts": opts.AxisOpts(type_="value"),
+        "legend_opts": opts.LegendOpts(pos_top="6%"),
+        "datazoom_opts": [
             opts.DataZoomOpts(type_="inside", range_start=0, range_end=100),
             opts.DataZoomOpts(type_="slider", range_start=0, range_end=100),
         ],
-    )
+    }
+    if title:
+        global_opts["title_opts"] = opts.TitleOpts(title=title)
+    chart.set_global_opts(**global_opts)
     return _dump_options(chart)
 
 
