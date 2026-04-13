@@ -31,6 +31,7 @@
 
     <div class="tabs">
         <button id="tab_btn_train" class="tab-btn active" type="button" data-i18n="tab_train">训练</button>
+        <button id="tab_btn_resume" class="tab-btn" type="button" data-i18n="tab_resume">继续训练</button>
         <button id="tab_btn_compare" class="tab-btn" type="button" data-i18n="tab_compare">模型对比</button>
         <button id="tab_btn_history" class="tab-btn" type="button" data-i18n="tab_history">运行历史</button>
     </div>
@@ -232,6 +233,46 @@
             <div id="chart"></div>
         </div>
     </div>
+    </div>
+
+    <div id="tab_resume" class="tab-panel">
+        <div class="card resizable-card">
+            <div class="toolbar">
+                <strong data-i18n="resume_title">继续训练</strong>
+                <div class="toolbar-controls">
+                    <button class="btn btn-auto" type="button" onclick="loadResumeRuns()" data-i18n="btn_refresh_resume_runs">刷新可续训模型</button>
+                </div>
+            </div>
+            <div class="group-grid">
+                <div>
+                    <label data-i18n="resume_select_run">选择历史运行</label>
+                    <select id="resume_run_id"></select>
+                </div>
+                <div>
+                    <label data-i18n="resume_start_epoch">续训起始 epoch</label>
+                    <select id="resume_epoch"></select>
+                </div>
+                <div>
+                    <label data-i18n="resume_target_epoch">目标 max_epoch</label>
+                    <input id="resume_max_epoch" type="number" min="1" value="20"/>
+                </div>
+                <div>
+                    <label data-i18n="resume_saved_model">保存模型</label>
+                    <select id="resume_saved_model">
+                        <option value="true" selected>true</option>
+                        <option value="false">false</option>
+                    </select>
+                </div>
+                <div class="span-all">
+                    <label data-i18n="resume_extra_args">额外参数</label>
+                    <input id="resume_extra_args" data-i18n-placeholder="resume_extra_args_placeholder" placeholder="可选，例如 --log_level INFO"/>
+                </div>
+            </div>
+            <div class="actions">
+                <button class="btn btn-primary" onclick="startResumeTrain()" type="button" data-i18n="btn_start_resume">开始继续训练</button>
+            </div>
+            <div id="resume_hint" class="small"></div>
+        </div>
     </div>
 
     <div id="tab_compare" class="tab-panel">

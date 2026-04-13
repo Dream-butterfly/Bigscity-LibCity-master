@@ -52,6 +52,7 @@ EPOCH_LOSS_RE = re.compile(
     r"Epoch\s+\[(\d+)/(\d+)\]\s+train_loss:\s*([0-9.eE+-]+),\s*val_loss:\s*([0-9.eE+-]+)"
 )
 SAVED_EPOCH_RE = re.compile(r"Saved model at\s+([0-9]+)")
+CHECKPOINT_EPOCH_RE = re.compile(r"_epoch(\d+)\.tar$")
 CLI_OPTION_KEYS = [
     "config_file",
     "exp_id",
@@ -252,6 +253,46 @@ def _collect_completed_runs(limit: int = 200) -> list[dict[str, Any]]:
                 "mtime": run_dir.stat().st_mtime,
                 "metrics_csv": str(csv_files[0]),
                 "predictions_npz": str(npz_files[0]),
+            }
+        )
+        if len(runs) >= limit:
+            break
+    return runs
+
+
+def _collect_resume_runs(limit: int = 300) -> list[dict[str, Any]]:
+    if not OUTPUTS_DIR.exists():
+        return []
+    runs: list[dict[str, Any]] = []
+    dirs = [p for p in OUTPUTS_DIR.iterdir() if p.is_dir()]
+    dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    for run_dir in dirs:
+        cache_dir = run_dir / "model_cache"
+        if not cache_dir.exists() or not cache_dir.is_dir():
+            continue
+        epochs: list[int] = []
+        for ckpt in cache_dir.glob("*_epoch*.tar"):
+            m = CHECKPOINT_EPOCH_RE.search(ckpt.name)
+            if not m:
+                continue
+            try:
+                epochs.append(int(m.group(1)))
+            except Exception:
+                continue
+        if not epochs:
+            continue
+        epochs = sorted(set(epochs))
+        meta = _parse_run_dir_name(run_dir.name)
+        runs.append(
+            {
+                "run_id": run_dir.name,
+                "run_dir": str(run_dir),
+                "task": meta["task"],
+                "model": meta["model"],
+                "dataset": meta["dataset"],
+                "mtime": run_dir.stat().st_mtime,
+                "epochs": epochs,
+                "latest_epoch": epochs[-1],
             }
         )
         if len(runs) >= limit:
@@ -995,6 +1036,12 @@ def api_result_series(
 @app.get("/api/runs")
 def api_runs():
     runs = _collect_completed_runs(limit=300)
+    return {"runs": runs}
+
+
+@app.get("/api/resume_runs")
+def api_resume_runs():
+    runs = _collect_resume_runs(limit=300)
     return {"runs": runs}
 
 

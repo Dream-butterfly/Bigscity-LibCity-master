@@ -23,6 +23,7 @@ const state = {
     modelPlotOptionBar: {},
     lossPlot: {},
     compareRuns: [],
+    resumeRuns: [],
     latestLogs: [],
     logFilterLevel: 'all',
     logFilterKeyword: '',
@@ -109,6 +110,7 @@ async function loadI18n(lang) {
     updateLossSummary(state.lossPlot || {});
     renderLogs(state.latestLogs || []);
     if (state.activeTab === 'history') await loadHistory();
+    if (state.activeTab === 'resume') await loadResumeRuns();
     const select = byId('lang_select');
     if (select) select.value = normalized;
 }
@@ -365,6 +367,157 @@ async function startTrain() {
     });
     const data = await r.json();
     if (!r.ok) alert(data.error || t('error_start_failed', '启动失败'));
+}
+
+function formatResumeRunTag(run) {
+    const latest = Number(run?.latest_epoch);
+    const latestText = Number.isFinite(latest)
+        ? tf('resume_latest_epoch', {epoch: latest}, `latest=${latest}`)
+        : t('resume_latest_epoch_na', 'latest=-');
+    return `${run.run_id} | ${run.model || '-'} | ${run.dataset || '-'} | ${latestText}`;
+}
+
+function renderResumeHint(run) {
+    const el = byId('resume_hint');
+    if (!el) return;
+    if (!run) {
+        el.innerText = t('resume_hint_empty', '请选择一个可续训的运行目录');
+        return;
+    }
+    const epochs = Array.isArray(run.epochs) ? run.epochs : [];
+    const latest = Number(run.latest_epoch);
+    const minEpoch = epochs.length ? epochs[0] : '-';
+    const maxEpoch = Number.isFinite(latest) ? latest : '-';
+    el.innerText = tf(
+        'resume_hint_selected',
+        {run: run.run_id, model: run.model || '-', dataset: run.dataset || '-', min: minEpoch, max: maxEpoch},
+        `run=${run.run_id}, model=${run.model || '-'}, dataset=${run.dataset || '-'}, checkpoints=${minEpoch}..${maxEpoch}`
+    );
+}
+
+function renderResumeRunOptions() {
+    const el = byId('resume_run_id');
+    if (!el) return;
+    const selected = el.value;
+    const list = state.resumeRuns || [];
+    const options = ['<option value=""></option>'].concat(
+        list.map((run) => {
+            const sel = selected && selected === run.run_id ? 'selected' : '';
+            return `<option value="${esc(run.run_id)}" ${sel}>${esc(formatResumeRunTag(run))}</option>`;
+        })
+    );
+    el.innerHTML = options.join('');
+    if (!el.value && list.length) {
+        el.value = list[0].run_id;
+    }
+    onResumeRunChanged();
+}
+
+function renderResumeEpochOptions(run) {
+    const epochEl = byId('resume_epoch');
+    if (!epochEl) return;
+    const epochsRaw = Array.isArray(run?.epochs) ? run.epochs : [];
+    const epochs = epochsRaw
+        .map((x) => Number(x))
+        .filter((x) => Number.isFinite(x) && x >= 0)
+        .map((x) => Math.floor(x))
+        .sort((a, b) => a - b);
+    if (!epochs.length) {
+        epochEl.innerHTML = '<option value=""></option>';
+        epochEl.value = '';
+        epochEl.disabled = true;
+        return;
+    }
+    let selected = Math.floor(Number(epochEl.value));
+    if (!epochs.includes(selected)) {
+        selected = Math.floor(Number(run?.latest_epoch));
+    }
+    if (!epochs.includes(selected)) {
+        selected = epochs[epochs.length - 1];
+    }
+    epochEl.innerHTML = epochs
+        .map((epoch) => `<option value="${epoch}" ${epoch === selected ? 'selected' : ''}>${epoch}</option>`)
+        .join('');
+    epochEl.value = String(selected);
+    epochEl.disabled = false;
+}
+
+function onResumeRunChanged() {
+    const runId = byId('resume_run_id')?.value || '';
+    const run = (state.resumeRuns || []).find((x) => x.run_id === runId);
+    renderResumeHint(run || null);
+    renderResumeEpochOptions(run || null);
+    if (!run) return;
+    const resumeEpoch = Math.floor(Number(byId('resume_epoch').value));
+    if (!Number.isFinite(resumeEpoch) || resumeEpoch < 0) return;
+    const currentMax = Math.max(1, Math.floor(Number(byId('resume_max_epoch').value || (resumeEpoch + 10))));
+    byId('resume_max_epoch').value = String(Math.max(currentMax, resumeEpoch + 1));
+}
+
+async function loadResumeRuns() {
+    const r = await fetch('/api/resume_runs');
+    const data = await r.json();
+    state.resumeRuns = Array.isArray(data.runs) ? data.runs : [];
+    renderResumeRunOptions();
+}
+
+async function startResumeTrain() {
+    const runId = (byId('resume_run_id').value || '').trim();
+    if (!runId) {
+        alert(t('resume_select_first', '请先选择可续训模型'));
+        return;
+    }
+    const run = (state.resumeRuns || []).find((x) => x.run_id === runId);
+    if (!run) {
+        alert(t('resume_run_not_found', '未找到对应运行目录'));
+        return;
+    }
+    if (!run.task || !run.model || !run.dataset) {
+        alert(t('resume_run_meta_missing', '所选运行目录缺少 task/model/dataset 信息，无法继续训练'));
+        return;
+    }
+    const resumeEpoch = Math.floor(Number(byId('resume_epoch').value));
+    if (!Number.isFinite(resumeEpoch) || resumeEpoch < 0) {
+        alert(t('resume_invalid_epoch', '请选择有效的续训 epoch'));
+        return;
+    }
+    const availableEpochs = (Array.isArray(run.epochs) ? run.epochs : []).map((x) => Math.floor(Number(x)));
+    if (!availableEpochs.includes(resumeEpoch)) {
+        alert(t('resume_invalid_epoch', '请选择有效的续训 epoch'));
+        return;
+    }
+    const targetMaxEpoch = Math.max(1, Math.floor(Number(byId('resume_max_epoch').value || (resumeEpoch + 1))));
+    if (targetMaxEpoch <= resumeEpoch) {
+        alert(t('resume_invalid_max_epoch', '目标 max_epoch 必须大于续训起始 epoch'));
+        return;
+    }
+    byId('resume_epoch').value = String(resumeEpoch);
+    byId('resume_max_epoch').value = String(targetMaxEpoch);
+    const expId = String(run.run_id || '').split('__')[0];
+    const body = {
+        task: run.task,
+        model: run.model,
+        dataset: run.dataset,
+        saved_model: byId('resume_saved_model').value,
+        train: true,
+        extra_args: byId('resume_extra_args').value || '',
+        cli_options: {exp_id: expId},
+        config: {
+            epoch: resumeEpoch,
+            max_epoch: targetMaxEpoch,
+        },
+    };
+    const r = await fetch('/api/start', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+        alert(data.error || t('resume_start_failed', '继续训练启动失败'));
+        return;
+    }
+    switchTab('train');
 }
 
 async function stopTrain() {
@@ -649,11 +802,13 @@ function clearResultPanels() {
 }
 
 function switchTab(tabName) {
-    state.activeTab = ['train', 'compare', 'history'].includes(tabName) ? tabName : 'train';
+    state.activeTab = ['train', 'resume', 'compare', 'history'].includes(tabName) ? tabName : 'train';
     byId('tab_btn_train').classList.toggle('active', state.activeTab === 'train');
+    byId('tab_btn_resume').classList.toggle('active', state.activeTab === 'resume');
     byId('tab_btn_compare').classList.toggle('active', state.activeTab === 'compare');
     byId('tab_btn_history').classList.toggle('active', state.activeTab === 'history');
     byId('tab_train').classList.toggle('active', state.activeTab === 'train');
+    byId('tab_resume').classList.toggle('active', state.activeTab === 'resume');
     byId('tab_compare').classList.toggle('active', state.activeTab === 'compare');
     byId('tab_history').classList.toggle('active', state.activeTab === 'history');
     setTimeout(resizeAllCharts, 60);
@@ -892,6 +1047,10 @@ async function init() {
         setTimeout(resizeAllCharts, 60);
     });
     byId('tab_btn_train').addEventListener('click', () => switchTab('train'));
+    byId('tab_btn_resume').addEventListener('click', async () => {
+        switchTab('resume');
+        if (!state.resumeRuns.length) await loadResumeRuns();
+    });
     byId('tab_btn_compare').addEventListener('click', async () => {
         switchTab('compare');
         if (!state.compareRuns.length) await loadCompareRuns();
@@ -957,6 +1116,7 @@ async function init() {
     byId('pred_horizon').addEventListener('change', refreshPredictionSeries);
     byId('pred_node').addEventListener('change', refreshPredictionSeries);
     byId('pred_feature').addEventListener('change', refreshPredictionSeries);
+    byId('resume_run_id').addEventListener('change', onResumeRunChanged);
     resetPredictionSelectors();
     initPaneResizers();
     switchTab('train');
