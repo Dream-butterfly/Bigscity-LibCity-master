@@ -24,6 +24,8 @@ const state = {
     lossPlot: {},
     compareRuns: [],
     resumeRuns: [],
+    dataVersions: [],
+    dataStatus: {},
     latestLogs: [],
     logFilterLevel: 'all',
     logFilterKeyword: '',
@@ -34,6 +36,7 @@ const state = {
 const byId = (id) => document.getElementById(id);
 const esc = (s) => String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 const CLI_FIELDS = ["config_file", "exp_id", "seed", "gpu", "gpu_id", "train_rate", "eval_rate", "batch_size", "learning_rate", "max_epoch", "dataset_class", "executor", "evaluator"];
+const HIDDEN_TRAIN_PARAM_KEYS = new Set(["config_file", "train_rate", "eval_rate", "dataset_class"]);
 const normalizeLang = (lang) => {
     const x = String(lang || '').trim();
     if (!x) return 'zh-CN';
@@ -111,6 +114,7 @@ async function loadI18n(lang) {
     renderLogs(state.latestLogs || []);
     if (state.activeTab === 'history') await loadHistory();
     if (state.activeTab === 'resume') await loadResumeRuns();
+    if (state.activeTab === 'data') await loadDataVersions();
     const select = byId('lang_select');
     if (select) select.value = normalized;
 }
@@ -190,10 +194,13 @@ function parseValue(type, raw) {
 
 function renderTasks() {
     const tasks = [...new Set(state.models.map(x => x.task))].sort();
-    byId('task').innerHTML = tasks.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+    const html = tasks.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+    byId('task').innerHTML = html;
+    if (byId('data_task')) byId('data_task').innerHTML = html;
     const stgcnMeta = state.models.find((x) => x.model === 'STGCN');
     if (stgcnMeta && tasks.includes(stgcnMeta.task)) {
         byId('task').value = stgcnMeta.task;
+        if (byId('data_task')) byId('data_task').value = stgcnMeta.task;
     }
 }
 
@@ -204,9 +211,23 @@ function renderModelsForTask() {
     if (models.includes('STGCN')) byId('model').value = 'STGCN';
 }
 
+function renderDataModelsForTask() {
+    const task = byId('data_task')?.value || byId('task')?.value;
+    const models = [...new Set(state.models.filter(x => x.task === task).map(x => x.model))].sort();
+    if (byId('data_model')) {
+        byId('data_model').innerHTML = models.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+        if (models.includes('STGCN')) byId('data_model').value = 'STGCN';
+    }
+}
+
 function renderDatasets() {
-    byId('dataset').innerHTML = state.datasets.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
-    if (state.datasets.includes('PEMSD4')) byId('dataset').value = 'PEMSD4';
+    const html = state.datasets.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+    byId('dataset').innerHTML = html;
+    if (byId('data_dataset')) byId('data_dataset').innerHTML = html;
+    if (state.datasets.includes('PEMSD4')) {
+        byId('dataset').value = 'PEMSD4';
+        if (byId('data_dataset')) byId('data_dataset').value = 'PEMSD4';
+    }
 }
 
 function renderParamCell(section, idx) {
@@ -308,7 +329,160 @@ function collectCliOptions() {
     return out;
 }
 
+function collectDataCliOptions() {
+    const out = {};
+    const mappings = {
+        seed: 'data_seed',
+        train_rate: 'data_train_rate',
+        eval_rate: 'data_eval_rate',
+        batch_size: 'data_batch_size',
+        dataset_class: 'data_dataset_class',
+    };
+    for (const [k, id] of Object.entries(mappings)) {
+        const el = byId(id);
+        if (!el) continue;
+        const v = String(el.value ?? '').trim();
+        if (v !== '') out[k] = v;
+    }
+    return out;
+}
+
+function setDataStatus(stateName, extra) {
+    const el = byId('data_status');
+    if (!el) return;
+    el.className = 'badge';
+    if (stateName === 'running') el.classList.add('status-running');
+    else if (stateName === 'finished') el.classList.add('status-finished');
+    else el.classList.add('status-idle');
+    el.innerText = extra ? `${stateName} (${extra})` : stateName;
+}
+
+function formatDataVersionTag(v) {
+    const status = String(v?.status || '-');
+    const task = String(v?.task || '-');
+    const model = String(v?.model || '-');
+    const dataset = String(v?.dataset || '-');
+    return `${v.version_id} | ${status} | ${task}/${model}/${dataset}`;
+}
+
+function renderDataVersionHint(version) {
+    const el = byId('data_version_hint');
+    if (!el) return;
+    if (!version) {
+        el.innerText = '未选择数据版本';
+        return;
+    }
+    const s = version.script_meta || {};
+    const cache = s.cache_file_name || '-';
+    const trainB = s.train_batches ?? '-';
+    const validB = s.valid_batches ?? '-';
+    const testB = s.test_batches ?? '-';
+    el.innerText = `status=${version.status || '-'}, dataset=${version.dataset || '-'}, cache=${cache}, batches(train/val/test)=${trainB}/${validB}/${testB}`;
+}
+
+function getSelectedTrainDataVersion() {
+    return String(byId('train_data_version')?.value || '').trim();
+}
+
+function applyTrainDataVersionSelection() {
+    const vid = getSelectedTrainDataVersion();
+    const v = (state.dataVersions || []).find((x) => x.version_id === vid);
+    const hintEl = byId('train_data_version_hint');
+    const lockIds = ['train_rate', 'eval_rate', 'dataset_class', 'config_file'];
+    if (!v) {
+        if (hintEl) hintEl.innerText = '';
+        lockIds.forEach((id) => {
+            const el = byId(id);
+            if (el) el.disabled = false;
+        });
+        return;
+    }
+    if (v.task && byId('task')) byId('task').value = v.task;
+    renderModelsForTask();
+    if (v.model && byId('model')) byId('model').value = v.model;
+    if (v.dataset && byId('dataset')) byId('dataset').value = v.dataset;
+    if (hintEl) {
+        hintEl.innerText = '已锁定数据相关参数（train_rate/eval_rate/dataset_class/config_file 等）为所选 data_version 配置，训练页修改不会触发重新生成。';
+    }
+    lockIds.forEach((id) => {
+        const el = byId(id);
+        if (el) el.disabled = true;
+    });
+}
+
+function renderDataVersionOptions() {
+    const versions = Array.isArray(state.dataVersions) ? state.dataVersions : [];
+    const ready = versions.filter((x) => String(x.status || '').toLowerCase() === 'ready');
+    const render = (id, list, selected) => {
+        const el = byId(id);
+        if (!el) return;
+        const opts = ['<option value=""></option>'].concat(
+            list.map((v) => `<option value="${esc(v.version_id)}" ${selected === v.version_id ? 'selected' : ''}>${esc(formatDataVersionTag(v))}</option>`)
+        );
+        el.innerHTML = opts.join('');
+    };
+    render('data_version_select', versions, byId('data_version_select')?.value || '');
+    render('train_data_version', ready, byId('train_data_version')?.value || '');
+    const runId = byId('resume_run_id')?.value || '';
+    const run = (state.resumeRuns || []).find((x) => x.run_id === runId);
+    const resumeReady = run ? ready.filter((v) => v.task === run.task && v.model === run.model && v.dataset === run.dataset) : ready;
+    render('resume_data_version', resumeReady, byId('resume_data_version')?.value || '');
+    if (!byId('train_data_version')?.value && ready.length) byId('train_data_version').value = ready[0].version_id;
+    if (!byId('resume_data_version')?.value && resumeReady.length) byId('resume_data_version').value = resumeReady[0].version_id;
+    if (!byId('data_version_select')?.value && versions.length) byId('data_version_select').value = versions[0].version_id;
+    const selected = (versions || []).find((x) => x.version_id === byId('data_version_select')?.value);
+    renderDataVersionHint(selected || null);
+    applyTrainDataVersionSelection();
+}
+
+async function loadDataVersions() {
+    const r = await fetch('/api/data/versions');
+    const data = await r.json();
+    state.dataVersions = Array.isArray(data.versions) ? data.versions : [];
+    renderDataVersionOptions();
+}
+
+async function refreshDataStatus() {
+    const r = await fetch('/api/data/status');
+    const s = await r.json();
+    state.dataStatus = s || {};
+    const st = s.running ? 'running' : (s.return_code === 0 ? 'finished' : 'idle');
+    setDataStatus(st, s.error || '');
+    renderLogsInto(s.logs_tail || [], 'data_logs');
+}
+
+async function startDataPrep() {
+    const body = {
+        task: byId('data_task').value,
+        model: byId('data_model').value,
+        dataset: byId('data_dataset').value,
+        extra_args: byId('data_extra_args').value || '',
+        cli_options: collectDataCliOptions(),
+        config: {},
+    };
+    const r = await fetch('/api/data/start', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+        alert(data.error || '数据处理启动失败');
+        return;
+    }
+    await loadDataVersions();
+}
+
+async function stopDataPrep() {
+    const r = await fetch('/api/data/stop', {method: 'POST'});
+    const data = await r.json();
+    if (!r.ok) {
+        alert(data.error || '停止数据处理失败');
+    }
+}
+
 async function loadDefaults() {
+    applyTrainDataVersionSelection();
     const body = {task: byId('task').value, model: byId('model').value, dataset: byId('dataset').value};
     const r = await fetch('/api/default_config', {
         method: 'POST',
@@ -323,7 +497,7 @@ async function loadDefaults() {
     const cfg = data.config || {};
     cfg.max_epoch = 10;
     const executorKeys = new Set(data.executor_keys || []);
-    const allRows = Object.keys(cfg).sort().map(k => ({
+    const allRows = Object.keys(cfg).filter((k) => !HIDDEN_TRAIN_PARAM_KEYS.has(k)).sort().map(k => ({
         key: k,
         defaultValue: cfg[k],
         type: inferType(cfg[k]),
@@ -336,6 +510,12 @@ async function loadDefaults() {
 }
 
 async function startTrain() {
+    const dataVersionId = getSelectedTrainDataVersion();
+    if (!dataVersionId) {
+        alert('请先在训练页选择 ready 的 data_version_id');
+        return;
+    }
+    applyTrainDataVersionSelection();
     let config;
     try {
         config = collectConfigFromTable();
@@ -343,17 +523,13 @@ async function startTrain() {
         alert(`${t('error_param_parse_failed', '参数解析失败')}: ${e.message}`);
         return;
     }
-    // Keep command-line form fields synchronized into config.
     const cliOptions = collectCliOptions();
-    for (const [k, v] of Object.entries(cliOptions)) {
-        if (k === 'config_file' || k === 'exp_id') continue;
-        config[k] = v;
-    }
 
     const body = {
         task: byId('task').value,
         model: byId('model').value,
         dataset: byId('dataset').value,
+        data_version_id: dataVersionId,
         saved_model: byId('saved_model').value,
         train: byId('train').value,
         extra_args: byId('extra_args').value || '',
@@ -452,6 +628,7 @@ function onResumeRunChanged() {
     if (!Number.isFinite(resumeEpoch) || resumeEpoch < 0) return;
     const currentMax = Math.max(1, Math.floor(Number(byId('resume_max_epoch').value || (resumeEpoch + 10))));
     byId('resume_max_epoch').value = String(Math.max(currentMax, resumeEpoch + 1));
+    renderDataVersionOptions();
 }
 
 async function loadResumeRuns() {
@@ -476,6 +653,11 @@ async function startResumeTrain() {
         alert(t('resume_run_meta_missing', '所选运行目录缺少 task/model/dataset 信息，无法继续训练'));
         return;
     }
+    const dataVersionId = String(byId('resume_data_version')?.value || '').trim();
+    if (!dataVersionId) {
+        alert('请先选择可用的 data_version_id');
+        return;
+    }
     const resumeEpoch = Math.floor(Number(byId('resume_epoch').value));
     if (!Number.isFinite(resumeEpoch) || resumeEpoch < 0) {
         alert(t('resume_invalid_epoch', '请选择有效的续训 epoch'));
@@ -498,6 +680,7 @@ async function startResumeTrain() {
         task: run.task,
         model: run.model,
         dataset: run.dataset,
+        data_version_id: dataVersionId,
         saved_model: byId('resume_saved_model').value,
         train: true,
         extra_args: byId('resume_extra_args').value || '',
@@ -802,11 +985,13 @@ function clearResultPanels() {
 }
 
 function switchTab(tabName) {
-    state.activeTab = ['train', 'resume', 'compare', 'history'].includes(tabName) ? tabName : 'train';
+    state.activeTab = ['data', 'train', 'resume', 'compare', 'history'].includes(tabName) ? tabName : 'train';
+    byId('tab_btn_data').classList.toggle('active', state.activeTab === 'data');
     byId('tab_btn_train').classList.toggle('active', state.activeTab === 'train');
     byId('tab_btn_resume').classList.toggle('active', state.activeTab === 'resume');
     byId('tab_btn_compare').classList.toggle('active', state.activeTab === 'compare');
     byId('tab_btn_history').classList.toggle('active', state.activeTab === 'history');
+    byId('tab_data').classList.toggle('active', state.activeTab === 'data');
     byId('tab_train').classList.toggle('active', state.activeTab === 'train');
     byId('tab_resume').classList.toggle('active', state.activeTab === 'resume');
     byId('tab_compare').classList.toggle('active', state.activeTab === 'compare');
@@ -1037,6 +1222,7 @@ async function refreshStatus() {
             state.resultRenderedRunKey = runKey;
         }
     }
+    await refreshDataStatus();
 }
 
 async function init() {
@@ -1050,6 +1236,10 @@ async function init() {
     byId('theme_select').addEventListener('change', (e) => {
         applyTheme(e.target.value || 'light');
         setTimeout(resizeAllCharts, 60);
+    });
+    byId('tab_btn_data').addEventListener('click', async () => {
+        switchTab('data');
+        await loadDataVersions();
     });
     byId('tab_btn_train').addEventListener('click', () => switchTab('train'));
     byId('tab_btn_resume').addEventListener('click', async () => {
@@ -1069,14 +1259,29 @@ async function init() {
     const meta = await r.json();
     state.models = meta.models || [];
     state.datasets = meta.datasets || [];
+    state.dataVersions = Array.isArray(meta.data_versions) ? meta.data_versions : [];
     renderTasks();
     renderModelsForTask();
+    renderDataModelsForTask();
     renderDatasets();
+    renderDataVersionOptions();
     byId('task').addEventListener('change', async () => {
         renderModelsForTask();
         await loadDefaults();
     });
+    byId('data_task').addEventListener('change', () => renderDataModelsForTask());
     byId('model').addEventListener('change', loadDefaults);
+    byId('train_data_version').addEventListener('change', async () => {
+        applyTrainDataVersionSelection();
+        await loadDefaults();
+    });
+    byId('data_version_select').addEventListener('change', () => {
+        const selected = (state.dataVersions || []).find((x) => x.version_id === byId('data_version_select').value);
+        renderDataVersionHint(selected || null);
+    });
+    await loadDefaults();
+    await loadDataVersions();
+    applyTrainDataVersionSelection();
     await loadDefaults();
     byId('param_filter').addEventListener('input', renderParamTable);
     byId('model_plot_type').addEventListener('change', (e) => {

@@ -30,10 +30,61 @@
     </div>
 
     <div class="tabs">
+        <button id="tab_btn_data" class="tab-btn" type="button">数据处理</button>
         <button id="tab_btn_train" class="tab-btn active" type="button" data-i18n="tab_train">训练</button>
         <button id="tab_btn_resume" class="tab-btn" type="button" data-i18n="tab_resume">继续训练</button>
         <button id="tab_btn_compare" class="tab-btn" type="button" data-i18n="tab_compare">模型对比</button>
         <button id="tab_btn_history" class="tab-btn" type="button" data-i18n="tab_history">运行历史</button>
+    </div>
+
+    <div id="tab_data" class="tab-panel">
+        <div class="card resizable-card">
+            <div class="toolbar">
+                <strong>数据集独立处理</strong>
+                <div class="toolbar-controls">
+                    <button class="btn btn-auto" type="button" onclick="loadDataVersions()">刷新版本</button>
+                    <button class="btn btn-danger" type="button" onclick="stopDataPrep()">停止处理</button>
+                    <span id="data_status" class="badge status-idle">idle</span>
+                </div>
+            </div>
+            <div class="group-grid">
+                <div><label>task</label><select id="data_task"></select></div>
+                <div><label>model</label><select id="data_model"></select></div>
+                <div><label>dataset</label><select id="data_dataset"></select></div>
+                <div><label>seed</label><input id="data_seed" placeholder="0"/></div>
+                <div><label>train_rate</label><input id="data_train_rate" placeholder="0.7"/></div>
+                <div><label>eval_rate</label><input id="data_eval_rate" placeholder="0.1"/></div>
+                <div><label>batch_size</label><input id="data_batch_size" placeholder="64"/></div>
+                <div><label>dataset_class</label><input id="data_dataset_class" placeholder="TrafficStatePointDataset"/></div>
+                <div class="span-all"><label>extra_args</label><input id="data_extra_args" placeholder="--log_level INFO"/></div>
+            </div>
+            <div class="actions">
+                <button class="btn btn-primary" type="button" onclick="startDataPrep()">开始处理数据</button>
+            </div>
+        </div>
+        <div class="card resizable-card">
+            <div class="toolbar">
+                <strong>数据版本（仅 ready 可用于训练）</strong>
+            </div>
+            <div class="group-grid">
+                <div class="span-all"><label>版本列表</label><select id="data_version_select"></select></div>
+            </div>
+            <div id="data_version_hint" class="small"></div>
+        </div>
+        <div class="card resizable-card">
+            <div class="toolbar"><strong>数据处理日志</strong></div>
+            <div class="log-shell">
+                <div class="log-shell-top">
+                    <div class="log-lights">
+                        <span class="light red"></span>
+                        <span class="light yellow"></span>
+                        <span class="light green"></span>
+                    </div>
+                    <span class="log-title mono">data_prep.log</span>
+                </div>
+                <div id="data_logs" class="log-stream mono"></div>
+            </div>
+        </div>
     </div>
 
     <div id="tab_train" class="tab-panel active">
@@ -42,10 +93,17 @@
             <div class="config-group">
                 <div class="config-group-title" data-i18n="group_basic_task">基础任务</div>
                 <div class="group-grid">
+                    <div class="span-all">
+                        <label>data_version_id</label>
+                        <div style="display:flex; gap:8px;">
+                            <select id="train_data_version" style="flex:1"></select>
+                            <button class="btn btn-auto" type="button" onclick="loadDataVersions()">刷新</button>
+                        </div>
+                        <div id="train_data_version_hint" class="small"></div>
+                    </div>
                     <div><label data-param-label="task">task</label><select id="task"></select></div>
                     <div><label data-param-label="model">model</label><select id="model"></select></div>
                     <div><label data-param-label="dataset">dataset</label><select id="dataset"></select></div>
-                    <div><label data-param-label="config_file">config_file</label><input id="config_file" data-i18n-placeholder="placeholder_optional_no_json" placeholder="可选，不带 .json"/></div>
                 </div>
             </div>
             <div class="config-group">
@@ -54,8 +112,6 @@
                     <div><label data-param-label="max_epoch">max_epoch</label><input id="max_epoch" value="10"/></div>
                     <div><label data-param-label="batch_size">batch_size</label><input id="batch_size" placeholder="64"/></div>
                     <div><label data-param-label="learning_rate">learning_rate</label><input id="learning_rate" placeholder="0.001"/></div>
-                    <div><label data-param-label="train_rate">train_rate</label><input id="train_rate" placeholder="0.7"/></div>
-                    <div><label data-param-label="eval_rate">eval_rate</label><input id="eval_rate" placeholder="0.1"/></div>
                     <div>
                         <label data-param-label="saved_model">saved_model</label>
                         <select id="saved_model">
@@ -91,7 +147,6 @@
             <div class="config-group">
                 <div class="config-group-title" data-i18n="group_override_args">覆盖参数</div>
                 <div class="group-grid">
-                    <div><label data-param-label="dataset_class">dataset_class</label><input id="dataset_class" placeholder="TrafficStatePointDataset"/></div>
                     <div><label data-param-label="executor">executor</label><input id="executor" placeholder="TrafficStateExecutor"/></div>
                     <div><label data-param-label="evaluator">evaluator</label><input id="evaluator" placeholder="TrafficStateEvaluator"/></div>
                     <div class="span-all"><label data-param-label="extra_args">extra_args</label><input id="extra_args" placeholder="--log_level INFO"/></div>
@@ -247,6 +302,10 @@
                 <div>
                     <label data-i18n="resume_select_run">选择历史运行</label>
                     <select id="resume_run_id"></select>
+                </div>
+                <div>
+                    <label>data_version_id</label>
+                    <select id="resume_data_version"></select>
                 </div>
                 <div>
                     <label data-i18n="resume_start_epoch">续训起始 epoch</label>

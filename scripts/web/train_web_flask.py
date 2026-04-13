@@ -15,6 +15,7 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -43,6 +44,8 @@ if str(PROJECT_ROOT) not in sys.path:
 MODELS_ROOT = PROJECT_ROOT / "libcity" / "models"
 RESOURCE_DATA_ROOT = PROJECT_ROOT / "resource_data"
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
+DATA_VERSIONS_DIR = OUTPUTS_DIR / "data_versions"
+ACTIVE_DATA_VERSION_FILE = DATA_VERSIONS_DIR / "active_version.json"
 EXP_ID_RE = re.compile(r"exp_id=([A-Za-z0-9_.:-]+)")
 LOG_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2} [\d:,]+ - (?:INFO|WARNING|ERROR|DEBUG) - (.*)$")
 MODEL_START_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\($")
@@ -83,6 +86,23 @@ CLI_OPTION_TYPE = {
     "executor": "str",
     "evaluator": "str",
 }
+DATA_LOCKED_CONFIG_KEYS = {
+    "dataset",
+    "dataset_class",
+    "train_rate",
+    "eval_rate",
+    "input_window",
+    "output_window",
+    "scaler",
+    "load_external",
+    "normal_external",
+    "ext_scaler",
+    "add_time_in_day",
+    "add_day_in_week",
+    "cache_dataset",
+    "cache_file_name",
+}
+DATA_LOCKED_CLI_KEYS = {"config_file", "dataset_class", "train_rate", "eval_rate"}
 
 app = FastAPI(title="LibCity Web Trainer")
 app.mount("/static", StaticFiles(directory=str(WEB_ROOT / "static")), name="static")
@@ -147,6 +167,30 @@ def _normalize_cli_options(raw: dict[str, Any], allow_config_file: bool = True) 
         else:
             out[key] = text
     return out
+
+
+def _merge_with_data_version_constraints(
+    prep_config_payload: dict[str, Any],
+    user_config_payload: dict[str, Any],
+    prep_cli_options: dict[str, Any],
+    user_cli_options: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    config_payload = dict(prep_config_payload)
+    config_payload.update(user_config_payload)
+    for key in DATA_LOCKED_CONFIG_KEYS:
+        if key in prep_config_payload:
+            config_payload[key] = prep_config_payload[key]
+        elif key in config_payload:
+            config_payload.pop(key, None)
+
+    cli_options = dict(prep_cli_options)
+    cli_options.update(user_cli_options)
+    for key in DATA_LOCKED_CLI_KEYS:
+        if key in prep_cli_options:
+            cli_options[key] = prep_cli_options[key]
+        elif key in cli_options:
+            cli_options.pop(key, None)
+    return config_payload, cli_options
 
 
 @lru_cache(maxsize=1)
@@ -347,6 +391,83 @@ def _collect_resume_runs(limit: int = 300) -> list[dict[str, Any]]:
         if len(runs) >= limit:
             break
     return runs
+
+
+def _version_meta_path(version_id: str) -> Path:
+    return DATA_VERSIONS_DIR / version_id / "meta.json"
+
+
+def _safe_version_id() -> str:
+    return f"dv_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+
+
+def _write_data_version_meta(version_id: str, payload: dict[str, Any]) -> None:
+    path = _version_meta_path(version_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    old: dict[str, Any] = {}
+    if path.exists():
+        try:
+            obj = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(obj, dict):
+                old = obj
+        except Exception:
+            old = {}
+    data = dict(old)
+    data.update(payload)
+    data["version_id"] = version_id
+    data["updated_at"] = time.time()
+    path.write_text(json.dumps(_to_jsonable(data), ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _read_data_version_meta(version_id: str) -> dict[str, Any] | None:
+    if any(sep in version_id for sep in ["/", "\\"]) or ".." in version_id:
+        return None
+    path = _version_meta_path(version_id)
+    if not path.exists():
+        return None
+    try:
+        obj = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not isinstance(obj, dict):
+        return None
+    obj["version_id"] = version_id
+    return obj
+
+
+def _list_data_versions(limit: int = 300, only_ready: bool = False) -> list[dict[str, Any]]:
+    if not DATA_VERSIONS_DIR.exists():
+        return []
+    items: list[dict[str, Any]] = []
+    for p in DATA_VERSIONS_DIR.iterdir():
+        if not p.is_dir():
+            continue
+        meta = _read_data_version_meta(p.name)
+        if not meta:
+            continue
+        if only_ready and str(meta.get("status", "")).lower() != "ready":
+            continue
+        items.append(meta)
+    items.sort(key=lambda x: float(x.get("updated_at", 0) or 0), reverse=True)
+    return items[:limit]
+
+
+def _set_active_data_version(version_id: str | None) -> None:
+    DATA_VERSIONS_DIR.mkdir(parents=True, exist_ok=True)
+    payload = {"active_version_id": version_id or "", "updated_at": time.time()}
+    ACTIVE_DATA_VERSION_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _get_active_data_version() -> str:
+    if not ACTIVE_DATA_VERSION_FILE.exists():
+        return ""
+    try:
+        obj = json.loads(ACTIVE_DATA_VERSION_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    if not isinstance(obj, dict):
+        return ""
+    return str(obj.get("active_version_id", "")).strip()
 
 
 def _extract_major_metrics(metrics_csv: Path, limit: int = 3) -> dict[str, float]:
@@ -729,6 +850,52 @@ class TrainState:
 STATE = TrainState()
 
 
+@dataclass
+class DataPrepState:
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    running: bool = False
+    command: list[str] = field(default_factory=list)
+    logs: list[str] = field(default_factory=list)
+    process: subprocess.Popen[str] | None = None
+    version_id: str | None = None
+    return_code: int | None = None
+    error: str | None = None
+    started_at: float | None = None
+    ended_at: float | None = None
+    stop_requested: bool = False
+
+    def reset(self, command: list[str], version_id: str) -> None:
+        with self.lock:
+            self.running = True
+            self.command = command
+            self.logs = []
+            self.process = None
+            self.version_id = version_id
+            self.return_code = None
+            self.error = None
+            self.started_at = time.time()
+            self.ended_at = None
+            self.stop_requested = False
+
+    def append_log(self, line: str) -> None:
+        line = line.rstrip("\n")
+        with self.lock:
+            self.logs.append(line)
+            if len(self.logs) > 3000:
+                self.logs = self.logs[-3000:]
+
+    def finish(self, return_code: int, error: str | None) -> None:
+        with self.lock:
+            self.running = False
+            self.return_code = return_code
+            self.error = error
+            self.ended_at = time.time()
+            self.process = None
+
+
+DATA_STATE = DataPrepState()
+
+
 def _write_runtime_config(config_data: dict[str, Any]) -> tuple[str, Path]:
     fd, tmp_path = tempfile.mkstemp(prefix="webcfg_", suffix=".json", dir=str(PROJECT_ROOT))
     os.close(fd)
@@ -749,6 +916,142 @@ def _remove_runtime_config(path: Path | None) -> None:
         pass
 
 
+def _run_data_prep_background(
+    version_id: str,
+    task: str,
+    model: str,
+    dataset: str,
+    config_payload: dict[str, Any],
+    cli_options: dict[str, Any],
+    extra_args: str,
+) -> None:
+    runtime_config_path: Path | None = None
+    version_meta_out = _version_meta_path(version_id).parent / "script_meta.json"
+    try:
+        effective_config = {}
+        base_name = str(cli_options.get("config_file", "")).strip()
+        if base_name:
+            effective_config.update(_load_base_config(base_name))
+        effective_config.update(config_payload)
+    except Exception as exc:
+        DATA_STATE.reset([], version_id=version_id)
+        DATA_STATE.finish(return_code=-1, error=f"Config preparation failed: {exc}")
+        _write_data_version_meta(version_id, {"status": "failed", "error": str(exc), "task": task, "model": model, "dataset": dataset})
+        return
+
+    try:
+        config_file, runtime_config_path = _write_runtime_config(effective_config)
+    except Exception as exc:
+        DATA_STATE.reset([], version_id=version_id)
+        DATA_STATE.finish(return_code=-1, error=f"Config write failed: {exc}")
+        _write_data_version_meta(version_id, {"status": "failed", "error": str(exc), "task": task, "model": model, "dataset": dataset})
+        return
+
+    cmd = [
+        "uv",
+        "run",
+        "run_data_prep.py",
+        "--task",
+        task,
+        "--model",
+        model,
+        "--dataset",
+        dataset,
+        "--config_file",
+        config_file,
+        "--version_meta",
+        str(version_meta_out),
+    ]
+    for key in CLI_OPTION_KEYS:
+        if key == "config_file":
+            continue
+        value = cli_options.get(key, None)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text == "":
+            continue
+        if key == "gpu":
+            text = text.lower()
+        cmd.extend([f"--{key}", text])
+    if extra_args.strip():
+        cmd.extend(shlex.split(extra_args, posix=False))
+
+    _write_data_version_meta(
+        version_id,
+        {
+            "status": "processing",
+            "task": task,
+            "model": model,
+            "dataset": dataset,
+            "cli_options": cli_options,
+            "config_payload": config_payload,
+            "created_at": time.time(),
+        },
+    )
+    DATA_STATE.reset(cmd, version_id=version_id)
+    DATA_STATE.append_log("$ " + " ".join(cmd))
+    try:
+        creationflags = 0
+        if os.name == "nt":
+            creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(PROJECT_ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            creationflags=creationflags,
+        )
+    except Exception as exc:
+        _remove_runtime_config(runtime_config_path)
+        DATA_STATE.finish(return_code=-1, error=f"Failed to start process: {exc}")
+        _write_data_version_meta(version_id, {"status": "failed", "error": f"Failed to start process: {exc}"})
+        return
+
+    with DATA_STATE.lock:
+        DATA_STATE.process = proc
+
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        DATA_STATE.append_log(line)
+    code = proc.wait()
+    try:
+        if code != 0:
+            with DATA_STATE.lock:
+                stopped = DATA_STATE.stop_requested
+            err = "Data processing stopped by user." if stopped else f"Data processing failed with return code {code}."
+            DATA_STATE.finish(code, err)
+            _write_data_version_meta(version_id, {"status": "failed", "error": err})
+            return
+        script_meta: dict[str, Any] = {}
+        if version_meta_out.exists():
+            try:
+                obj = json.loads(version_meta_out.read_text(encoding="utf-8"))
+                if isinstance(obj, dict):
+                    script_meta = obj
+            except Exception:
+                script_meta = {}
+        DATA_STATE.finish(code, None)
+        _write_data_version_meta(
+            version_id,
+            {
+                "status": "ready",
+                "error": None,
+                "script_meta": script_meta,
+            },
+        )
+        _set_active_data_version(version_id)
+    except Exception as exc:
+        DATA_STATE.finish(code, f"Data result parse error: {exc}")
+        _write_data_version_meta(version_id, {"status": "failed", "error": f"Data result parse error: {exc}"})
+    finally:
+        _remove_runtime_config(runtime_config_path)
+
+
 def _load_base_config(config_file_name: str) -> dict[str, Any]:
     name = config_file_name.strip()
     if not name:
@@ -761,6 +1064,19 @@ def _load_base_config(config_file_name: str) -> dict[str, Any]:
     if not isinstance(obj, dict):
         raise ValueError(f"Base config must be an object: {path}")
     return obj
+
+
+def _resolve_data_version(version_id: str) -> tuple[dict[str, Any], str]:
+    vid = str(version_id or "").strip()
+    if not vid:
+        active = _get_active_data_version()
+        vid = active
+    meta = _read_data_version_meta(vid) if vid else None
+    if not meta:
+        raise FileNotFoundError("Data version not found.")
+    if str(meta.get("status", "")).lower() != "ready":
+        raise ValueError("Data version is not ready.")
+    return meta, vid
 
 
 def _run_training_background(
@@ -885,7 +1201,105 @@ async def index(request: Request):
 
 @app.get("/api/meta")
 def api_meta():
-    return {"models": _discover_models(), "datasets": _discover_datasets()}
+    return {
+        "models": _discover_models(),
+        "datasets": _discover_datasets(),
+        "data_versions": _list_data_versions(limit=300, only_ready=True),
+        "active_data_version_id": _get_active_data_version(),
+    }
+
+
+@app.post("/api/data/start")
+async def api_data_start(request: Request):
+    with DATA_STATE.lock:
+        if DATA_STATE.running:
+            return JSONResponse(status_code=409, content={"error": "A data processing task is already running."})
+    body = await request.json()
+    task = str(body.get("task", "traffic_state_pred")).strip() or "traffic_state_pred"
+    model = str(body.get("model", "STGCN")).strip() or "STGCN"
+    dataset = str(body.get("dataset", "PEMSD4")).strip() or "PEMSD4"
+    extra_args = str(body.get("extra_args", ""))
+    config_payload = body.get("config", {})
+    cli_options = body.get("cli_options", {})
+    if not isinstance(config_payload, dict):
+        return JSONResponse(status_code=400, content={"error": "config must be an object."})
+    if not isinstance(cli_options, dict):
+        return JSONResponse(status_code=400, content={"error": "cli_options must be an object."})
+    try:
+        cli_options = _normalize_cli_options(cli_options, allow_config_file=True)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    version_id = _safe_version_id()
+    t = threading.Thread(
+        target=_run_data_prep_background,
+        args=(version_id, task, model, dataset, config_payload, cli_options, extra_args),
+        daemon=True,
+    )
+    t.start()
+    return {"message": "Data processing started.", "version_id": version_id}
+
+
+@app.post("/api/data/stop")
+def api_data_stop():
+    with DATA_STATE.lock:
+        proc = DATA_STATE.process
+        running = DATA_STATE.running
+        DATA_STATE.stop_requested = True
+    if not running or proc is None:
+        return JSONResponse(status_code=409, content={"error": "No running data processing task."})
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+            except Exception:
+                proc.terminate()
+        return {"message": "Stop signal sent to data processing task."}
+    except Exception as exc:
+        return JSONResponse(status_code=500, content={"error": f"Failed to stop data process: {exc}"})
+
+
+@app.get("/api/data/status")
+def api_data_status():
+    with DATA_STATE.lock:
+        return {
+            "running": DATA_STATE.running,
+            "command": DATA_STATE.command,
+            "version_id": DATA_STATE.version_id,
+            "return_code": DATA_STATE.return_code,
+            "error": DATA_STATE.error,
+            "logs_tail": DATA_STATE.logs[-400:],
+            "started_at": DATA_STATE.started_at,
+            "ended_at": DATA_STATE.ended_at,
+        }
+
+
+@app.get("/api/data/versions")
+def api_data_versions(ready_only: bool = Query(default=False)):
+    return {
+        "versions": _list_data_versions(limit=300, only_ready=bool(ready_only)),
+        "active_data_version_id": _get_active_data_version(),
+    }
+
+
+@app.post("/api/data/active")
+async def api_data_active(request: Request):
+    body = await request.json()
+    version_id = str(body.get("version_id", "")).strip()
+    if version_id:
+        meta = _read_data_version_meta(version_id)
+        if not meta:
+            return JSONResponse(status_code=404, content={"error": "Data version not found."})
+        if str(meta.get("status", "")).lower() != "ready":
+            return JSONResponse(status_code=400, content={"error": "Only ready data versions can be activated."})
+    _set_active_data_version(version_id)
+    return {"active_data_version_id": version_id}
 
 
 @app.post("/api/default_config")
@@ -921,15 +1335,20 @@ async def api_start(request: Request):
             return JSONResponse(status_code=409, content={"error": "A training task is already running."})
 
     body = await request.json()
-    task = str(body.get("task", "traffic_state_pred")).strip() or "traffic_state_pred"
-    model = str(body.get("model", "STGCN")).strip() or "STGCN"
-    dataset = str(body.get("dataset", "PEMSD4")).strip() or "PEMSD4"
+    data_version_id = str(body.get("data_version_id", "")).strip()
+    try:
+        data_meta, resolved_version_id = _resolve_data_version(data_version_id)
+    except Exception as exc:
+        return JSONResponse(status_code=400, content={"error": f"Invalid data_version_id: {exc}"})
+    task = str(data_meta.get("task", body.get("task", "traffic_state_pred"))).strip() or "traffic_state_pred"
+    model = str(data_meta.get("model", body.get("model", "STGCN"))).strip() or "STGCN"
+    dataset = str(data_meta.get("dataset", body.get("dataset", "PEMSD4"))).strip() or "PEMSD4"
     saved_model = _bool_from_any(body.get("saved_model", True), True)
     train = _bool_from_any(body.get("train", True), True)
     extra_args = str(body.get("extra_args", ""))
-    config_payload = body.get("config", {})
+    user_config_payload = body.get("config", {})
     cli_options = body.get("cli_options", {})
-    if not isinstance(config_payload, dict):
+    if not isinstance(user_config_payload, dict):
         return JSONResponse(status_code=400, content={"error": "config must be an object."})
     if not isinstance(cli_options, dict):
         return JSONResponse(status_code=400, content={"error": "cli_options must be an object."})
@@ -937,6 +1356,19 @@ async def api_start(request: Request):
         cli_options = _normalize_cli_options(cli_options, allow_config_file=True)
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"error": str(exc)})
+    prep_config_payload = data_meta.get("config_payload", {})
+    if not isinstance(prep_config_payload, dict):
+        prep_config_payload = {}
+    prep_cli_options = data_meta.get("cli_options", {})
+    if not isinstance(prep_cli_options, dict):
+        prep_cli_options = {}
+    config_payload, cli_options = _merge_with_data_version_constraints(
+        prep_config_payload=prep_config_payload,
+        user_config_payload=user_config_payload,
+        prep_cli_options=prep_cli_options,
+        user_cli_options=cli_options,
+    )
+    config_payload["data_version_id"] = resolved_version_id
 
     t = threading.Thread(
         target=_run_training_background,
@@ -954,14 +1386,19 @@ async def api_start_resume(request: Request):
             return JSONResponse(status_code=409, content={"error": "A training task is already running."})
 
     body = await request.json()
-    task = str(body.get("task", "traffic_state_pred")).strip() or "traffic_state_pred"
-    model = str(body.get("model", "STGCN")).strip() or "STGCN"
-    dataset = str(body.get("dataset", "PEMSD4")).strip() or "PEMSD4"
+    data_version_id = str(body.get("data_version_id", "")).strip()
+    try:
+        data_meta, resolved_version_id = _resolve_data_version(data_version_id)
+    except Exception as exc:
+        return JSONResponse(status_code=400, content={"error": f"Invalid data_version_id: {exc}"})
+    task = str(data_meta.get("task", body.get("task", "traffic_state_pred"))).strip() or "traffic_state_pred"
+    model = str(data_meta.get("model", body.get("model", "STGCN"))).strip() or "STGCN"
+    dataset = str(data_meta.get("dataset", body.get("dataset", "PEMSD4"))).strip() or "PEMSD4"
     saved_model = _bool_from_any(body.get("saved_model", True), True)
     extra_args = str(body.get("extra_args", ""))
-    config_payload = body.get("config", {})
+    user_config_payload = body.get("config", {})
     cli_options = body.get("cli_options", {})
-    if not isinstance(config_payload, dict):
+    if not isinstance(user_config_payload, dict):
         return JSONResponse(status_code=400, content={"error": "config must be an object."})
     if not isinstance(cli_options, dict):
         return JSONResponse(status_code=400, content={"error": "cli_options must be an object."})
@@ -973,7 +1410,22 @@ async def api_start_resume(request: Request):
     exp_id = str(cli_options.get("exp_id", "")).strip()
     if not exp_id:
         return JSONResponse(status_code=400, content={"error": "Resume training requires cli_options.exp_id."})
-    cli_options = {"exp_id": exp_id}
+    prep_config_payload = data_meta.get("config_payload", {})
+    if not isinstance(prep_config_payload, dict):
+        prep_config_payload = {}
+    config_payload, _ = _merge_with_data_version_constraints(
+        prep_config_payload=prep_config_payload,
+        user_config_payload=user_config_payload,
+        prep_cli_options={},
+        user_cli_options={},
+    )
+    config_payload["data_version_id"] = resolved_version_id
+    prep_cli_options = data_meta.get("cli_options", {})
+    if not isinstance(prep_cli_options, dict):
+        prep_cli_options = {}
+    merged_cli_options = {k: v for k, v in prep_cli_options.items() if k != "config_file" and k not in DATA_LOCKED_CLI_KEYS}
+    merged_cli_options["exp_id"] = exp_id
+    cli_options = merged_cli_options
 
     epoch_raw = config_payload.get("epoch", None)
     max_epoch_raw = config_payload.get("max_epoch", None)
