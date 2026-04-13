@@ -23,6 +23,7 @@ dependencies = [
     "tqdm>=4.67.3",
     "tslearn>=0.8.1",
     "uvicorn>=0.30.0",
+    "timm"
 ]
 
 [tool.uv.sources]
