@@ -111,8 +111,8 @@ def build_loss_line_option(plot: dict[str, Any]) -> dict[str, Any]:
         chart.set_global_opts(title_opts=opts.TitleOpts(title="", subtitle="暂无 loss 数据"))
         return _dump_options(chart)
 
-    start = min(xs)
-    x_series = [str(x - start) for x in xs]
+    epoch_shift = 1 if min(xs) == 0 else 0
+    x_series = [str(x + epoch_shift) for x in xs]
     train_improve = [round(v, 2) for v in _improve_pct(train)]
     val_improve = [round(v, 2) for v in _improve_pct(val)]
     improve_abs_max = max(5.0, *[abs(v) for v in train_improve], *[abs(v) for v in val_improve]) * 1.1
@@ -121,7 +121,7 @@ def build_loss_line_option(plot: dict[str, Any]) -> dict[str, Any]:
     mark_lines = [
         opts.MarkLineItem(
             name="s",
-            x=str(e - start),
+            x=str(e + epoch_shift),
             linestyle_opts=opts.LineStyleOpts(type_="dashed", color="#f59e0b", opacity=0.85),
             symbol="none",
         )
@@ -141,7 +141,7 @@ def build_loss_line_option(plot: dict[str, Any]) -> dict[str, Any]:
                 data=mark_lines,
                 is_silent=True,
                 symbol="none",
-                label_opts=opts.LabelOpts(is_show=True, color="#b45309", formatter="{b}"),
+                label_opts=opts.LabelOpts(is_show=False),
             )
             if mark_lines
             else None
@@ -177,13 +177,13 @@ def build_loss_line_option(plot: dict[str, Any]) -> dict[str, Any]:
                 opts.MarkLineItem(
                     name="0%",
                     y=0,
-                    linestyle_opts=opts.LineStyleOpts(type_="dashed", color="#94a3b8", opacity=0.95),
+                    linestyle_opts=opts.LineStyleOpts(type_="solid", color="#000000", width=2, opacity=0.95),
                     symbol="none",
                 )
             ],
             is_silent=True,
             symbol="none",
-            label_opts=opts.LabelOpts(is_show=True, color="#64748b", formatter="{b}"),
+            label_opts=opts.LabelOpts(is_show=False),
         ),
         label_opts=opts.LabelOpts(is_show=False),
     )
@@ -198,11 +198,32 @@ def build_loss_line_option(plot: dict[str, Any]) -> dict[str, Any]:
     chart.set_global_opts(
         tooltip_opts=opts.TooltipOpts(
             trigger="axis",
-            formatter="function(params){if(!params||!params.length){return '';}const h='epoch-1: '+params[0].axisValue;"
-            "const b=params.map(function(p){const v=Number(p.value);return p.marker+p.seriesName+': '+"
-            "(Number.isFinite(v)?v.toFixed(2):p.value);}).join('<br/>');return h+'<br/>'+b;}",
+            formatter="function(params){"
+            "const arr=(Array.isArray(params)?params:[params]).filter(function(p){"
+            "return p&&p.componentType==='series'&&p.seriesType==='line';"
+            "});"
+            "if(!arr.length){return '';}"
+            "const axis=(arr[0].axisValueLabel||arr[0].axisValue);"
+            "const h='epoch: '+axis;"
+            "const seen={};"
+            "const rows=[];"
+            "arr.forEach(function(p){"
+            "const key=String(p.seriesName||'');"
+            "if(seen[key]){return;}"
+            "seen[key]=1;"
+            "let raw=(p.data!==undefined&&p.data!==null)?p.data:p.value;"
+            "if(Array.isArray(raw)){raw=(raw.length>1?raw[1]:raw[0]);}"
+            "if(raw&&typeof raw==='object'&&Array.isArray(raw.value)){"
+            "raw=(raw.value.length>1?raw.value[1]:raw.value[0]);"
+            "}"
+            "const v=Number(raw);"
+            "const text=Number.isFinite(v)?v.toFixed(2):String(raw);"
+            "rows.push((p.marker||'')+key+': '+text);"
+            "});"
+            "return h+'<br/>'+rows.join('<br/>');"
+            "}",
         ),
-        xaxis_opts=opts.AxisOpts(name="epoch-1"),
+        xaxis_opts=opts.AxisOpts(name="epoch"),
         yaxis_opts=opts.AxisOpts(
             type_="value",
             name="loss",
