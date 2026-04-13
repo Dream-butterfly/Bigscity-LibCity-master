@@ -140,36 +140,58 @@ class TrafficStateDataset(AbstractDataset):
         return basename
 
     def _normalize_dataset_resource_files(self):
-        self.geo_file = self._resolve_resource_basename('geo_file', self.geo_file, '.geo', required=True)
-        self.rel_file = self._resolve_resource_basename('rel_file', self.rel_file, '.rel', required=False)
-        if self.load_external:
-            self.ext_file = self._resolve_resource_basename('ext_file', self.ext_file, '.ext', required=False)
-
         data_suffixes = ('.dyna', '.grid', '.od', '.gridod')
         raw_data_files = self.data_files if isinstance(self.data_files, list) else [self.data_files]
-        single_data_file = len(raw_data_files) == 1
-        resolved_data_files = []
-        missing_data_files = []
-        for data_file in raw_data_files:
-            data_file = str(data_file)
-            if self._resource_exists(data_file, data_suffixes):
-                resolved_data_files.append(data_file)
-            elif single_data_file and self._resource_exists(self.dataset, data_suffixes):
-                self._logger.warning(
-                    'Configured `data_files=%s` not found under %s, fallback to `%s`.',
-                    data_file, self.data_path, self.dataset
-                )
-                resolved_data_files.append(str(self.dataset))
-            else:
-                missing_data_files.append(data_file)
-        if missing_data_files:
-            available = self._list_resource_basenames(data_suffixes)
+        raw_data_files = [str(item) for item in raw_data_files if item not in [None, '']]
+
+        # 统一要求 geo_file / rel_file / data_files 使用同一 basename
+        candidate_basenames = []
+        for basename in [self.dataset, self.geo_file, self.rel_file] + raw_data_files:
+            if basename in [None, '']:
+                continue
+            basename = str(basename)
+            if basename not in candidate_basenames:
+                candidate_basenames.append(basename)
+
+        canonical_basename = None
+        for basename in candidate_basenames:
+            if self._resource_exists(basename, '.geo') and self._resource_exists(basename, data_suffixes):
+                canonical_basename = basename
+                break
+
+        if canonical_basename is None:
+            available_geo = self._list_resource_basenames('.geo')
+            available_data = self._list_resource_basenames(data_suffixes)
             raise ValueError(
-                'Configured data_files {} not found under {}. Available basenames for traffic state files: {}'.format(
-                    missing_data_files, self.data_path, available
+                'Cannot find a shared basename for `geo_file/rel_file/data_files` under {}. '
+                'Configured: geo_file={}, rel_file={}, data_files={}. '
+                'Available .geo basenames: {}. Available traffic-state basenames: {}.'.format(
+                    self.data_path, self.geo_file, self.rel_file, raw_data_files, available_geo, available_data
                 )
             )
-        self.data_files = resolved_data_files
+
+        if str(self.geo_file) != canonical_basename:
+            self._logger.warning(
+                'Aligned `geo_file` from `%s` to `%s` under %s.',
+                self.geo_file, canonical_basename, self.data_path
+            )
+        if str(self.rel_file) != canonical_basename:
+            self._logger.warning(
+                'Aligned `rel_file` from `%s` to `%s` under %s.',
+                self.rel_file, canonical_basename, self.data_path
+            )
+        if raw_data_files != [canonical_basename]:
+            self._logger.warning(
+                'Aligned `data_files` from %s to [%s] under %s.',
+                raw_data_files, canonical_basename, self.data_path
+            )
+
+        self.geo_file = canonical_basename
+        self.rel_file = canonical_basename
+        self.data_files = [canonical_basename]
+
+        if self.load_external:
+            self.ext_file = self._resolve_resource_basename('ext_file', self.ext_file, '.ext', required=False)
 
     def _load_geo(self):
         """
