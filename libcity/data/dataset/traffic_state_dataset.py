@@ -82,14 +82,94 @@ class TrafficStateDataset(AbstractDataset):
         self.num_nodes = 0
         self.num_batches = 0
         self._logger = getLogger()
-        if os.path.exists(self.data_path + self.geo_file + '.geo'):
+        self._normalize_dataset_resource_files()
+        geo_path = os.path.join(self.data_path, self.geo_file + '.geo')
+        if os.path.exists(geo_path):
             self._load_geo()
         else:
-            raise ValueError('Not found .geo file!')
-        if os.path.exists(self.data_path + self.rel_file + '.rel'):  # .rel file is not necessary
+            raise ValueError('Not found .geo file: {}'.format(geo_path))
+        rel_path = os.path.join(self.data_path, self.rel_file + '.rel')
+        if os.path.exists(rel_path):  # .rel file is not necessary
             self._load_rel()
         else:
             self.adj_mx = np.zeros((len(self.geo_ids), len(self.geo_ids)), dtype=np.float32)
+
+    def _resource_exists(self, basename, suffixes):
+        if basename in [None, '']:
+            return False
+        if isinstance(suffixes, str):
+            suffixes = (suffixes,)
+        basename = str(basename)
+        for suffix in suffixes:
+            if os.path.exists(os.path.join(self.data_path, basename + suffix)):
+                return True
+        return False
+
+    def _list_resource_basenames(self, suffixes):
+        if isinstance(suffixes, str):
+            suffixes = (suffixes,)
+        if not os.path.exists(self.data_path):
+            return []
+        basenames = set()
+        for filename in os.listdir(self.data_path):
+            for suffix in suffixes:
+                if filename.endswith(suffix):
+                    basenames.add(filename[:-len(suffix)])
+        return sorted(basenames)
+
+    def _resolve_resource_basename(self, config_key, basename, suffixes, required=False):
+        if basename in [None, '']:
+            basename = self.dataset
+        basename = str(basename)
+        if self._resource_exists(basename, suffixes):
+            return basename
+        fallback = str(self.dataset)
+        if fallback != basename and self._resource_exists(fallback, suffixes):
+            self._logger.warning(
+                'Configured `%s=%s` not found under %s, fallback to `%s`.',
+                config_key, basename, self.data_path, fallback
+            )
+            return fallback
+        if required:
+            available = self._list_resource_basenames(suffixes)
+            raise ValueError(
+                'Configured `{}`={} not found under {}. Available basenames for {}: {}'.format(
+                    config_key, basename, self.data_path, suffixes, available
+                )
+            )
+        return basename
+
+    def _normalize_dataset_resource_files(self):
+        self.geo_file = self._resolve_resource_basename('geo_file', self.geo_file, '.geo', required=True)
+        self.rel_file = self._resolve_resource_basename('rel_file', self.rel_file, '.rel', required=False)
+        if self.load_external:
+            self.ext_file = self._resolve_resource_basename('ext_file', self.ext_file, '.ext', required=False)
+
+        data_suffixes = ('.dyna', '.grid', '.od', '.gridod')
+        raw_data_files = self.data_files if isinstance(self.data_files, list) else [self.data_files]
+        single_data_file = len(raw_data_files) == 1
+        resolved_data_files = []
+        missing_data_files = []
+        for data_file in raw_data_files:
+            data_file = str(data_file)
+            if self._resource_exists(data_file, data_suffixes):
+                resolved_data_files.append(data_file)
+            elif single_data_file and self._resource_exists(self.dataset, data_suffixes):
+                self._logger.warning(
+                    'Configured `data_files=%s` not found under %s, fallback to `%s`.',
+                    data_file, self.data_path, self.dataset
+                )
+                resolved_data_files.append(str(self.dataset))
+            else:
+                missing_data_files.append(data_file)
+        if missing_data_files:
+            available = self._list_resource_basenames(data_suffixes)
+            raise ValueError(
+                'Configured data_files {} not found under {}. Available basenames for traffic state files: {}'.format(
+                    missing_data_files, self.data_path, available
+                )
+            )
+        self.data_files = resolved_data_files
 
     def _load_geo(self):
         """
@@ -150,9 +230,16 @@ class TrafficStateDataset(AbstractDataset):
                 if len(self.weight_col) != 1:
                     raise ValueError('`weight_col` parameter must be only one column!')
                 self.weight_col = self.weight_col[0]
-            self.distance_df = relfile[~relfile[self.weight_col].isna()][[
-                'origin_id', 'destination_id', self.weight_col]]
-        else:
+            if self.weight_col in relfile.columns:
+                self.distance_df = relfile[~relfile[self.weight_col].isna()][[
+                    'origin_id', 'destination_id', self.weight_col]]
+            else:
+                self._logger.warning(
+                    'Configured weight_col `%s` not in %s.rel columns. Fallback to auto-detect.',
+                    self.weight_col, self.rel_file
+                )
+                self.weight_col = ''
+        if self.weight_col == '':
             if len(relfile.columns) > 5 or len(relfile.columns) < 4:  # properties不只一列，且未指定weight_col，报错
                 raise ValueError("Don't know which column to be loaded! Please set `weight_col` parameter!")
             elif len(relfile.columns) == 4:  # 4列说明没有properties列，那就是rel文件中有的代表相邻，否则不相邻
@@ -263,7 +350,15 @@ class TrafficStateDataset(AbstractDataset):
                 data_col = [self.data_col].copy()
             data_col.insert(0, 'time')
             data_col.insert(1, 'entity_id')
-            dynafile = dynafile[data_col]
+            missing_cols = [col for col in data_col if col not in dynafile.columns]
+            if len(missing_cols) > 0:
+                self._logger.warning(
+                    'Configured data_col contains columns not in %s.dyna: %s. Fallback to all feature columns.',
+                    filename, missing_cols
+                )
+                dynafile = dynafile[dynafile.columns[2:]]  # 从time列开始所有列
+            else:
+                dynafile = dynafile[data_col]
         else:  # 不指定则加载所有列
             dynafile = dynafile[dynafile.columns[2:]]  # 从time列开始所有列
         # 求时间序列
@@ -558,7 +653,15 @@ class TrafficStateDataset(AbstractDataset):
             else:  # str
                 ext_col = [self.ext_col].copy()
             ext_col.insert(0, 'time')
-            extfile = extfile[ext_col]
+            missing_cols = [col for col in ext_col if col not in extfile.columns]
+            if len(missing_cols) > 0:
+                self._logger.warning(
+                    'Configured ext_col contains columns not in %s.ext: %s. Fallback to all ext columns.',
+                    self.ext_file, missing_cols
+                )
+                extfile = extfile[extfile.columns[1:]]  # 从time列开始所有列
+            else:
+                extfile = extfile[ext_col]
         else:  # 不指定则加载所有列
             extfile = extfile[extfile.columns[1:]]  # 从time列开始所有列
         # 求时间序列
@@ -1064,6 +1167,12 @@ class TrafficStateDataset(AbstractDataset):
             x_test = self._add_noise(x_test)
         # 数据归一化
         self.feature_dim = x_train.shape[-1]
+        if self.output_dim > self.feature_dim:
+            self._logger.warning(
+                'Configured output_dim=%d is larger than feature_dim=%d, fallback to feature_dim.',
+                self.output_dim, self.feature_dim
+            )
+            self.output_dim = self.feature_dim
         self.ext_dim = self.feature_dim - self.output_dim
         self.scaler = self._get_scalar(self.scaler_type,
                                        x_train[..., :self.output_dim], y_train[..., :self.output_dim])
