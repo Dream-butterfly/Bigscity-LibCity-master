@@ -1,4 +1,3 @@
-import json
 import os
 import time
 import copy
@@ -8,7 +7,7 @@ import numpy as np
 import torch
 
 from libcity.common.traffic_state_executor import TrafficStateExecutor
-from libcity.utils import ensure_dir, tune
+from libcity.utils import tune
 
 
 def masked_mae_loss(preds, labels, null_val=0.0):
@@ -23,52 +22,6 @@ def masked_mae_loss(preds, labels, null_val=0.0):
     loss = loss * mask
     loss = torch.where(torch.isnan(loss), torch.zeros_like(loss), loss)
     return torch.mean(loss)
-
-
-def mse_np(y_true, y_pred):
-    with np.errstate(divide="ignore", invalid="ignore"):
-        mask = np.not_equal(y_true, 0)
-        mask = mask.astype(np.float32)
-        mask /= np.mean(mask)
-        mse = np.square(y_pred - y_true)
-        mse = np.nan_to_num(mse * mask)
-        mse = np.mean(mse)
-        return mse
-
-
-def rmse_np(y_true, y_pred):
-    with np.errstate(divide="ignore", invalid="ignore"):
-        mask = np.not_equal(y_true, 0)
-        mask = mask.astype(np.float32)
-        mask /= np.mean(mask)
-        rmse = np.square(np.abs(y_pred - y_true))
-        rmse = np.nan_to_num(rmse * mask)
-        rmse = np.sqrt(np.mean(rmse))
-        return rmse
-
-
-def mae_np(y_true, y_pred):
-    with np.errstate(divide="ignore", invalid="ignore"):
-        mask = np.not_equal(y_true, 0)
-        mask = mask.astype(np.float32)
-        mask /= np.mean(mask)
-        mae = np.abs(y_pred - y_true)
-        mae = np.nan_to_num(mae * mask)
-        mae = np.mean(mae)
-        return mae
-
-
-def mape_np(y_true, y_pred, null_val=0):
-    with np.errstate(divide="ignore", invalid="ignore"):
-        if np.isnan(null_val):
-            mask = ~np.isnan(y_true)
-        else:
-            mask = np.not_equal(y_true, null_val)
-        mask = mask.astype("float32")
-        mask /= np.mean(mask)
-        mape = np.abs(np.divide((y_pred - y_true).astype("float32"), y_true))
-        mape = np.nan_to_num(mask * mape)
-        return np.mean(mape) * 100
 
 
 class STGformerExecutor(TrafficStateExecutor):
@@ -174,63 +127,4 @@ class STGformerExecutor(TrafficStateExecutor):
             return mean_loss
 
     def evaluate(self, test_dataloader):
-        self._logger.info("Start evaluating ...")
-        with torch.no_grad():
-            self.model.eval()
-            y_truths = []
-            y_preds = []
-            start_time = time.time()
-            for batch in test_dataloader:
-                batch.to_tensor(self.device)
-                output = self.model.predict(batch)
-                y_true = self._scaler.inverse_transform(batch["y"][..., : self.output_dim])
-                y_pred = self._scaler.inverse_transform(output[..., : self.output_dim])
-                y_truths.append(y_true.cpu().numpy())
-                y_preds.append(y_pred.cpu().numpy())
-            end_time = time.time()
-            y_preds = np.concatenate(y_preds, axis=0)
-            y_truths = np.concatenate(y_truths, axis=0)
-            outputs = {"prediction": y_preds, "truth": y_truths}
-            filename_prefix = (
-                time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime(time.time()))
-                + "_"
-                + self.config["model"]
-                + "_"
-                + self.config["dataset"]
-            )
-            ensure_dir(self.evaluate_res_dir)
-            np.savez_compressed(
-                os.path.join(self.evaluate_res_dir, f"{filename_prefix}_predictions.npz"), **outputs
-            )
-            result = self._calc_independent_metrics(y_truths, y_preds)
-            result["inference_time"] = float(end_time - start_time)
-            with open(
-                os.path.join(self.evaluate_res_dir, f"{filename_prefix}_independent_metrics.json"),
-                "w",
-                encoding="utf-8",
-            ) as metrics_file:
-                json.dump(result, metrics_file, ensure_ascii=False, indent=2)
-            self._logger.info("Independent-style test result is {}".format(json.dumps(result)))
-            return result
-
-    @staticmethod
-    def _calc_independent_metrics(y_true, y_pred):
-        if y_true.ndim == 4 and y_true.shape[-1] == 1:
-            y_true = y_true[..., 0]
-            y_pred = y_pred[..., 0]
-
-        rmse_all = float(rmse_np(y_true, y_pred))
-        mae_all = float(mae_np(y_true, y_pred))
-        mape_all = float(mape_np(y_true, y_pred))
-        result = {
-            "RMSE@all": rmse_all,
-            "MAE@all": mae_all,
-            "MAPE@all": mape_all,
-        }
-        out_steps = y_pred.shape[1]
-        for i in range(out_steps):
-            result[f"RMSE@{i + 1}"] = float(rmse_np(y_true[:, i, :], y_pred[:, i, :]))
-            result[f"MAE@{i + 1}"] = float(mae_np(y_true[:, i, :], y_pred[:, i, :]))
-            result[f"MAPE@{i + 1}"] = float(mape_np(y_true[:, i, :], y_pred[:, i, :]))
-        result["MSE@all"] = float(mse_np(y_true, y_pred))
-        return result
+        return super().evaluate(test_dataloader)
