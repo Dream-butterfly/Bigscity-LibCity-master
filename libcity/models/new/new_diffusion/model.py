@@ -216,16 +216,16 @@ class STEncoder(nn.Module):
     """Condition encoder that maps historical sequence to time-aware conditions."""
 
     def __init__(
-        self,
-        input_dim,
-        hidden_dim,
-        num_heads,
-        num_layers,
-        ffn_hidden_dim,
-        graph_k_hop,
-        dropout=0.1,
-        use_temporal_position_embedding=True,
-        max_time_steps=None,
+            self,
+            input_dim,
+            hidden_dim,
+            num_heads,
+            num_layers,
+            ffn_hidden_dim,
+            graph_k_hop,
+            dropout=0.1,
+            use_temporal_position_embedding=True,
+            max_time_steps=None,
     ):
         super().__init__()
         self.max_time_steps = max_time_steps
@@ -266,13 +266,13 @@ class DenoiserBlock(nn.Module):
     """Denoising block: temporal self-attention, graph conv, cross-attention, FFN."""
 
     def __init__(
-        self,
-        hidden_dim,
-        num_heads,
-        ffn_hidden_dim,
-        graph_k_hop,
-        dropout=0.1,
-        use_spatiotemporal_attention=False,
+            self,
+            hidden_dim,
+            num_heads,
+            ffn_hidden_dim,
+            graph_k_hop,
+            dropout=0.1,
+            use_spatiotemporal_attention=False,
     ):
         super().__init__()
         self.temporal_attention = MultiHeadAttention(hidden_dim, num_heads, dropout)
@@ -324,17 +324,17 @@ class AttentionDenoiser(nn.Module):
     """Attention-based noise predictor epsilon_theta(Y_t, t, H, A)."""
 
     def __init__(
-        self,
-        output_dim,
-        hidden_dim,
-        num_heads,
-        num_layers,
-        ffn_hidden_dim,
-        graph_k_hop,
-        dropout=0.1,
-        use_spatiotemporal_attention=False,
-        use_temporal_position_embedding=True,
-        max_future_steps=None,
+            self,
+            output_dim,
+            hidden_dim,
+            num_heads,
+            num_layers,
+            ffn_hidden_dim,
+            graph_k_hop,
+            dropout=0.1,
+            use_spatiotemporal_attention=False,
+            use_temporal_position_embedding=True,
+            max_future_steps=None,
     ):
         super().__init__()
         self.max_future_steps = max_future_steps
@@ -458,7 +458,7 @@ class DiffusionScheduler(nn.Module):
         posterior_variance_t = self._extract(self.posterior_variance, timesteps, current_state.shape)
 
         model_mean = sqrt_recip_alpha_t * (
-            current_state - (beta_t / sqrt_one_minus_alpha_bar_t) * predicted_noise
+                current_state - (beta_t / sqrt_one_minus_alpha_bar_t) * predicted_noise
         )
         noise = torch.randn_like(current_state)
         nonzero_mask = (timesteps > 0).float().reshape(current_state.shape[0], 1, 1, 1)
