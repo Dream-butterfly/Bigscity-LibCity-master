@@ -3,6 +3,7 @@ const DEFAULT_LANG = query.get('lang') || window.localStorage.getItem('train_web
 const DEFAULT_THEME = query.get('theme') || window.localStorage.getItem('train_web_theme') || 'light';
 const DEFAULT_MODEL_PLOT_TOPK_PIE = Number(window.localStorage.getItem('train_web_model_plot_topk_pie') || 8);
 const DEFAULT_MODEL_PLOT_TOPK_BAR = Number(window.localStorage.getItem('train_web_model_plot_topk_bar') || 12);
+const DEFAULT_CHART_SCALE = Number(window.localStorage.getItem('train_web_chart_scale') || 100);
 const state = {
     models: [],
     datasets: [],
@@ -15,6 +16,7 @@ const state = {
     modelPlotType: 'pie',
     modelPlotTopKPie: Number.isFinite(DEFAULT_MODEL_PLOT_TOPK_PIE) ? DEFAULT_MODEL_PLOT_TOPK_PIE : 8,
     modelPlotTopKBar: Number.isFinite(DEFAULT_MODEL_PLOT_TOPK_BAR) ? DEFAULT_MODEL_PLOT_TOPK_BAR : 12,
+    chartScale: Number.isFinite(DEFAULT_CHART_SCALE) ? DEFAULT_CHART_SCALE : 100,
     activeRunKey: '',
     lossRenderedEpochCount: -1,
     resultRenderedRunKey: '',
@@ -1141,6 +1143,214 @@ function renderEChart(containerId, option) {
     }
 }
 
+const PANE_RATIO_CONTROLS = {
+    pane_top: {inputId: 'layout_ratio_top', textId: 'layout_ratio_top_text'},
+    pane_bottom: {inputId: 'layout_ratio_bottom', textId: 'layout_ratio_bottom_text'},
+    pane_compare: {inputId: 'layout_ratio_compare', textId: 'layout_ratio_compare_text'},
+};
+
+const CHART_BASE_HEIGHTS = {
+    chart: 330,
+    compare_chart: 360,
+    model_param_chart: 300,
+    loss_chart: 390,
+};
+
+const TILE_OFFSET_LIMIT = 1400;
+
+function clampPaneRatioPercent(v, fallback = 50) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(20, Math.min(80, Math.floor(n)));
+}
+
+function applyPaneGridTemplate(pane, leftPercent) {
+    if (!pane) return;
+    if (window.matchMedia('(max-width: 1050px)').matches) {
+        pane.style.gridTemplateColumns = '1fr';
+        return;
+    }
+    pane.style.gridTemplateColumns = `${leftPercent}% 8px ${100 - leftPercent}%`;
+}
+
+function setPaneRatioByPercent(paneId, leftPercent, persist = true, resize = true) {
+    const pane = byId(paneId);
+    if (!pane) return;
+    const left = clampPaneRatioPercent(leftPercent);
+    applyPaneGridTemplate(pane, left);
+    if (persist) {
+        window.localStorage.setItem(`pane_ratio_${paneId}`, String(left / 100));
+    }
+    const cfg = PANE_RATIO_CONTROLS[paneId];
+    if (cfg) {
+        const input = byId(cfg.inputId);
+        const text = byId(cfg.textId);
+        if (input) input.value = String(left);
+        if (text) text.innerText = `${left}% / ${100 - left}%`;
+    }
+    if (resize) resizeAllCharts();
+}
+
+function applyChartScale(scalePercent, persist = true) {
+    const scale = Math.max(70, Math.min(170, Math.floor(Number(scalePercent) || 100)));
+    state.chartScale = scale;
+    const root = document.documentElement;
+    root.style.setProperty('--chart-height-pred', `${Math.round(CHART_BASE_HEIGHTS.chart * scale / 100)}px`);
+    root.style.setProperty('--chart-height-compare', `${Math.round(CHART_BASE_HEIGHTS.compare_chart * scale / 100)}px`);
+    root.style.setProperty('--chart-height-model', `${Math.round(CHART_BASE_HEIGHTS.model_param_chart * scale / 100)}px`);
+    root.style.setProperty('--chart-height-loss', `${Math.round(CHART_BASE_HEIGHTS.loss_chart * scale / 100)}px`);
+    const slider = byId('layout_chart_scale');
+    const text = byId('layout_chart_scale_text');
+    if (slider) slider.value = String(scale);
+    if (text) text.innerText = `${scale}%`;
+    if (persist) window.localStorage.setItem('train_web_chart_scale', String(scale));
+    resizeAllCharts();
+}
+
+function resetLayoutControls() {
+    setPaneRatioByPercent('pane_top', 50, true, false);
+    setPaneRatioByPercent('pane_bottom', 50, true, false);
+    setPaneRatioByPercent('pane_compare', 50, true, false);
+    applyChartScale(100, true);
+}
+
+function initLayoutControls() {
+    Object.entries(PANE_RATIO_CONTROLS).forEach(([paneId, cfg]) => {
+        const input = byId(cfg.inputId);
+        if (!input) return;
+        const raw = Number(window.localStorage.getItem(`pane_ratio_${paneId}`));
+        const left = Number.isFinite(raw) ? clampPaneRatioPercent(raw * 100) : 50;
+        setPaneRatioByPercent(paneId, left, false, false);
+        input.addEventListener('input', (e) => setPaneRatioByPercent(paneId, e.target.value, true));
+    });
+    applyChartScale(state.chartScale, false);
+    const scaleInput = byId('layout_chart_scale');
+    if (scaleInput) {
+        scaleInput.addEventListener('input', (e) => applyChartScale(e.target.value, true));
+    }
+}
+
+function refreshPaneLayoutForViewport() {
+    Object.keys(PANE_RATIO_CONTROLS).forEach((paneId) => {
+        const raw = Number(window.localStorage.getItem(`pane_ratio_${paneId}`));
+        const left = Number.isFinite(raw) ? clampPaneRatioPercent(raw * 100) : 50;
+        setPaneRatioByPercent(paneId, left, false, false);
+    });
+}
+
+function setLayoutPopoverOpen(open) {
+    const panel = byId('layout_popup');
+    const btn = byId('layout_fab');
+    if (!panel || !btn) return;
+    const isOpen = !!open;
+    panel.classList.toggle('open', isOpen);
+    panel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+    btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+}
+
+function initLayoutPopover() {
+    const panel = byId('layout_popup');
+    const btn = byId('layout_fab');
+    if (!panel || !btn) return;
+    btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        setLayoutPopoverOpen(!panel.classList.contains('open'));
+    });
+    panel.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+    window.addEventListener('pointerdown', (ev) => {
+        if (!panel.classList.contains('open')) return;
+        if (panel.contains(ev.target) || btn.contains(ev.target)) return;
+        setLayoutPopoverOpen(false);
+    });
+    window.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape') setLayoutPopoverOpen(false);
+    });
+}
+
+function clampTileOffset(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(-TILE_OFFSET_LIMIT, Math.min(TILE_OFFSET_LIMIT, Math.round(n)));
+}
+
+function getTileStorageKey(tileKey) {
+    return `train_web_tile_offset_${tileKey}`;
+}
+
+function readTileOffset(tileKey) {
+    const raw = window.localStorage.getItem(getTileStorageKey(tileKey));
+    if (!raw) return {x: 0, y: 0};
+    const [xRaw, yRaw] = raw.split(',');
+    return {x: clampTileOffset(xRaw), y: clampTileOffset(yRaw)};
+}
+
+function applyTileOffset(card, x, y, persist = true) {
+    if (!card) return;
+    const tileKey = card.dataset.tileKey;
+    if (!tileKey) return;
+    const safeX = clampTileOffset(x);
+    const safeY = clampTileOffset(y);
+    card.style.left = `${safeX}px`;
+    card.style.top = `${safeY}px`;
+    card.dataset.tileOffsetX = String(safeX);
+    card.dataset.tileOffsetY = String(safeY);
+    if (persist) {
+        window.localStorage.setItem(getTileStorageKey(tileKey), `${safeX},${safeY}`);
+    }
+}
+
+function resetTilePositions() {
+    document.querySelectorAll('.resizable-card').forEach((card, idx) => {
+        const tileKey = card.dataset.tileKey || card.id || `resizable_tile_${idx + 1}`;
+        card.dataset.tileKey = tileKey;
+        applyTileOffset(card, 0, 0, true);
+    });
+    resizeAllCharts();
+}
+
+function initMovableTiles() {
+    document.querySelectorAll('.resizable-card').forEach((card, idx) => {
+        const tileKey = card.id || `resizable_tile_${idx + 1}`;
+        card.dataset.tileKey = tileKey;
+        card.classList.add('movable-tile');
+        const saved = readTileOffset(tileKey);
+        applyTileOffset(card, saved.x, saved.y, false);
+
+        const toolbar = card.querySelector('.toolbar');
+        if (!toolbar) return;
+        toolbar.addEventListener('pointerdown', (ev) => {
+            if (ev.button !== 0) return;
+            if (ev.target.closest('.toolbar-controls')) return;
+            if (ev.target.closest('button,input,select,textarea,a,label')) return;
+            ev.preventDefault();
+
+            const startX = ev.clientX;
+            const startY = ev.clientY;
+            const baseX = Number(card.dataset.tileOffsetX || 0);
+            const baseY = Number(card.dataset.tileOffsetY || 0);
+            card.classList.add('tile-moving');
+            document.body.style.userSelect = 'none';
+
+            const onPointerMove = (moveEv) => {
+                const nextX = baseX + (moveEv.clientX - startX);
+                const nextY = baseY + (moveEv.clientY - startY);
+                applyTileOffset(card, nextX, nextY, false);
+            };
+
+            const onPointerUp = () => {
+                document.body.style.userSelect = '';
+                window.removeEventListener('pointermove', onPointerMove);
+                window.removeEventListener('pointerup', onPointerUp);
+                card.classList.remove('tile-moving');
+                applyTileOffset(card, card.dataset.tileOffsetX, card.dataset.tileOffsetY, true);
+            };
+
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
+        });
+    });
+}
+
 function initPaneResizers() {
     document.querySelectorAll('.pane').forEach((pane) => {
         const left = pane.querySelector('.pane-left');
@@ -1153,7 +1363,7 @@ function initPaneResizers() {
             const ratioRaw = window.localStorage.getItem(storageKey);
             const ratio = Number(ratioRaw);
             if (Number.isFinite(ratio) && ratio > 0.15 && ratio < 0.85) {
-                pane.style.gridTemplateColumns = `${(ratio * 100).toFixed(3)}% 8px ${(100 - ratio * 100).toFixed(3)}%`;
+                if (pane.id) setPaneRatioByPercent(pane.id, ratio * 100, false, false);
             }
         }
 
@@ -1173,7 +1383,7 @@ function initPaneResizers() {
                 let nextLeft = startLeft + delta;
                 nextLeft = Math.max(minWidth, Math.min(total - minWidth, nextLeft));
                 const ratio = nextLeft / Math.max(1, total);
-                pane.style.gridTemplateColumns = `${(ratio * 100).toFixed(3)}% 8px ${(100 - ratio * 100).toFixed(3)}%`;
+                applyPaneGridTemplate(pane, ratio * 100);
                 resizeAllCharts();
             };
 
@@ -1185,6 +1395,7 @@ function initPaneResizers() {
                 const ratio = left.getBoundingClientRect().width / Math.max(1, totalWidth);
                 if (storageKey && Number.isFinite(ratio)) {
                     window.localStorage.setItem(storageKey, String(ratio));
+                    if (pane.id) setPaneRatioByPercent(pane.id, ratio * 100, false);
                 }
             };
 
@@ -1712,10 +1923,16 @@ async function init() {
     byId('resume_run_id').addEventListener('change', onResumeRunChanged);
     resetPredictionSelectors();
     initPaneResizers();
+    initLayoutControls();
+    initLayoutPopover();
+    initMovableTiles();
     switchTab('train');
     await refreshStatus();
     setInterval(refreshStatus, 2000);
 }
 
-window.addEventListener('resize', resizeAllCharts);
+window.addEventListener('resize', () => {
+    refreshPaneLayoutForViewport();
+    resizeAllCharts();
+});
 init();

@@ -29,12 +29,48 @@
         </div>
     </div>
 
-    <div class="tabs">
-        <button id="tab_btn_data" class="tab-btn" type="button">数据处理</button>
-        <button id="tab_btn_train" class="tab-btn active" type="button" data-i18n="tab_train">训练</button>
-        <button id="tab_btn_resume" class="tab-btn" type="button" data-i18n="tab_resume">继续训练</button>
-        <button id="tab_btn_compare" class="tab-btn" type="button" data-i18n="tab_compare">模型对比</button>
-        <button id="tab_btn_history" class="tab-btn" type="button" data-i18n="tab_history">运行历史</button>
+    <div class="tabs-bar">
+        <div class="tabs">
+            <button id="tab_btn_data" class="tab-btn" type="button">数据处理</button>
+            <button id="tab_btn_train" class="tab-btn active" type="button" data-i18n="tab_train">训练</button>
+            <button id="tab_btn_resume" class="tab-btn" type="button" data-i18n="tab_resume">继续训练</button>
+            <button id="tab_btn_compare" class="tab-btn" type="button" data-i18n="tab_compare">模型对比</button>
+            <button id="tab_btn_history" class="tab-btn" type="button" data-i18n="tab_history">运行历史</button>
+        </div>
+        <div class="layout-widget">
+            <button id="layout_fab" class="btn layout-fab" type="button" aria-expanded="false" aria-controls="layout_popup">视图布局</button>
+            <div id="layout_popup" class="card layout-card layout-popup" aria-hidden="true">
+                <div class="toolbar">
+                    <strong>视图布局</strong>
+                    <div class="toolbar-controls layout-actions">
+                        <button class="btn btn-auto" type="button" onclick="resetLayoutControls()">重置布局</button>
+                        <button class="btn btn-auto" type="button" onclick="resetTilePositions()">重置磁贴</button>
+                    </div>
+                </div>
+                <div class="layout-grid">
+                    <div>
+                        <label>上方左右比例</label>
+                        <input id="layout_ratio_top" type="range" min="20" max="80" step="1" value="50"/>
+                        <div id="layout_ratio_top_text" class="small mono">50% / 50%</div>
+                    </div>
+                    <div>
+                        <label>下方左右比例</label>
+                        <input id="layout_ratio_bottom" type="range" min="20" max="80" step="1" value="50"/>
+                        <div id="layout_ratio_bottom_text" class="small mono">50% / 50%</div>
+                    </div>
+                    <div>
+                        <label>图表尺寸</label>
+                        <input id="layout_chart_scale" type="range" min="70" max="170" step="1" value="100"/>
+                        <div id="layout_chart_scale_text" class="small mono">100%</div>
+                    </div>
+                    <div>
+                        <label>对比页左右比例</label>
+                        <input id="layout_ratio_compare" type="range" min="20" max="80" step="1" value="50"/>
+                        <div id="layout_ratio_compare_text" class="small mono">50% / 50%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="tab_data" class="tab-panel">
@@ -438,7 +474,7 @@
                 </div>
             </div>
         </div>
-        <div class="pane">
+        <div class="pane" id="pane_compare">
             <div class="card resizable-card pane-left">
                 <div class="toolbar"><strong data-i18n="compare_metrics_title">指标对比</strong></div>
                 <div class="table-wrap table-wrap-300">
