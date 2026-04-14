@@ -54,6 +54,21 @@ general_arguments = {
         "default": None,
         "help": "the evaluator class name"
     },
+    "use_amp": {
+        "type": "bool",
+        "default": None,
+        "help": "whether enable AMP mixed precision training"
+    },
+    "amp_dtype": {
+        "type": "str",
+        "default": None,
+        "help": "AMP dtype: float16 or bfloat16"
+    },
+    "use_gradient_checkpointing": {
+        "type": "bool",
+        "default": None,
+        "help": "whether enable gradient checkpointing in model blocks"
+    },
 }
 
 hyper_arguments = {
@@ -81,6 +96,21 @@ hyper_arguments = {
         "type": "int",
         "default": None,
         "help": "the batch size"
+    },
+    "use_amp": {
+        "type": "bool",
+        "default": None,
+        "help": "whether enable AMP mixed precision training"
+    },
+    "amp_dtype": {
+        "type": "str",
+        "default": None,
+        "help": "AMP dtype: float16 or bfloat16"
+    },
+    "use_gradient_checkpointing": {
+        "type": "bool",
+        "default": None,
+        "help": "whether enable gradient checkpointing in model blocks"
     }
 }
 

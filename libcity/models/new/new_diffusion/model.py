@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 from libcity.models.abstract_traffic_state_model import AbstractTrafficStateModel
 
@@ -80,13 +81,30 @@ class MultiHeadAttention(nn.Module):
         key = key.transpose(1, 2)
         value = value.transpose(1, 2)
 
-        attention_scores = torch.matmul(query, key.transpose(-2, -1)) * self.scale
+        attention_mask = None
         if mask is not None:
-            attention_scores = attention_scores.masked_fill(mask, float("-inf"))
+            attention_mask = mask
+            if attention_mask.dim() == 2:
+                attention_mask = attention_mask.unsqueeze(0).unsqueeze(0)
+            elif attention_mask.dim() == 3:
+                attention_mask = attention_mask.unsqueeze(1)
+            elif attention_mask.dim() != 4:
+                raise ValueError("mask must have 2, 3, or 4 dimensions.")
+            if attention_mask.dtype == torch.bool:
+                # Keep old behavior where True meant a masked-out position.
+                attention_mask = ~attention_mask
+            elif not torch.is_floating_point(attention_mask):
+                raise ValueError("mask must be a bool or floating-point tensor.")
+            attention_mask = attention_mask.to(device=query.device)
 
-        attention_weights = torch.softmax(attention_scores, dim=-1)
-        attention_weights = self.dropout(attention_weights)
-        attention_output = torch.matmul(attention_weights, value)
+        attention_output = F.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            attn_mask=attention_mask,
+            dropout_p=self.dropout.p if self.training else 0.0,
+            scale=self.scale,
+        )
         attention_output = attention_output.transpose(1, 2).contiguous().view(batch_size, query_len, self.hidden_dim)
         return self.output_projection(attention_output)
 
@@ -226,9 +244,11 @@ class STEncoder(nn.Module):
             dropout=0.1,
             use_temporal_position_embedding=True,
             max_time_steps=None,
+            use_gradient_checkpointing=True,
     ):
         super().__init__()
         self.max_time_steps = max_time_steps
+        self.use_gradient_checkpointing = use_gradient_checkpointing
         self.input_projection = nn.Linear(input_dim, hidden_dim)
         self.blocks = nn.ModuleList(
             [
@@ -257,7 +277,12 @@ class STEncoder(nn.Module):
                 )
             encoded_features = encoded_features + self.temporal_position_embedding[:, :history_steps]
         for block in self.blocks:
-            encoded_features = block(encoded_features, adjacency_matrix)
+            if self.use_gradient_checkpointing and self.training:
+                encoded_features = checkpoint(
+                    block, encoded_features, adjacency_matrix, use_reentrant=False
+                )
+            else:
+                encoded_features = block(encoded_features, adjacency_matrix)
         encoded_features = self.final_norm(encoded_features)
         return encoded_features
 
@@ -335,9 +360,11 @@ class AttentionDenoiser(nn.Module):
             use_spatiotemporal_attention=False,
             use_temporal_position_embedding=True,
             max_future_steps=None,
+            use_gradient_checkpointing=True,
     ):
         super().__init__()
         self.max_future_steps = max_future_steps
+        self.use_gradient_checkpointing = use_gradient_checkpointing
         self.input_projection = nn.Linear(output_dim, hidden_dim)
         self.future_position_embedding = None
         if use_temporal_position_embedding:
@@ -383,7 +410,12 @@ class AttentionDenoiser(nn.Module):
         denoiser_input = denoiser_input + timestep_features.unsqueeze(1).unsqueeze(2)
 
         for block in self.blocks:
-            denoiser_input = block(denoiser_input, condition_features, adjacency_matrix)
+            if self.use_gradient_checkpointing and self.training:
+                denoiser_input = checkpoint(
+                    block, denoiser_input, condition_features, adjacency_matrix, use_reentrant=False
+                )
+            else:
+                denoiser_input = block(denoiser_input, condition_features, adjacency_matrix)
         denoiser_input = self.final_norm(denoiser_input)
         return self.output_projection(denoiser_input)
 
@@ -511,6 +543,7 @@ class NewDiffusion(AbstractTrafficStateModel):
         self.ddim_eta = config.get("ddim_eta", 0.0)
         self.use_spatiotemporal_attention = config.get("use_spatiotemporal_attention", True)
         self.use_temporal_position_embedding = config.get("use_temporal_position_embedding", True)
+        self.use_gradient_checkpointing = config.get("use_gradient_checkpointing", True)
         self.device = config.get("device", torch.device("cpu"))
 
         self.num_nodes = data_feature.get("num_nodes", 1)
@@ -531,6 +564,7 @@ class NewDiffusion(AbstractTrafficStateModel):
             dropout=self.dropout,
             use_temporal_position_embedding=self.use_temporal_position_embedding,
             max_time_steps=self.input_window,
+            use_gradient_checkpointing=self.use_gradient_checkpointing,
         )
         self.noise_predictor = AttentionDenoiser(
             output_dim=self.output_dim,
@@ -543,6 +577,7 @@ class NewDiffusion(AbstractTrafficStateModel):
             use_spatiotemporal_attention=self.use_spatiotemporal_attention,
             use_temporal_position_embedding=self.use_temporal_position_embedding,
             max_future_steps=self.output_window,
+            use_gradient_checkpointing=self.use_gradient_checkpointing,
         )
         self.diffusion_scheduler = DiffusionScheduler(
             diffusion_steps=self.diffusion_steps,

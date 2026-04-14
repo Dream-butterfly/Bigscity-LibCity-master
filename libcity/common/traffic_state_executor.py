@@ -1,5 +1,6 @@
 import os
 import time
+from contextlib import nullcontext
 import numpy as np
 import torch
 from logging import getLogger
@@ -23,6 +24,8 @@ class TrafficStateExecutor(AbstractExecutor):
         self.config = config
         self.data_feature = data_feature
         self.device = self.config.get('device', torch.device('cpu'))
+        if not isinstance(self.device, torch.device):
+            self.device = torch.device(self.device)
         self.model = model.to(self.device)
         self.exp_id = self.config.get('exp_id', None)
 
@@ -71,6 +74,28 @@ class TrafficStateExecutor(AbstractExecutor):
         self.hyper_tune = self.config.get('hyper_tune', False)
 
         self.output_dim = self.config.get('output_dim', 1)
+        self.use_amp = self.config.get('use_amp', True)
+        self.amp_dtype = str(self.config.get('amp_dtype', 'float16')).lower()
+        if self.amp_dtype in ('fp16', 'float16'):
+            self.amp_dtype = 'float16'
+            self.amp_torch_dtype = torch.float16
+        elif self.amp_dtype in ('bf16', 'bfloat16'):
+            self.amp_dtype = 'bfloat16'
+            self.amp_torch_dtype = torch.bfloat16
+        else:
+            self._logger.warning('Unsupported amp_dtype `%s`, fallback to float16.', self.amp_dtype)
+            self.amp_dtype = 'float16'
+            self.amp_torch_dtype = torch.float16
+        if self.amp_dtype == 'bfloat16' and self.device.type == 'cuda' and not torch.cuda.is_bf16_supported():
+            self._logger.warning('Current CUDA device does not support bfloat16 AMP, fallback to float16.')
+            self.amp_dtype = 'float16'
+            self.amp_torch_dtype = torch.float16
+        if self.use_amp and self.device.type != 'cuda':
+            self._logger.warning('AMP is only enabled on CUDA devices, disable AMP on device `%s`.', self.device)
+        self.amp_enabled = self.use_amp and self.device.type == 'cuda'
+        self.grad_scaler = torch.amp.GradScaler('cuda', enabled=self.amp_enabled and self.amp_dtype == 'float16')
+        if self.amp_enabled:
+            self._logger.info('Enable AMP training (dtype=%s).', self.amp_dtype)
         self.optimizer = self._build_optimizer()
         self.lr_scheduler = self._build_lr_scheduler()
         self._epoch_num = self.config.get('epoch', 0)
@@ -112,6 +137,7 @@ class TrafficStateExecutor(AbstractExecutor):
         config = dict()
         config['model_state_dict'] = self.model.state_dict()
         config['optimizer_state_dict'] = self.optimizer.state_dict()
+        config['grad_scaler_state_dict'] = self.grad_scaler.state_dict()
         config['epoch'] = epoch
         model_path = self.cache_dir + '/' + self.config['model'] + '_' + self.config['dataset'] + '_epoch%d.tar' % epoch
         torch.save(config, model_path)
@@ -131,6 +157,8 @@ class TrafficStateExecutor(AbstractExecutor):
         checkpoint = torch.load(model_path, map_location=load_device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        if 'grad_scaler_state_dict' in checkpoint:
+            self.grad_scaler.load_state_dict(checkpoint['grad_scaler_state_dict'])
         self._logger.info("Loaded model at {}".format(epoch))
 
     def _build_optimizer(self):
@@ -159,6 +187,11 @@ class TrafficStateExecutor(AbstractExecutor):
             optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate,
                                          eps=self.lr_epsilon, weight_decay=self.weight_decay)
         return optimizer
+
+    def _autocast_context(self):
+        if self.amp_enabled:
+            return torch.autocast(device_type='cuda', dtype=self.amp_torch_dtype)
+        return nullcontext()
 
     def _build_lr_scheduler(self):
         """
@@ -242,6 +275,7 @@ class TrafficStateExecutor(AbstractExecutor):
             else:
                 lf = loss.masked_mae_torch
             return lf(y_predicted, y_true)
+
         return func
 
     def evaluate(self, test_dataloader):
@@ -259,7 +293,8 @@ class TrafficStateExecutor(AbstractExecutor):
             y_preds = []
             for batch in test_dataloader:
                 batch.to_tensor(self.device)
-                output = self.model.predict(batch)
+                with self._autocast_context():
+                    output = self.model.predict(batch)
                 y_true = self._scaler.inverse_transform(batch['y'][..., :self.output_dim])
                 y_pred = self._scaler.inverse_transform(output[..., :self.output_dim])
                 y_truths.append(y_true.cpu().numpy())
@@ -318,7 +353,7 @@ class TrafficStateExecutor(AbstractExecutor):
 
             if (epoch_idx % self.log_every) == 0:
                 log_lr = self.optimizer.param_groups[0]['lr']
-                message = 'Epoch [{}/{}] train_loss: {:.4f}, val_loss: {:.4f}, lr: {:.6f}, {:.2f}s'.\
+                message = 'Epoch [{}/{}] train_loss: {:.4f}, val_loss: {:.4f}, lr: {:.6f}, {:.2f}s'. \
                     format(epoch_idx, self.epochs, np.mean(losses), val_loss, log_lr, (end_time - start_time))
                 self._logger.info(message)
 
@@ -370,13 +405,22 @@ class TrafficStateExecutor(AbstractExecutor):
         for batch in train_dataloader:
             self.optimizer.zero_grad()
             batch.to_tensor(self.device)
-            loss = loss_func(batch)
+            with self._autocast_context():
+                loss = loss_func(batch)
             self._logger.debug(loss.item())
             losses.append(loss.item())
-            loss.backward()
-            if self.clip_grad_norm:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
-            self.optimizer.step()
+            if self.grad_scaler.is_enabled():
+                self.grad_scaler.scale(loss).backward()
+                if self.clip_grad_norm:
+                    self.grad_scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+                self.grad_scaler.step(self.optimizer)
+                self.grad_scaler.update()
+            else:
+                loss.backward()
+                if self.clip_grad_norm:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+                self.optimizer.step()
         return losses
 
     def _valid_epoch(self, eval_dataloader, epoch_idx, loss_func=None):
@@ -397,7 +441,8 @@ class TrafficStateExecutor(AbstractExecutor):
             losses = []
             for batch in eval_dataloader:
                 batch.to_tensor(self.device)
-                loss = loss_func(batch)
+                with self._autocast_context():
+                    loss = loss_func(batch)
                 self._logger.debug(loss.item())
                 losses.append(loss.item())
             mean_loss = np.mean(losses)
