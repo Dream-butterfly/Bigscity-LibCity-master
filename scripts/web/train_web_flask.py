@@ -47,6 +47,9 @@ RESOURCE_DATA_ROOT = PROJECT_ROOT / "resource_data"
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 DATA_VERSIONS_DIR = OUTPUTS_DIR / "data_versions"
 ACTIVE_DATA_VERSION_FILE = DATA_VERSIONS_DIR / "active_version.json"
+TRAIN_HISTORY_FILE = OUTPUTS_DIR / "web_train_history.json"
+TRAIN_HISTORY_MAX_ITEMS = 2000
+TRAIN_HISTORY_LOCK = threading.Lock()
 EXP_ID_RE = re.compile(r"exp_id=([A-Za-z0-9_.:-]+)")
 LOG_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2} [\d:,]+ - (?:INFO|WARNING|ERROR|DEBUG) - (.*)$")
 MODEL_START_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\($")
@@ -590,6 +593,90 @@ def _collect_resume_runs(limit: int = 300) -> list[dict[str, Any]]:
     return runs
 
 
+def _read_train_history_items() -> list[dict[str, Any]]:
+    if not TRAIN_HISTORY_FILE.exists():
+        return []
+    try:
+        obj = json.loads(TRAIN_HISTORY_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if not isinstance(obj, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for row in obj:
+        if isinstance(row, dict):
+            out.append(row)
+    return out
+
+
+def _write_train_history_items(items: list[dict[str, Any]]) -> None:
+    OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+    TRAIN_HISTORY_FILE.write_text(json.dumps(_to_jsonable(items), ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _upsert_train_history_item(record_id: str, payload: dict[str, Any]) -> None:
+    rid = str(record_id).strip()
+    if not rid:
+        raise ValueError("record_id is required.")
+    with TRAIN_HISTORY_LOCK:
+        items = _read_train_history_items()
+        idx = -1
+        for i, row in enumerate(items):
+            if str(row.get("record_id", "")).strip() == rid:
+                idx = i
+                break
+        old = items[idx] if idx >= 0 else {}
+        row = dict(old)
+        row.update(payload)
+        row["record_id"] = rid
+        if "created_at" not in row:
+            row["created_at"] = time.time()
+        row["updated_at"] = time.time()
+        if idx >= 0:
+            items[idx] = row
+        else:
+            items.append(row)
+        items.sort(
+            key=lambda x: float(
+                x.get("ended_at", None)
+                or x.get("started_at", None)
+                or x.get("updated_at", None)
+                or x.get("created_at", None)
+                or 0
+            ),
+            reverse=True,
+        )
+        _write_train_history_items(items[:TRAIN_HISTORY_MAX_ITEMS])
+
+
+def _build_major_metrics_from_summary(summary: dict[str, Any], limit: int = 3) -> dict[str, float]:
+    if not isinstance(summary, dict):
+        return {}
+    preferred = ["MAE", "RMSE", "MAPE", "masked_MAE", "masked_RMSE", "masked_MAPE"]
+    keys: list[str] = []
+    for key in preferred:
+        if key in summary:
+            keys.append(key)
+    for key in summary.keys():
+        sk = str(key)
+        if sk not in keys:
+            keys.append(sk)
+    out: dict[str, float] = {}
+    for key in keys[: max(1, limit)]:
+        item = summary.get(key, {})
+        if isinstance(item, dict):
+            val = item.get("avg", None)
+        else:
+            val = None
+        if val is None:
+            continue
+        try:
+            out[str(key)] = float(val)
+        except Exception:
+            continue
+    return out
+
+
 def _version_meta_path(version_id: str) -> Path:
     return DATA_VERSIONS_DIR / version_id / "meta.json"
 
@@ -690,9 +777,60 @@ def _extract_major_metrics(metrics_csv: Path, limit: int = 3) -> dict[str, float
 
 
 def _build_history_items(limit: int = 20) -> list[dict[str, Any]]:
-    runs = _collect_completed_runs(limit=max(limit * 3, 50))
+    with TRAIN_HISTORY_LOCK:
+        history_rows = _read_train_history_items()
     items: list[dict[str, Any]] = []
+    seen_run_ids: set[str] = set()
+    for row in history_rows:
+        status = str(row.get("status", "finished")).strip().lower() or "finished"
+        if status == "error":
+            status = "failed"
+        run_id = str(row.get("run_id", "")).strip()
+        output_dir = str(row.get("output_dir", "")).strip()
+        try:
+            started_at = float(row.get("started_at")) if row.get("started_at") is not None else None
+        except Exception:
+            started_at = None
+        try:
+            ended_at = float(row.get("ended_at")) if row.get("ended_at") is not None else None
+        except Exception:
+            ended_at = None
+        try:
+            duration_sec = float(row.get("duration_sec")) if row.get("duration_sec") is not None else None
+        except Exception:
+            duration_sec = None
+        if duration_sec is None and started_at is not None and ended_at is not None:
+            duration_sec = max(0.0, ended_at - started_at)
+        raw_metrics = row.get("major_metrics", {})
+        major_metrics: dict[str, float] = {}
+        if isinstance(raw_metrics, dict):
+            for k, v in raw_metrics.items():
+                try:
+                    major_metrics[str(k)] = float(v)
+                except Exception:
+                    continue
+        item = {
+            "run_id": run_id,
+            "task": str(row.get("task", "")),
+            "model": str(row.get("model", "")),
+            "dataset": str(row.get("dataset", "")),
+            "status": status,
+            "duration_sec": duration_sec,
+            "started_at": started_at,
+            "ended_at": ended_at,
+            "major_metrics": major_metrics,
+            "output_dir": output_dir,
+        }
+        items.append(item)
+        if run_id:
+            seen_run_ids.add(run_id)
+
+    # Backward compatibility: include legacy finished runs that were never recorded.
+    runs = _collect_completed_runs(limit=max(limit * 3, 50))
     for run in runs:
+        run_id = str(run.get("run_id", "")).strip()
+        if run_id and run_id in seen_run_ids:
+            continue
         run_dir = Path(run["run_dir"])
         try:
             st = run_dir.stat()
@@ -703,10 +841,9 @@ def _build_history_items(limit: int = 20) -> list[dict[str, Any]]:
             started_at = None
             ended_at = None
             duration_sec = None
-        metrics = _extract_major_metrics(Path(run["metrics_csv"]), limit=3)
         items.append(
             {
-                "run_id": run["run_id"],
+                "run_id": run_id,
                 "task": run.get("task", ""),
                 "model": run.get("model", ""),
                 "dataset": run.get("dataset", ""),
@@ -714,13 +851,12 @@ def _build_history_items(limit: int = 20) -> list[dict[str, Any]]:
                 "duration_sec": duration_sec,
                 "started_at": started_at,
                 "ended_at": ended_at,
-                "major_metrics": metrics,
+                "major_metrics": _extract_major_metrics(Path(run["metrics_csv"]), limit=3),
                 "output_dir": run["run_dir"],
             }
         )
-        if len(items) >= limit:
-            break
-    return items
+    items.sort(key=lambda x: float(x.get("ended_at", None) or x.get("started_at", None) or 0), reverse=True)
+    return items[:limit]
 
 
 def _downsample_xy(y1: list[float], y2: list[float], max_points: int = 600) -> tuple[list[float], list[float]]:
@@ -1291,7 +1427,9 @@ def _run_training_background(
     cli_options: dict[str, Any],
     extra_args: str,
     entry_script: str = "run_model.py",
+    history_record_id: str | None = None,
 ) -> None:
+    history_id = str(history_record_id or "").strip()
     runtime_config_path: Path | None = None
     try:
         effective_config = {}
@@ -1302,6 +1440,22 @@ def _run_training_background(
     except Exception as exc:
         STATE.reset([])
         STATE.finish(return_code=-1, error=f"Config preparation failed: {exc}", result=None)
+        if history_id:
+            _upsert_train_history_item(
+                history_id,
+                {
+                    "task": task,
+                    "model": model,
+                    "dataset": dataset,
+                    "status": "failed",
+                    "run_id": str(cli_options.get("exp_id", "")).strip(),
+                    "ended_at": time.time(),
+                    "duration_sec": None,
+                    "major_metrics": {},
+                    "output_dir": "",
+                    "error": f"Config preparation failed: {exc}",
+                },
+            )
         return
 
     try:
@@ -1309,6 +1463,22 @@ def _run_training_background(
     except Exception as exc:
         STATE.reset([])
         STATE.finish(return_code=-1, error=f"Config write failed: {exc}", result=None)
+        if history_id:
+            _upsert_train_history_item(
+                history_id,
+                {
+                    "task": task,
+                    "model": model,
+                    "dataset": dataset,
+                    "status": "failed",
+                    "run_id": str(cli_options.get("exp_id", "")).strip(),
+                    "ended_at": time.time(),
+                    "duration_sec": None,
+                    "major_metrics": {},
+                    "output_dir": "",
+                    "error": f"Config write failed: {exc}",
+                },
+            )
         return
     cmd = [
         "uv",
@@ -1344,6 +1514,23 @@ def _run_training_background(
 
     STATE.reset(cmd)
     STATE.append_log("$ " + " ".join(cmd))
+    if history_id:
+        _upsert_train_history_item(
+            history_id,
+            {
+                "task": task,
+                "model": model,
+                "dataset": dataset,
+                "status": "running",
+                "run_id": str(cli_options.get("exp_id", "")).strip(),
+                "started_at": STATE.started_at,
+                "ended_at": None,
+                "duration_sec": None,
+                "major_metrics": {},
+                "output_dir": "",
+                "error": None,
+            },
+        )
     try:
         creationflags = 0
         if os.name == "nt":
@@ -1362,6 +1549,20 @@ def _run_training_background(
     except Exception as exc:
         _remove_runtime_config(runtime_config_path)
         STATE.finish(return_code=-1, error=f"Failed to start process: {exc}", result=None)
+        if history_id:
+            with STATE.lock:
+                started_at = STATE.started_at
+            ended_at = time.time()
+            duration_sec = max(0.0, ended_at - started_at) if started_at is not None else None
+            _upsert_train_history_item(
+                history_id,
+                {
+                    "status": "failed",
+                    "ended_at": ended_at,
+                    "duration_sec": duration_sec,
+                    "error": f"Failed to start process: {exc}",
+                },
+            )
         return
 
     with STATE.lock:
@@ -1374,24 +1575,94 @@ def _run_training_background(
         if m:
             with STATE.lock:
                 STATE.exp_id = m.group(1)
+                current_started_at = STATE.started_at
+            if history_id:
+                _upsert_train_history_item(
+                    history_id,
+                    {
+                        "run_id": m.group(1),
+                        "started_at": current_started_at,
+                    },
+                )
 
     code = proc.wait()
     try:
         if code != 0:
             with STATE.lock:
                 stopped = STATE.stop_requested
+                started_at = STATE.started_at
             if stopped:
                 STATE.finish(code, "Training stopped by user.", None)
+                status = "stopped"
+                error = "Training stopped by user."
             else:
                 STATE.finish(code, f"Training failed with return code {code}.", None)
+                status = "failed"
+                error = f"Training failed with return code {code}."
+            if history_id:
+                ended_at = time.time()
+                duration_sec = max(0.0, ended_at - started_at) if started_at is not None else None
+                _upsert_train_history_item(
+                    history_id,
+                    {
+                        "status": status,
+                        "ended_at": ended_at,
+                        "duration_sec": duration_sec,
+                        "error": error,
+                    },
+                )
             return
+        with STATE.lock:
+            started_at = STATE.started_at
         run_dir = _find_run_dir(task, model, dataset, STATE.exp_id)
         if run_dir is None:
             STATE.finish(code, "Training finished but output run directory was not found.", None)
+            if history_id:
+                ended_at = time.time()
+                duration_sec = max(0.0, ended_at - started_at) if started_at is not None else None
+                _upsert_train_history_item(
+                    history_id,
+                    {
+                        "status": "failed",
+                        "ended_at": ended_at,
+                        "duration_sec": duration_sec,
+                        "error": "Training finished but output run directory was not found.",
+                    },
+                )
             return
-        STATE.finish(code, None, _load_result_payload(run_dir))
+        result = _load_result_payload(run_dir)
+        STATE.finish(code, None, result)
+        if history_id:
+            ended_at = time.time()
+            duration_sec = max(0.0, ended_at - started_at) if started_at is not None else None
+            _upsert_train_history_item(
+                history_id,
+                {
+                    "run_id": run_dir.name,
+                    "status": "finished",
+                    "ended_at": ended_at,
+                    "duration_sec": duration_sec,
+                    "major_metrics": _build_major_metrics_from_summary(result.get("metrics_summary", {}), limit=3),
+                    "output_dir": str(run_dir),
+                    "error": None,
+                },
+            )
     except Exception as exc:
         STATE.finish(code, f"Result parse error: {exc}", None)
+        if history_id:
+            with STATE.lock:
+                started_at = STATE.started_at
+            ended_at = time.time()
+            duration_sec = max(0.0, ended_at - started_at) if started_at is not None else None
+            _upsert_train_history_item(
+                history_id,
+                {
+                    "status": "failed",
+                    "ended_at": ended_at,
+                    "duration_sec": duration_sec,
+                    "error": f"Result parse error: {exc}",
+                },
+            )
     finally:
         _remove_runtime_config(runtime_config_path)
 
@@ -1684,10 +1955,27 @@ async def api_start(request: Request):
         user_cli_options=cli_options,
     )
     config_payload["data_version_id"] = resolved_version_id
+    history_record_id = f"tr_{int(time.time())}_{uuid.uuid4().hex[:10]}"
+    _upsert_train_history_item(
+        history_record_id,
+        {
+            "task": task,
+            "model": model,
+            "dataset": dataset,
+            "status": "running",
+            "run_id": str(cli_options.get("exp_id", "")).strip(),
+            "started_at": time.time(),
+            "ended_at": None,
+            "duration_sec": None,
+            "major_metrics": {},
+            "output_dir": "",
+            "error": None,
+        },
+    )
 
     t = threading.Thread(
         target=_run_training_background,
-        args=(task, model, dataset, config_payload, saved_model, train, cli_options, extra_args, "run_model.py"),
+        args=(task, model, dataset, config_payload, saved_model, train, cli_options, extra_args, "run_model.py", history_record_id),
         daemon=True,
     )
     t.start()
@@ -1756,10 +2044,27 @@ async def api_start_resume(request: Request):
         return JSONResponse(status_code=400, content={"error": "config.epoch must be >= 0."})
     if max_epoch <= epoch:
         return JSONResponse(status_code=400, content={"error": "config.max_epoch must be greater than config.epoch."})
+    history_record_id = f"tr_{int(time.time())}_{uuid.uuid4().hex[:10]}"
+    _upsert_train_history_item(
+        history_record_id,
+        {
+            "task": task,
+            "model": model,
+            "dataset": dataset,
+            "status": "running",
+            "run_id": str(cli_options.get("exp_id", "")).strip(),
+            "started_at": time.time(),
+            "ended_at": None,
+            "duration_sec": None,
+            "major_metrics": {},
+            "output_dir": "",
+            "error": None,
+        },
+    )
 
     t = threading.Thread(
         target=_run_training_background,
-        args=(task, model, dataset, config_payload, saved_model, True, cli_options, extra_args, "run_resume.py"),
+        args=(task, model, dataset, config_payload, saved_model, True, cli_options, extra_args, "run_resume.py", history_record_id),
         daemon=True,
     )
     t.start()

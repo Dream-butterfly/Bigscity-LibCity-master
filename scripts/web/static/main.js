@@ -167,7 +167,7 @@ function inferType(v) {
 
 function toInputString(v) {
     if (v === null || v === undefined) return '';
-    if (typeof v === 'object') return JSON.stringify(v);
+    if (typeof v === 'object') return JSON.stringify(v, null, 2);
     return String(v);
 }
 
@@ -243,6 +243,9 @@ function renderParamCell(section, idx) {
     if (idx === null) return '';
     const rows = section === 'executor' ? state.paramRowsExecutor : state.paramRowsConfig;
     const row = rows[idx];
+    const valueEditor = row.type === 'json'
+        ? `<textarea class="param-value mono value-input value-input-json" data-section="${section}" data-idx="${idx}" rows="4">${esc(row.value)}</textarea>`
+        : `<input class="param-value mono value-input" data-section="${section}" data-idx="${idx}" value="${esc(row.value)}"/>`;
     return `
     <td class="param-localized">${esc(getParamDisplayName(row.key))}</td>
     <td class="mono param-key">${esc(row.key)}</td>
@@ -255,7 +258,7 @@ function renderParamCell(section, idx) {
         <option value="json" ${row.type === 'json' ? 'selected' : ''}>json</option>
       </select>
     </td>
-    <td><input class="param-value mono value-input" data-section="${section}" data-idx="${idx}" value="${esc(row.value)}"/></td>
+    <td>${valueEditor}</td>
   `;
 }
 
@@ -285,6 +288,7 @@ function renderParamTable() {
             const idx = Number(e.target.getAttribute('data-idx'));
             const rows = section === 'executor' ? state.paramRowsExecutor : state.paramRowsConfig;
             rows[idx].type = e.target.value;
+            renderParamTable();
         });
     });
     document.querySelectorAll('#param_tbody_config .value-input, #param_tbody_executor .value-input').forEach(el => {

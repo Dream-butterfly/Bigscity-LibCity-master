@@ -311,7 +311,7 @@ label {
     margin-bottom: 6px
 }
 
-input, select, button {
+input, select, button, textarea {
     width: 100%;
     padding: 9px 10px;
     border: 1px solid var(--line);
@@ -319,7 +319,7 @@ input, select, button {
     background: #fff
 }
 
-input:focus, select:focus {
+input:focus, select:focus, textarea:focus {
     outline: none;
     border-color: #93c5fd;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, .15)
@@ -762,6 +762,16 @@ th {
 
 .param-value {
     min-width: 180px
+}
+
+.value-input {
+    box-sizing: border-box;
+}
+
+.value-input-json {
+    min-width: 280px;
+    white-space: pre;
+    resize: vertical;
 }
 
 .param-type {
