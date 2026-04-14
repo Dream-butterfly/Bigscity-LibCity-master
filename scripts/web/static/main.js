@@ -26,6 +26,7 @@ const state = {
     resumeRuns: [],
     dataVersions: [],
     dataStatus: {},
+    dataPreview: {},
     latestLogs: [],
     logFilterLevel: 'all',
     logFilterKeyword: '',
@@ -357,12 +358,44 @@ function setDataStatus(stateName, extra) {
     el.innerText = extra ? `${stateName} (${extra})` : stateName;
 }
 
+function toNumOrNull(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+}
+
+function toIntOrNull(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.floor(n) : null;
+}
+
+function getDataVersionProfile(version) {
+    const v = version || {};
+    const cli = v.cli_options || {};
+    const cfg = v.config_payload || {};
+    const seed = toIntOrNull(v.seed ?? cli.seed ?? cfg.seed);
+    const trainRate = toNumOrNull(v.train_rate ?? cli.train_rate ?? cfg.train_rate);
+    const evalRate = toNumOrNull(v.eval_rate ?? cli.eval_rate ?? cfg.eval_rate);
+    let testRate = toNumOrNull(v.test_rate);
+    if (testRate === null && trainRate !== null && evalRate !== null) {
+        testRate = 1 - trainRate - evalRate;
+    }
+    return {seed, trainRate, evalRate, testRate};
+}
+
+function formatRate(v) {
+    if (!Number.isFinite(v)) return '-';
+    return Number(v).toFixed(3);
+}
+
 function formatDataVersionTag(v) {
     const status = String(v?.status || '-');
     const task = String(v?.task || '-');
     const model = String(v?.model || '-');
     const dataset = String(v?.dataset || '-');
-    return `${v.version_id} | ${status} | ${task}/${model}/${dataset}`;
+    const p = getDataVersionProfile(v);
+    const seedText = p.seed === null ? '-' : String(p.seed);
+    const splitText = `${formatRate(p.trainRate)}/${formatRate(p.evalRate)}/${formatRate(p.testRate)}`;
+    return `${v.version_id} | ${status} | ${task}/${model}/${dataset} | seed=${seedText} | split(T/V/Te)=${splitText}`;
 }
 
 function renderDataVersionHint(version) {
@@ -377,7 +410,54 @@ function renderDataVersionHint(version) {
     const trainB = s.train_batches ?? '-';
     const validB = s.valid_batches ?? '-';
     const testB = s.test_batches ?? '-';
-    el.innerText = `status=${version.status || '-'}, dataset=${version.dataset || '-'}, cache=${cache}, batches(train/val/test)=${trainB}/${validB}/${testB}`;
+    const p = getDataVersionProfile(version);
+    const seedText = p.seed === null ? '-' : String(p.seed);
+    const splitText = `${formatRate(p.trainRate)}/${formatRate(p.evalRate)}/${formatRate(p.testRate)}`;
+    el.innerText = `status=${version.status || '-'}, dataset=${version.dataset || '-'}, seed=${seedText}, split(train/val/test)=${splitText}, cache=${cache}, batches(train/val/test)=${trainB}/${validB}/${testB}`;
+}
+
+function renderDataPreview(payload) {
+    const tableEl = byId('data_preview_table');
+    const metaEl = byId('data_preview_meta');
+    if (!tableEl || !metaEl) return;
+    const data = payload || {};
+    const columns = Array.isArray(data.columns) ? data.columns : [];
+    const rows = Array.isArray(data.rows) ? data.rows : [];
+    if (!columns.length) {
+        tableEl.innerHTML = `<tr><td class="small">${esc(t('table_no_data', '无数据'))}</td></tr>`;
+        metaEl.innerText = '暂无预览数据';
+        return;
+    }
+    const thead = `<thead><tr>${columns.map((col) => `<th>${esc(col)}</th>`).join('')}</tr></thead>`;
+    const tbodyRows = rows.map((row) => {
+        return `<tr>${columns.map((col) => `<td>${esc(row?.[col] ?? '')}</td>`).join('')}</tr>`;
+    }).join('');
+    const tbody = `<tbody>${tbodyRows || `<tr><td colspan="${columns.length}" class="small">${esc(t('table_no_data', '无数据'))}</td></tr>`}</tbody>`;
+    tableEl.innerHTML = `${thead}${tbody}`;
+    const hasMoreText = data.has_more ? '（仅展示前 N 行）' : '';
+    metaEl.innerText = `dataset=${data.dataset || '-'}, file=${data.file_name || '-'}, cols=${columns.length}, rows=${rows.length}${hasMoreText}`;
+}
+
+async function loadDataPreview() {
+    const dataset = String(byId('data_dataset')?.value || '').trim();
+    const fileType = String(byId('data_preview_file_type')?.value || 'dyna').trim();
+    const rowInput = Math.floor(Number(byId('data_preview_rows')?.value || 20));
+    const rows = Number.isFinite(rowInput) ? Math.max(1, Math.min(100, rowInput)) : 20;
+    if (byId('data_preview_rows')) byId('data_preview_rows').value = String(rows);
+    if (!dataset) {
+        renderDataPreview(null);
+        return;
+    }
+    const qs = new URLSearchParams({dataset, file_type: fileType, rows: String(rows)});
+    const r = await fetch(`/api/data/preview?${qs.toString()}`);
+    const data = await r.json();
+    if (!r.ok) {
+        alert(data.error || '加载数据预览失败');
+        renderDataPreview(null);
+        return;
+    }
+    state.dataPreview = data;
+    renderDataPreview(data);
 }
 
 function getSelectedTrainDataVersion() {
@@ -700,7 +780,6 @@ async function startResumeTrain() {
         alert(data.error || t('resume_start_failed', '继续训练启动失败'));
         return;
     }
-    switchTab('train');
 }
 
 async function stopTrain() {
@@ -1240,6 +1319,7 @@ async function init() {
     byId('tab_btn_data').addEventListener('click', async () => {
         switchTab('data');
         await loadDataVersions();
+        await loadDataPreview();
     });
     byId('tab_btn_train').addEventListener('click', () => switchTab('train'));
     byId('tab_btn_resume').addEventListener('click', async () => {
@@ -1270,6 +1350,8 @@ async function init() {
         await loadDefaults();
     });
     byId('data_task').addEventListener('change', () => renderDataModelsForTask());
+    byId('data_dataset').addEventListener('change', loadDataPreview);
+    byId('data_preview_file_type').addEventListener('change', loadDataPreview);
     byId('model').addEventListener('change', loadDefaults);
     byId('train_data_version').addEventListener('change', async () => {
         applyTrainDataVersionSelection();
@@ -1281,6 +1363,7 @@ async function init() {
     });
     await loadDefaults();
     await loadDataVersions();
+    await loadDataPreview();
     applyTrainDataVersionSelection();
     await loadDefaults();
     byId('param_filter').addEventListener('input', renderParamTable);

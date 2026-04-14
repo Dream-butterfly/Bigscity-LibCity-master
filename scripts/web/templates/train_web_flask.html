@@ -72,6 +72,24 @@
             <div id="data_version_hint" class="small"></div>
         </div>
         <div class="card resizable-card">
+            <div class="toolbar">
+                <strong>数据集预览</strong>
+                <div class="toolbar-controls">
+                    <select id="data_preview_file_type" style="width:auto;">
+                        <option value="dyna">dyna</option>
+                        <option value="geo">geo</option>
+                        <option value="rel">rel</option>
+                    </select>
+                    <input id="data_preview_rows" style="width:90px;" value="20" placeholder="rows"/>
+                    <button class="btn btn-auto" type="button" onclick="loadDataPreview()">刷新预览</button>
+                </div>
+            </div>
+            <div id="data_preview_meta" class="small">暂无预览数据</div>
+            <div class="table-wrap table-wrap-300">
+                <table id="data_preview_table"></table>
+            </div>
+        </div>
+        <div class="card resizable-card">
             <div class="toolbar"><strong>数据处理日志</strong></div>
             <div class="log-shell">
                 <div class="log-shell-top">

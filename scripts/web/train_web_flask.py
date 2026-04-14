@@ -135,6 +135,24 @@ def _bool_from_any(v: Any, default: bool) -> bool:
     return default
 
 
+def _float_or_none(v: Any) -> float | None:
+    if v is None:
+        return None
+    try:
+        return float(str(v).strip())
+    except Exception:
+        return None
+
+
+def _int_or_none(v: Any) -> int | None:
+    if v is None:
+        return None
+    try:
+        return int(str(v).strip())
+    except Exception:
+        return None
+
+
 def _normalize_cli_options(raw: dict[str, Any], allow_config_file: bool = True) -> dict[str, str]:
     out: dict[str, str] = {}
     for key in CLI_OPTION_KEYS:
@@ -167,6 +185,29 @@ def _normalize_cli_options(raw: dict[str, Any], allow_config_file: bool = True) 
         else:
             out[key] = text
     return out
+
+
+def _build_data_version_split_profile(cli_options: dict[str, Any], config_payload: dict[str, Any]) -> dict[str, Any]:
+    seed = _int_or_none(cli_options.get("seed"))
+    if seed is None:
+        seed = _int_or_none(config_payload.get("seed"))
+
+    train_rate = _float_or_none(cli_options.get("train_rate"))
+    if train_rate is None:
+        train_rate = _float_or_none(config_payload.get("train_rate"))
+    eval_rate = _float_or_none(cli_options.get("eval_rate"))
+    if eval_rate is None:
+        eval_rate = _float_or_none(config_payload.get("eval_rate"))
+
+    test_rate = None
+    if train_rate is not None and eval_rate is not None:
+        test_rate = round(1.0 - train_rate - eval_rate, 6)
+    return {
+        "seed": seed,
+        "train_rate": train_rate,
+        "eval_rate": eval_rate,
+        "test_rate": test_rate,
+    }
 
 
 def _merge_with_data_version_constraints(
@@ -223,6 +264,78 @@ def _discover_datasets() -> list[str]:
     ds = [p.name for p in RESOURCE_DATA_ROOT.iterdir() if p.is_dir() and (p / "config.json").exists()]
     ds.sort()
     return ds
+
+
+def _resolve_dataset_preview_file(dataset: str, file_type: str) -> Path:
+    ds = str(dataset or "").strip()
+    typ = str(file_type or "").strip().lower()
+    if not ds:
+        raise ValueError("dataset is required.")
+    if any(sep in ds for sep in ["/", "\\"]) or ".." in ds:
+        raise ValueError("Invalid dataset name.")
+    if typ not in {"dyna", "geo", "rel"}:
+        raise ValueError("file_type must be one of: dyna, geo, rel.")
+    dataset_dir = RESOURCE_DATA_ROOT / ds
+    if not dataset_dir.exists() or not dataset_dir.is_dir():
+        raise FileNotFoundError(f"Dataset directory not found: {ds}")
+
+    config_path = dataset_dir / "config.json"
+    config_data: dict[str, Any] = {}
+    if config_path.exists():
+        try:
+            obj = json.loads(config_path.read_text(encoding="utf-8"))
+            if isinstance(obj, dict):
+                config_data = obj
+        except Exception:
+            config_data = {}
+    info = config_data.get("info", {})
+    if not isinstance(info, dict):
+        info = {}
+
+    candidate_stems: list[str] = []
+    if typ == "geo":
+        stem = str(info.get("geo_file", "")).strip()
+        if stem:
+            candidate_stems.append(stem)
+    elif typ == "rel":
+        stem = str(info.get("rel_file", "")).strip()
+        if stem:
+            candidate_stems.append(stem)
+    else:
+        files = info.get("data_files", [])
+        if isinstance(files, list):
+            for item in files:
+                stem = str(item).strip()
+                if stem:
+                    candidate_stems.append(stem)
+    candidate_stems.append(ds)
+
+    seen: set[str] = set()
+    for stem in candidate_stems:
+        if stem in seen:
+            continue
+        seen.add(stem)
+        file_path = dataset_dir / f"{stem}.{typ}"
+        if file_path.exists() and file_path.is_file():
+            return file_path
+    raise FileNotFoundError(f"Dataset preview file not found for dataset={ds}, file_type={typ}")
+
+
+def _load_dataset_preview(dataset: str, file_type: str, rows: int) -> dict[str, Any]:
+    limit = max(1, min(int(rows), 100))
+    file_path = _resolve_dataset_preview_file(dataset, file_type)
+    df_full = pd.read_csv(file_path, nrows=limit + 1)
+    has_more = len(df_full.index) > limit
+    df = df_full.iloc[:limit].copy() if has_more else df_full
+    records = df.where(pd.notna(df), None).to_dict(orient="records")
+    return {
+        "dataset": str(dataset),
+        "file_type": str(file_type).lower(),
+        "file_name": file_path.name,
+        "columns": [str(c) for c in df.columns],
+        "rows": _to_jsonable(records),
+        "has_more": bool(has_more),
+    }
 
 
 def _get_manifest_meta(task: str, model: str) -> tuple[dict[str, Any], Path]:
@@ -927,6 +1040,7 @@ def _run_data_prep_background(
 ) -> None:
     runtime_config_path: Path | None = None
     version_meta_out = _version_meta_path(version_id).parent / "script_meta.json"
+    split_profile = _build_data_version_split_profile(cli_options=cli_options, config_payload=config_payload)
     try:
         effective_config = {}
         base_name = str(cli_options.get("config_file", "")).strip()
@@ -984,6 +1098,10 @@ def _run_data_prep_background(
             "task": task,
             "model": model,
             "dataset": dataset,
+            "seed": split_profile.get("seed"),
+            "train_rate": split_profile.get("train_rate"),
+            "eval_rate": split_profile.get("eval_rate"),
+            "test_rate": split_profile.get("test_rate"),
             "cli_options": cli_options,
             "config_payload": config_payload,
             "created_at": time.time(),
@@ -1278,6 +1396,22 @@ def api_data_status():
             "started_at": DATA_STATE.started_at,
             "ended_at": DATA_STATE.ended_at,
         }
+
+
+@app.get("/api/data/preview")
+def api_data_preview(
+    dataset: str = Query(...),
+    file_type: str = Query(default="dyna"),
+    rows: int = Query(default=20, ge=1, le=100),
+):
+    try:
+        return _load_dataset_preview(dataset=dataset, file_type=file_type, rows=rows)
+    except FileNotFoundError as exc:
+        return JSONResponse(status_code=404, content={"error": str(exc)})
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    except Exception as exc:
+        return JSONResponse(status_code=500, content={"error": f"Failed to load dataset preview: {exc}"})
 
 
 @app.get("/api/data/versions")
