@@ -496,6 +496,25 @@ input:focus, select:focus {
     padding: 7px 8px;
 }
 
+.split-input-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(120px, 1fr));
+    gap: 10px;
+}
+
+.split-preset-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 760px) {
+    .split-input-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .table-wrap {
     max-height: 460px;
     overflow: auto;

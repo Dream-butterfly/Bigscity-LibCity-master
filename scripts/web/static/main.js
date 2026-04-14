@@ -27,6 +27,7 @@ const state = {
     dataVersions: [],
     dataStatus: {},
     dataPreview: {},
+    dataVersionsDatasetFilter: '',
     latestLogs: [],
     logFilterLevel: 'all',
     logFilterKeyword: '',
@@ -37,7 +38,7 @@ const state = {
 const byId = (id) => document.getElementById(id);
 const esc = (s) => String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 const CLI_FIELDS = ["config_file", "exp_id", "seed", "gpu", "gpu_id", "train_rate", "eval_rate", "batch_size", "learning_rate", "max_epoch", "dataset_class", "executor", "evaluator"];
-const HIDDEN_TRAIN_PARAM_KEYS = new Set(["config_file", "train_rate", "eval_rate", "dataset_class"]);
+const HIDDEN_TRAIN_PARAM_KEYS = new Set(["config_file", "train_rate", "eval_rate", "dataset_class", "task", "model", "dataset", "seed"]);
 const normalizeLang = (lang) => {
     const x = String(lang || '').trim();
     if (!x) return 'zh-CN';
@@ -196,24 +197,21 @@ function parseValue(type, raw) {
 function renderTasks() {
     const tasks = [...new Set(state.models.map(x => x.task))].sort();
     const html = tasks.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
-    byId('task').innerHTML = html;
-    if (byId('data_task')) byId('data_task').innerHTML = html;
+    const dataTaskEl = byId('data_task');
+    if (!dataTaskEl) return;
+    dataTaskEl.innerHTML = html;
     const stgcnMeta = state.models.find((x) => x.model === 'STGCN');
     if (stgcnMeta && tasks.includes(stgcnMeta.task)) {
-        byId('task').value = stgcnMeta.task;
-        if (byId('data_task')) byId('data_task').value = stgcnMeta.task;
+        dataTaskEl.value = stgcnMeta.task;
     }
 }
 
 function renderModelsForTask() {
-    const task = byId('task').value;
-    const models = [...new Set(state.models.filter(x => x.task === task).map(x => x.model))].sort();
-    byId('model').innerHTML = models.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
-    if (models.includes('STGCN')) byId('model').value = 'STGCN';
+    renderDataModelsForTask();
 }
 
 function renderDataModelsForTask() {
-    const task = byId('data_task')?.value || byId('task')?.value;
+    const task = byId('data_task')?.value || '';
     const models = [...new Set(state.models.filter(x => x.task === task).map(x => x.model))].sort();
     if (byId('data_model')) {
         byId('data_model').innerHTML = models.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
@@ -223,11 +221,19 @@ function renderDataModelsForTask() {
 
 function renderDatasets() {
     const html = state.datasets.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
-    byId('dataset').innerHTML = html;
+    if (byId('dataset')) byId('dataset').innerHTML = html;
     if (byId('data_dataset')) byId('data_dataset').innerHTML = html;
     if (state.datasets.includes('PEMSD4')) {
-        byId('dataset').value = 'PEMSD4';
+        if (byId('dataset')) byId('dataset').value = 'PEMSD4';
         if (byId('data_dataset')) byId('data_dataset').value = 'PEMSD4';
+    }
+    const filterEl = byId('data_versions_dataset_filter');
+    if (filterEl) {
+        const selected = String(state.dataVersionsDatasetFilter || '');
+        const options = ['<option value="">全部数据集</option>'].concat(
+            state.datasets.map((d) => `<option value="${esc(d)}" ${selected === d ? 'selected' : ''}>${esc(d)}</option>`)
+        );
+        filterEl.innerHTML = options.join('');
     }
 }
 
@@ -330,12 +336,120 @@ function collectCliOptions() {
     return out;
 }
 
+function formatSplitRate(v) {
+    return Number(v).toFixed(3);
+}
+
+function parseSplitRate(raw, name) {
+    const text = String(raw ?? '').trim();
+    if (!text) throw new Error(`${name} 不能为空`);
+    const n = Number(text);
+    if (!Number.isFinite(n)) throw new Error(`${name} 不是有效数字`);
+    if (n < 0 || n > 1) throw new Error(`${name} 需在 [0, 1]`);
+    return n;
+}
+
+function getDataSplitValues() {
+    const train = parseSplitRate(byId('data_train_rate')?.value, 'train');
+    const evalR = parseSplitRate(byId('data_eval_rate')?.value, 'eval');
+    const test = parseSplitRate(byId('data_test_rate')?.value, 'test');
+    const sum = train + evalR + test;
+    if (Math.abs(sum - 1) > 1e-6) {
+        throw new Error(`train+eval+test 必须等于 1（当前 ${sum.toFixed(6)}）`);
+    }
+    return {train, eval: evalR, test};
+}
+
+function setDataSplitValues(split) {
+    if (byId('data_train_rate')) byId('data_train_rate').value = formatSplitRate(split.train);
+    if (byId('data_eval_rate')) byId('data_eval_rate').value = formatSplitRate(split.eval);
+    if (byId('data_test_rate')) byId('data_test_rate').value = formatSplitRate(split.test);
+    updateDataSplitHint();
+    syncDataSplitPreset();
+}
+
+function parsePresetValue(raw) {
+    const parts = String(raw || '').split(',').map((x) => Number(String(x).trim()));
+    if (parts.length !== 3 || parts.some((x) => !Number.isFinite(x))) return null;
+    return {train: parts[0], eval: parts[1], test: parts[2]};
+}
+
+function applyDataSplitPreset() {
+    const presetEl = byId('data_split_preset');
+    if (!presetEl) return;
+    const parsed = parsePresetValue(presetEl.value);
+    if (!parsed) return;
+    setDataSplitValues(parsed);
+}
+
+function syncDataSplitPreset() {
+    const presetEl = byId('data_split_preset');
+    if (!presetEl) return;
+    let current;
+    try {
+        current = getDataSplitValues();
+    } catch (_) {
+        presetEl.value = '';
+        return;
+    }
+    let matched = '';
+    for (const opt of Array.from(presetEl.options)) {
+        if (!opt.value) continue;
+        const p = parsePresetValue(opt.value);
+        if (!p) continue;
+        if (
+            Math.abs(p.train - current.train) < 1e-9 &&
+            Math.abs(p.eval - current.eval) < 1e-9 &&
+            Math.abs(p.test - current.test) < 1e-9
+        ) {
+            matched = opt.value;
+            break;
+        }
+    }
+    presetEl.value = matched;
+}
+
+function updateDataSplitHint() {
+    const hintEl = byId('data_split_ratio_hint');
+    if (!hintEl) return;
+    try {
+        const split = getDataSplitValues();
+        hintEl.innerText = `train/eval/test = ${formatSplitRate(split.train)} / ${formatSplitRate(split.eval)} / ${formatSplitRate(split.test)}`;
+    } catch (e) {
+        hintEl.innerText = String(e.message || 'split 配置错误');
+    }
+}
+
+function initDataSplitControls() {
+    const trainEl = byId('data_train_rate');
+    const evalEl = byId('data_eval_rate');
+    const testEl = byId('data_test_rate');
+    const presetEl = byId('data_split_preset');
+    if (!trainEl || !evalEl || !testEl) return;
+    try {
+        setDataSplitValues(getDataSplitValues());
+    } catch (_) {
+        setDataSplitValues({train: 0.6, eval: 0.2, test: 0.2});
+    }
+    trainEl.addEventListener('input', () => {
+        updateDataSplitHint();
+        syncDataSplitPreset();
+    });
+    evalEl.addEventListener('input', () => {
+        updateDataSplitHint();
+        syncDataSplitPreset();
+    });
+    testEl.addEventListener('input', () => {
+        updateDataSplitHint();
+        syncDataSplitPreset();
+    });
+    if (presetEl) presetEl.addEventListener('change', applyDataSplitPreset);
+}
+
 function collectDataCliOptions() {
     const out = {};
     const mappings = {
         seed: 'data_seed',
-        train_rate: 'data_train_rate',
-        eval_rate: 'data_eval_rate',
         batch_size: 'data_batch_size',
         dataset_class: 'data_dataset_class',
     };
@@ -345,6 +459,9 @@ function collectDataCliOptions() {
         const v = String(el.value ?? '').trim();
         if (v !== '') out[k] = v;
     }
+    const split = getDataSplitValues();
+    out.train_rate = String(split.train);
+    out.eval_rate = String(split.eval);
     return out;
 }
 
@@ -356,6 +473,17 @@ function setDataStatus(stateName, extra) {
     else if (stateName === 'finished') el.classList.add('status-finished');
     else el.classList.add('status-idle');
     el.innerText = extra ? `${stateName} (${extra})` : stateName;
+}
+
+function setResumeStatus(stateName, extra) {
+    const el = byId('resume_status');
+    if (!el) return;
+    el.className = 'badge';
+    if (stateName === 'running') el.classList.add('status-running');
+    else if (stateName === 'finished') el.classList.add('status-finished');
+    else el.classList.add('status-idle');
+    const localizedState = t(`status_${stateName}`, stateName);
+    el.innerText = extra ? `${localizedState} (${extra})` : localizedState;
 }
 
 function toNumOrNull(v) {
@@ -403,6 +531,8 @@ function renderDataVersionHint(version) {
     if (!el) return;
     if (!version) {
         el.innerText = '未选择数据版本';
+        const noteEl = byId('data_version_note');
+        if (noteEl) noteEl.value = '';
         return;
     }
     const s = version.script_meta || {};
@@ -413,7 +543,11 @@ function renderDataVersionHint(version) {
     const p = getDataVersionProfile(version);
     const seedText = p.seed === null ? '-' : String(p.seed);
     const splitText = `${formatRate(p.trainRate)}/${formatRate(p.evalRate)}/${formatRate(p.testRate)}`;
-    el.innerText = `status=${version.status || '-'}, dataset=${version.dataset || '-'}, seed=${seedText}, split(train/val/test)=${splitText}, cache=${cache}, batches(train/val/test)=${trainB}/${validB}/${testB}`;
+    const note = String(version.note || '').trim();
+    const noteText = note ? `, note=${note}` : '';
+    el.innerText = `status=${version.status || '-'}, dataset=${version.dataset || '-'}, seed=${seedText}, split(train/val/test)=${splitText}, cache=${cache}, batches(train/val/test)=${trainB}/${validB}/${testB}${noteText}`;
+    const noteEl = byId('data_version_note');
+    if (noteEl) noteEl.value = note;
 }
 
 function renderDataPreview(payload) {
@@ -443,12 +577,20 @@ async function loadDataPreview() {
     const fileType = String(byId('data_preview_file_type')?.value || 'dyna').trim();
     const rowInput = Math.floor(Number(byId('data_preview_rows')?.value || 20));
     const rows = Number.isFinite(rowInput) ? Math.max(1, Math.min(100, rowInput)) : 20;
+    const entityId = String(byId('data_preview_entity_id')?.value || '').trim();
+    const timeStart = String(byId('data_preview_time_start')?.value || '').trim();
+    const timeEnd = String(byId('data_preview_time_end')?.value || '').trim();
+    const columns = String(byId('data_preview_columns')?.value || '').trim();
     if (byId('data_preview_rows')) byId('data_preview_rows').value = String(rows);
     if (!dataset) {
         renderDataPreview(null);
         return;
     }
     const qs = new URLSearchParams({dataset, file_type: fileType, rows: String(rows)});
+    if (entityId) qs.set('entity_id', entityId);
+    if (timeStart) qs.set('time_start', timeStart);
+    if (timeEnd) qs.set('time_end', timeEnd);
+    if (columns) qs.set('columns', columns);
     const r = await fetch(`/api/data/preview?${qs.toString()}`);
     const data = await r.json();
     if (!r.ok) {
@@ -460,29 +602,94 @@ async function loadDataPreview() {
     renderDataPreview(data);
 }
 
+function applyConfigPayloadToParamRows(configPayload) {
+    if (!configPayload || typeof configPayload !== 'object') return;
+    const rowMap = new Map();
+    [...state.paramRowsConfig, ...state.paramRowsExecutor].forEach((row) => rowMap.set(row.key, row));
+    for (const [k, v] of Object.entries(configPayload)) {
+        const row = rowMap.get(k);
+        if (row) {
+            row.value = toInputString(v);
+            row.type = inferType(v);
+        }
+    }
+}
+
+async function applySelectedDataVersionToTrain() {
+    const sourceId = String(byId('data_version_select')?.value || getSelectedTrainDataVersion()).trim();
+    if (!sourceId) {
+        alert('请先选择有效的 data_version_id');
+        return;
+    }
+    if (byId('train_data_version')) byId('train_data_version').value = sourceId;
+    const version = (state.dataVersions || []).find((x) => x.version_id === sourceId);
+    if (!version) {
+        alert('请先选择有效的 data_version_id');
+        return;
+    }
+    if (String(version.status || '').toLowerCase() !== 'ready') {
+        alert('仅 ready 数据版本可同步到训练参数');
+        return;
+    }
+    await loadDefaults();
+    const cli = (version.cli_options && typeof version.cli_options === 'object') ? version.cli_options : {};
+    for (const key of CLI_FIELDS) {
+        if (key in cli && byId(key)) byId(key).value = String(cli[key]);
+    }
+    const configPayload = (version.config_payload && typeof version.config_payload === 'object') ? version.config_payload : {};
+    applyDefaultToCliFields(configPayload);
+    applyConfigPayloadToParamRows(configPayload);
+    renderParamTable();
+    applyTrainDataVersionSelection();
+}
+
 function getSelectedTrainDataVersion() {
     return String(byId('train_data_version')?.value || '').trim();
+}
+
+function getSelectedTrainDataVersionMeta() {
+    const vid = getSelectedTrainDataVersion();
+    if (!vid) return null;
+    return (state.dataVersions || []).find((x) => x.version_id === vid) || null;
+}
+
+function getTrainContextMeta() {
+    const v = getSelectedTrainDataVersionMeta();
+    if (v && v.task && v.model && v.dataset) {
+        return {task: String(v.task), model: String(v.model), dataset: String(v.dataset), version: v};
+    }
+    const task = String(byId('data_task')?.value || '').trim();
+    const model = String(byId('data_model')?.value || '').trim();
+    const dataset = String(byId('data_dataset')?.value || '').trim();
+    if (task && model && dataset) {
+        return {task, model, dataset, version: null};
+    }
+    return null;
 }
 
 function applyTrainDataVersionSelection() {
     const vid = getSelectedTrainDataVersion();
     const v = (state.dataVersions || []).find((x) => x.version_id === vid);
     const hintEl = byId('train_data_version_hint');
-    const lockIds = ['train_rate', 'eval_rate', 'dataset_class', 'config_file'];
+    const contextEl = byId('train_data_context');
+    const lockIds = ['seed', 'train_rate', 'eval_rate', 'dataset_class', 'config_file'];
     if (!v) {
         if (hintEl) hintEl.innerText = '';
+        if (contextEl) contextEl.innerText = '-';
         lockIds.forEach((id) => {
             const el = byId(id);
             if (el) el.disabled = false;
         });
         return;
     }
-    if (v.task && byId('task')) byId('task').value = v.task;
-    renderModelsForTask();
-    if (v.model && byId('model')) byId('model').value = v.model;
-    if (v.dataset && byId('dataset')) byId('dataset').value = v.dataset;
     if (hintEl) {
-        hintEl.innerText = '已锁定数据相关参数（train_rate/eval_rate/dataset_class/config_file 等）为所选 data_version 配置，训练页修改不会触发重新生成。';
+        hintEl.innerText = '已锁定数据相关参数（seed/train_rate/eval_rate/dataset_class/config_file 等）为所选 data_version 配置，训练页修改不会触发重新生成。';
+    }
+    if (contextEl) {
+        const p = getDataVersionProfile(v);
+        const seedText = p.seed === null ? '-' : String(p.seed);
+        const splitText = `${formatRate(p.trainRate)}/${formatRate(p.evalRate)}/${formatRate(p.testRate)}`;
+        contextEl.innerText = `${v.task || '-'} / ${v.model || '-'} / ${v.dataset || '-'} | seed=${seedText} | split(train/val/test)=${splitText}`;
     }
     lockIds.forEach((id) => {
         const el = byId(id);
@@ -492,6 +699,10 @@ function applyTrainDataVersionSelection() {
 
 function renderDataVersionOptions() {
     const versions = Array.isArray(state.dataVersions) ? state.dataVersions : [];
+    const datasetFilter = String(state.dataVersionsDatasetFilter || '').trim();
+    const versionsForDataTab = datasetFilter
+        ? versions.filter((x) => String(x.dataset || '').trim() === datasetFilter)
+        : versions;
     const ready = versions.filter((x) => String(x.status || '').toLowerCase() === 'ready');
     const render = (id, list, selected) => {
         const el = byId(id);
@@ -501,7 +712,7 @@ function renderDataVersionOptions() {
         );
         el.innerHTML = opts.join('');
     };
-    render('data_version_select', versions, byId('data_version_select')?.value || '');
+    render('data_version_select', versionsForDataTab, byId('data_version_select')?.value || '');
     render('train_data_version', ready, byId('train_data_version')?.value || '');
     const runId = byId('resume_run_id')?.value || '';
     const run = (state.resumeRuns || []).find((x) => x.run_id === runId);
@@ -509,8 +720,8 @@ function renderDataVersionOptions() {
     render('resume_data_version', resumeReady, byId('resume_data_version')?.value || '');
     if (!byId('train_data_version')?.value && ready.length) byId('train_data_version').value = ready[0].version_id;
     if (!byId('resume_data_version')?.value && resumeReady.length) byId('resume_data_version').value = resumeReady[0].version_id;
-    if (!byId('data_version_select')?.value && versions.length) byId('data_version_select').value = versions[0].version_id;
-    const selected = (versions || []).find((x) => x.version_id === byId('data_version_select')?.value);
+    if (!byId('data_version_select')?.value && versionsForDataTab.length) byId('data_version_select').value = versionsForDataTab[0].version_id;
+    const selected = (versionsForDataTab || []).find((x) => x.version_id === byId('data_version_select')?.value);
     renderDataVersionHint(selected || null);
     applyTrainDataVersionSelection();
 }
@@ -520,6 +731,70 @@ async function loadDataVersions() {
     const data = await r.json();
     state.dataVersions = Array.isArray(data.versions) ? data.versions : [];
     renderDataVersionOptions();
+}
+
+async function saveDataVersionNote() {
+    const versionId = String(byId('data_version_select')?.value || '').trim();
+    if (!versionId) {
+        alert('请先选择数据版本');
+        return;
+    }
+    const note = String(byId('data_version_note')?.value || '').trim();
+    const r = await fetch('/api/data/version/note', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({version_id: versionId, note}),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+        alert(data.error || '保存备注失败');
+        return;
+    }
+    await loadDataVersions();
+}
+
+async function renameDataVersion() {
+    const versionId = String(byId('data_version_select')?.value || '').trim();
+    if (!versionId) {
+        alert('请先选择数据版本');
+        return;
+    }
+    const next = window.prompt('输入新的版本ID', versionId);
+    if (next === null) return;
+    const newVersionId = String(next).trim();
+    if (!newVersionId || newVersionId === versionId) return;
+    const r = await fetch('/api/data/version/rename', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({version_id: versionId, new_version_id: newVersionId}),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+        alert(data.error || '重命名失败');
+        return;
+    }
+    await loadDataVersions();
+}
+
+async function deleteDataVersion() {
+    const versionId = String(byId('data_version_select')?.value || '').trim();
+    if (!versionId) {
+        alert('请先选择数据版本');
+        return;
+    }
+    const ok = window.confirm(`确认删除数据版本 ${versionId} ?`);
+    if (!ok) return;
+    const r = await fetch('/api/data/version/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({version_id: versionId}),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+        alert(data.error || '删除失败');
+        return;
+    }
+    await loadDataVersions();
 }
 
 async function refreshDataStatus() {
@@ -532,12 +807,19 @@ async function refreshDataStatus() {
 }
 
 async function startDataPrep() {
+    let dataCliOptions;
+    try {
+        dataCliOptions = collectDataCliOptions();
+    } catch (e) {
+        alert(`划分比例错误: ${e.message || e}`);
+        return;
+    }
     const body = {
         task: byId('data_task').value,
         model: byId('data_model').value,
         dataset: byId('data_dataset').value,
         extra_args: byId('data_extra_args').value || '',
-        cli_options: collectDataCliOptions(),
+        cli_options: dataCliOptions,
         config: {},
     };
     const r = await fetch('/api/data/start', {
@@ -563,7 +845,9 @@ async function stopDataPrep() {
 
 async function loadDefaults() {
     applyTrainDataVersionSelection();
-    const body = {task: byId('task').value, model: byId('model').value, dataset: byId('dataset').value};
+    const ctx = getTrainContextMeta();
+    if (!ctx) return;
+    const body = {task: ctx.task, model: ctx.model, dataset: ctx.dataset};
     const r = await fetch('/api/default_config', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -595,6 +879,11 @@ async function startTrain() {
         alert('请先在训练页选择 ready 的 data_version_id');
         return;
     }
+    const version = getSelectedTrainDataVersionMeta();
+    if (!version || !version.task || !version.model || !version.dataset) {
+        alert('所选 data_version 缺少 task/model/dataset 信息');
+        return;
+    }
     applyTrainDataVersionSelection();
     let config;
     try {
@@ -606,9 +895,9 @@ async function startTrain() {
     const cliOptions = collectCliOptions();
 
     const body = {
-        task: byId('task').value,
-        model: byId('model').value,
-        dataset: byId('dataset').value,
+        task: version.task,
+        model: version.model,
+        dataset: version.dataset,
         data_version_id: dataVersionId,
         saved_model: byId('saved_model').value,
         train: byId('train').value,
@@ -1278,6 +1567,7 @@ async function refreshStatus() {
         state.resultRenderedRunKey = '';
     }
     setStatus(st, s.error ? tf('status_error', {error: s.error}, `error: ${s.error}`) : '');
+    setResumeStatus(st, s.error ? tf('status_error', {error: s.error}, `error: ${s.error}`) : '');
     state.latestLogs = s.logs_tail || [];
     renderLogs(state.latestLogs);
     state.modelPlot = s.model_plot || {};
@@ -1341,18 +1631,28 @@ async function init() {
     state.datasets = meta.datasets || [];
     state.dataVersions = Array.isArray(meta.data_versions) ? meta.data_versions : [];
     renderTasks();
-    renderModelsForTask();
     renderDataModelsForTask();
     renderDatasets();
+    initDataSplitControls();
     renderDataVersionOptions();
-    byId('task').addEventListener('change', async () => {
-        renderModelsForTask();
+    byId('data_task').addEventListener('change', async () => {
+        renderDataModelsForTask();
         await loadDefaults();
     });
-    byId('data_task').addEventListener('change', () => renderDataModelsForTask());
-    byId('data_dataset').addEventListener('change', loadDataPreview);
+    byId('data_model').addEventListener('change', loadDefaults);
+    byId('data_dataset').addEventListener('change', async () => {
+        await loadDataPreview();
+        await loadDefaults();
+    });
     byId('data_preview_file_type').addEventListener('change', loadDataPreview);
-    byId('model').addEventListener('change', loadDefaults);
+    byId('data_versions_dataset_filter').addEventListener('change', async (e) => {
+        state.dataVersionsDatasetFilter = String(e.target.value || '');
+        await loadDataVersions();
+    });
+    byId('data_preview_entity_id').addEventListener('change', loadDataPreview);
+    byId('data_preview_time_start').addEventListener('change', loadDataPreview);
+    byId('data_preview_time_end').addEventListener('change', loadDataPreview);
+    byId('data_preview_columns').addEventListener('change', loadDataPreview);
     byId('train_data_version').addEventListener('change', async () => {
         applyTrainDataVersionSelection();
         await loadDefaults();

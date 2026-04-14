@@ -52,10 +52,39 @@
                 <div><label>model</label><select id="data_model"></select></div>
                 <div><label>dataset</label><select id="data_dataset"></select></div>
                 <div><label>seed</label><input id="data_seed" placeholder="0"/></div>
-                <div><label>train_rate</label><input id="data_train_rate" placeholder="0.7"/></div>
-                <div><label>eval_rate</label><input id="data_eval_rate" placeholder="0.1"/></div>
                 <div><label>batch_size</label><input id="data_batch_size" placeholder="64"/></div>
                 <div><label>dataset_class</label><input id="data_dataset_class" placeholder="TrafficStatePointDataset"/></div>
+                <div class="span-all">
+                    <label>split(train/eval/test)</label>
+                    <div class="split-input-grid">
+                        <div>
+                            <label class="small">train</label>
+                            <input id="data_train_rate" value="0.6" placeholder="0.6"/>
+                        </div>
+                        <div>
+                            <label class="small">eval</label>
+                            <input id="data_eval_rate" value="0.2" placeholder="0.2"/>
+                        </div>
+                        <div>
+                            <label class="small">test</label>
+                            <input id="data_test_rate" value="0.2" placeholder="0.2"/>
+                        </div>
+                        <div class="span-all">
+                            <label class="small">预设</label>
+                            <div class="split-preset-row">
+                                <select id="data_split_preset" style="width:auto;">
+                                    <option value="">自定义</option>
+                                    <option value="0.6,0.2,0.2" selected>0.6 / 0.2 / 0.2</option>
+                                    <option value="0.7,0.1,0.2">0.7 / 0.1 / 0.2</option>
+                                    <option value="0.7,0.2,0.1">0.7 / 0.2 / 0.1</option>
+                                    <option value="0.8,0.1,0.1">0.8 / 0.1 / 0.1</option>
+                                </select>
+                                <button class="btn btn-auto" type="button" onclick="applyDataSplitPreset()">应用预设</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="data_split_ratio_hint" class="small">train/eval/test = 0.600 / 0.200 / 0.200</div>
+                </div>
                 <div class="span-all"><label>extra_args</label><input id="data_extra_args" placeholder="--log_level INFO"/></div>
             </div>
             <div class="actions">
@@ -65,10 +94,21 @@
         <div class="card resizable-card">
             <div class="toolbar">
                 <strong>数据版本（仅 ready 可用于训练）</strong>
+                <div class="toolbar-controls">
+                    <select id="data_versions_dataset_filter" style="width:auto;">
+                        <option value="">全部数据集</option>
+                    </select>
+                    <button class="btn btn-auto" type="button" onclick="loadDataVersions()">刷新</button>
+                    <button class="btn btn-auto" type="button" onclick="applySelectedDataVersionToTrain()">同步到训练参数</button>
+                    <button class="btn btn-auto" type="button" onclick="renameDataVersion()">重命名</button>
+                    <button class="btn btn-danger" type="button" onclick="deleteDataVersion()">删除</button>
+                </div>
             </div>
             <div class="group-grid">
                 <div class="span-all"><label>版本列表</label><select id="data_version_select"></select></div>
+                <div class="span-all"><label>备注</label><input id="data_version_note" placeholder="给当前版本添加备注"/></div>
             </div>
+            <div class="actions"><button class="btn btn-auto" type="button" onclick="saveDataVersionNote()">保存备注</button></div>
             <div id="data_version_hint" class="small"></div>
         </div>
         <div class="card resizable-card">
@@ -80,6 +120,10 @@
                         <option value="geo">geo</option>
                         <option value="rel">rel</option>
                     </select>
+                    <input id="data_preview_entity_id" style="width:110px;" placeholder="entity_id"/>
+                    <input id="data_preview_time_start" style="width:180px;" placeholder="time>= (ISO)"/>
+                    <input id="data_preview_time_end" style="width:180px;" placeholder="time<= (ISO)"/>
+                    <input id="data_preview_columns" style="width:180px;" placeholder="columns: c1,c2"/>
                     <input id="data_preview_rows" style="width:90px;" value="20" placeholder="rows"/>
                     <button class="btn btn-auto" type="button" onclick="loadDataPreview()">刷新预览</button>
                 </div>
@@ -119,9 +163,7 @@
                         </div>
                         <div id="train_data_version_hint" class="small"></div>
                     </div>
-                    <div><label data-param-label="task">task</label><select id="task"></select></div>
-                    <div><label data-param-label="model">model</label><select id="model"></select></div>
-                    <div><label data-param-label="dataset">dataset</label><select id="dataset"></select></div>
+                    <div class="span-all"><label>当前数据版本上下文</label><div id="train_data_context" class="small">-</div></div>
                 </div>
             </div>
             <div class="config-group">
@@ -150,7 +192,6 @@
                 <div class="config-group-title" data-i18n="group_runtime_env">运行环境</div>
                 <div class="group-grid">
                     <div><label data-param-label="exp_id">exp_id</label><input id="exp_id" data-i18n-placeholder="placeholder_optional" placeholder="可选"/></div>
-                    <div><label data-param-label="seed">seed</label><input id="seed" placeholder="0"/></div>
                     <div>
                         <label data-param-label="gpu">gpu</label>
                         <select id="gpu">
@@ -347,6 +388,7 @@
             </div>
             <div class="actions">
                 <button class="btn btn-primary" onclick="startResumeTrain()" type="button" data-i18n="btn_start_resume">开始继续训练</button>
+                <span id="resume_status" class="badge status-idle">idle</span>
             </div>
             <div id="resume_hint" class="small"></div>
         </div>

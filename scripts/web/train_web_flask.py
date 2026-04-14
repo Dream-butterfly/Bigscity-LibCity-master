@@ -8,6 +8,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import shlex
 import signal
 import subprocess
@@ -88,6 +89,7 @@ CLI_OPTION_TYPE = {
 }
 DATA_LOCKED_CONFIG_KEYS = {
     "dataset",
+    "seed",
     "dataset_class",
     "train_rate",
     "eval_rate",
@@ -102,7 +104,7 @@ DATA_LOCKED_CONFIG_KEYS = {
     "cache_dataset",
     "cache_file_name",
 }
-DATA_LOCKED_CLI_KEYS = {"config_file", "dataset_class", "train_rate", "eval_rate"}
+DATA_LOCKED_CLI_KEYS = {"config_file", "seed", "dataset_class", "train_rate", "eval_rate"}
 
 app = FastAPI(title="LibCity Web Trainer")
 app.mount("/static", StaticFiles(directory=str(WEB_ROOT / "static")), name="static")
@@ -208,6 +210,51 @@ def _build_data_version_split_profile(cli_options: dict[str, Any], config_payloa
         "eval_rate": eval_rate,
         "test_rate": test_rate,
     }
+
+
+def _validate_split_rates(config_payload: dict[str, Any], cli_options: dict[str, Any]) -> str | None:
+    train_rate = _float_or_none(cli_options.get("train_rate"))
+    if train_rate is None:
+        train_rate = _float_or_none(config_payload.get("train_rate"))
+    eval_rate = _float_or_none(cli_options.get("eval_rate"))
+    if eval_rate is None:
+        eval_rate = _float_or_none(config_payload.get("eval_rate"))
+    if train_rate is None and eval_rate is None:
+        return None
+    if train_rate is None or eval_rate is None:
+        return "train_rate and eval_rate must both be set when overriding split."
+    if not (0.0 <= train_rate < 1.0):
+        return "train_rate must be in [0, 1)."
+    if not (0.0 <= eval_rate < 1.0):
+        return "eval_rate must be in [0, 1)."
+    if train_rate + eval_rate >= 1.0:
+        return "train_rate + eval_rate must be < 1.0 to keep non-empty test split."
+    return None
+
+
+def _validate_epoch_pair(config_payload: dict[str, Any]) -> str | None:
+    if "epoch" not in config_payload or "max_epoch" not in config_payload:
+        return None
+    epoch = _int_or_none(config_payload.get("epoch"))
+    max_epoch = _int_or_none(config_payload.get("max_epoch"))
+    if epoch is None or max_epoch is None:
+        return "config.epoch and config.max_epoch must be integers."
+    if epoch < 0:
+        return "config.epoch must be >= 0."
+    if max_epoch <= epoch:
+        return "config.max_epoch must be greater than config.epoch."
+    return None
+
+
+def _safe_version_name(raw: str) -> str:
+    name = str(raw or "").strip()
+    if not name:
+        raise ValueError("version_id is required.")
+    if any(sep in name for sep in ["/", "\\"]) or ".." in name:
+        raise ValueError("Invalid version_id.")
+    if not re.fullmatch(r"[A-Za-z0-9_.:-]+", name):
+        raise ValueError("version_id may only contain letters, digits, . _ : -")
+    return name
 
 
 def _merge_with_data_version_constraints(
@@ -321,12 +368,49 @@ def _resolve_dataset_preview_file(dataset: str, file_type: str) -> Path:
     raise FileNotFoundError(f"Dataset preview file not found for dataset={ds}, file_type={typ}")
 
 
-def _load_dataset_preview(dataset: str, file_type: str, rows: int) -> dict[str, Any]:
+def _load_dataset_preview(
+    dataset: str,
+    file_type: str,
+    rows: int,
+    entity_id: str = "",
+    time_start: str = "",
+    time_end: str = "",
+    columns: list[str] | None = None,
+) -> dict[str, Any]:
     limit = max(1, min(int(rows), 100))
     file_path = _resolve_dataset_preview_file(dataset, file_type)
-    df_full = pd.read_csv(file_path, nrows=limit + 1)
+    entity = str(entity_id or "").strip()
+    ts = str(time_start or "").strip()
+    te = str(time_end or "").strip()
+    wanted_cols = [str(c).strip() for c in (columns or []) if str(c).strip()]
+
+    chunks: list[pd.DataFrame] = []
+    total = 0
+    for chunk in pd.read_csv(file_path, chunksize=50000):
+        cur = chunk
+        if entity and "entity_id" in cur.columns:
+            cur = cur[cur["entity_id"].astype(str) == entity]
+        if ts and "time" in cur.columns:
+            cur = cur[cur["time"].astype(str) >= ts]
+        if te and "time" in cur.columns:
+            cur = cur[cur["time"].astype(str) <= te]
+        if cur.empty:
+            continue
+        chunks.append(cur)
+        total += len(cur.index)
+        if total > limit:
+            break
+    if chunks:
+        df_full = pd.concat(chunks, ignore_index=True)
+    else:
+        df_full = pd.read_csv(file_path, nrows=0)
     has_more = len(df_full.index) > limit
     df = df_full.iloc[:limit].copy() if has_more else df_full
+    if wanted_cols:
+        existing = [c for c in wanted_cols if c in df.columns]
+        if existing:
+            df = df[existing]
+
     records = df.where(pd.notna(df), None).to_dict(orient="records")
     return {
         "dataset": str(dataset),
@@ -1347,6 +1431,13 @@ async def api_data_start(request: Request):
         cli_options = _normalize_cli_options(cli_options, allow_config_file=True)
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"error": str(exc)})
+    if "train_rate" not in cli_options:
+        cli_options["train_rate"] = "0.6"
+    if "eval_rate" not in cli_options:
+        cli_options["eval_rate"] = "0.2"
+    split_error = _validate_split_rates(config_payload, cli_options)
+    if split_error:
+        return JSONResponse(status_code=400, content={"error": split_error})
     version_id = _safe_version_id()
     t = threading.Thread(
         target=_run_data_prep_background,
@@ -1403,9 +1494,22 @@ def api_data_preview(
     dataset: str = Query(...),
     file_type: str = Query(default="dyna"),
     rows: int = Query(default=20, ge=1, le=100),
+    entity_id: str = Query(default=""),
+    time_start: str = Query(default=""),
+    time_end: str = Query(default=""),
+    columns: str = Query(default=""),
 ):
     try:
-        return _load_dataset_preview(dataset=dataset, file_type=file_type, rows=rows)
+        cols = [c.strip() for c in str(columns).split(",") if c.strip()]
+        return _load_dataset_preview(
+            dataset=dataset,
+            file_type=file_type,
+            rows=rows,
+            entity_id=entity_id,
+            time_start=time_start,
+            time_end=time_end,
+            columns=cols,
+        )
     except FileNotFoundError as exc:
         return JSONResponse(status_code=404, content={"error": str(exc)})
     except ValueError as exc:
@@ -1415,11 +1519,82 @@ def api_data_preview(
 
 
 @app.get("/api/data/versions")
-def api_data_versions(ready_only: bool = Query(default=False)):
+def api_data_versions(ready_only: bool = Query(default=False), dataset: str = Query(default="")):
+    ds = str(dataset or "").strip()
+    versions = _list_data_versions(limit=300, only_ready=bool(ready_only))
+    if ds:
+        versions = [v for v in versions if str(v.get("dataset", "")).strip() == ds]
     return {
-        "versions": _list_data_versions(limit=300, only_ready=bool(ready_only)),
+        "versions": versions,
         "active_data_version_id": _get_active_data_version(),
     }
+
+
+@app.post("/api/data/version/note")
+async def api_data_version_note(request: Request):
+    body = await request.json()
+    try:
+        version_id = _safe_version_name(body.get("version_id", ""))
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    note = str(body.get("note", "")).strip()
+    meta = _read_data_version_meta(version_id)
+    if not meta:
+        return JSONResponse(status_code=404, content={"error": "Data version not found."})
+    _write_data_version_meta(version_id, {"note": note})
+    return {"message": "Note updated.", "version_id": version_id, "note": note}
+
+
+@app.post("/api/data/version/delete")
+async def api_data_version_delete(request: Request):
+    body = await request.json()
+    try:
+        version_id = _safe_version_name(body.get("version_id", ""))
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    version_dir = DATA_VERSIONS_DIR / version_id
+    if not version_dir.exists() or not version_dir.is_dir():
+        return JSONResponse(status_code=404, content={"error": "Data version not found."})
+    active = _get_active_data_version()
+    if active == version_id:
+        _set_active_data_version("")
+    try:
+        shutil.rmtree(version_dir)
+    except Exception as exc:
+        return JSONResponse(status_code=500, content={"error": f"Failed to delete data version: {exc}"})
+    return {"message": "Data version deleted.", "version_id": version_id}
+
+
+@app.post("/api/data/version/rename")
+async def api_data_version_rename(request: Request):
+    body = await request.json()
+    try:
+        version_id = _safe_version_name(body.get("version_id", ""))
+        new_version_id = _safe_version_name(body.get("new_version_id", ""))
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    if version_id == new_version_id:
+        return JSONResponse(status_code=400, content={"error": "new_version_id must differ from version_id."})
+    src_dir = DATA_VERSIONS_DIR / version_id
+    dst_dir = DATA_VERSIONS_DIR / new_version_id
+    if not src_dir.exists() or not src_dir.is_dir():
+        return JSONResponse(status_code=404, content={"error": "Data version not found."})
+    if dst_dir.exists():
+        return JSONResponse(status_code=409, content={"error": "new_version_id already exists."})
+    src_dir.rename(dst_dir)
+    old_meta_path = dst_dir / "meta.json"
+    if old_meta_path.exists():
+        try:
+            obj = json.loads(old_meta_path.read_text(encoding="utf-8"))
+            if isinstance(obj, dict):
+                obj["version_id"] = new_version_id
+                old_meta_path.write_text(json.dumps(_to_jsonable(obj), ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+    active = _get_active_data_version()
+    if active == version_id:
+        _set_active_data_version(new_version_id)
+    return {"message": "Data version renamed.", "version_id": new_version_id}
 
 
 @app.post("/api/data/active")
@@ -1490,6 +1665,12 @@ async def api_start(request: Request):
         cli_options = _normalize_cli_options(cli_options, allow_config_file=True)
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"error": str(exc)})
+    split_error = _validate_split_rates(user_config_payload, cli_options)
+    if split_error:
+        return JSONResponse(status_code=400, content={"error": split_error})
+    epoch_error = _validate_epoch_pair(user_config_payload)
+    if epoch_error:
+        return JSONResponse(status_code=400, content={"error": epoch_error})
     prep_config_payload = data_meta.get("config_payload", {})
     if not isinstance(prep_config_payload, dict):
         prep_config_payload = {}
@@ -1540,6 +1721,9 @@ async def api_start_resume(request: Request):
         cli_options = _normalize_cli_options(cli_options, allow_config_file=False)
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"error": str(exc)})
+    split_error = _validate_split_rates(user_config_payload, cli_options)
+    if split_error:
+        return JSONResponse(status_code=400, content={"error": split_error})
 
     exp_id = str(cli_options.get("exp_id", "")).strip()
     if not exp_id:
