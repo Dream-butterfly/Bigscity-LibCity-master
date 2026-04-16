@@ -1,4 +1,4 @@
-"""Standalone PyTorch training script for new_diffusion."""
+"""Standalone PyTorch training script for new_diffusion_2."""
 
 import argparse
 import json
@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from libcity.models.new.new_diffusion.model import NewDiffusion
+from libcity.models.new.new_diffusion_2.model import NewDiffusion
 
 
 class TrafficNpzDataset(Dataset):
@@ -95,15 +95,15 @@ def train(args):
 
 def parse_args():
     """Parse CLI arguments."""
-    parser = argparse.ArgumentParser(description="Train new_diffusion with NPZ data.")
+    parser = argparse.ArgumentParser(description="Train new_diffusion_2 with NPZ data.")
     parser.add_argument("--data_npz", type=str, required=True, help="Path to NPZ file containing X, y, and optional A.")
     parser.add_argument(
         "--config_json",
         type=str,
-        default="libcity/models/new/new_diffusion/config.json",
+        default="libcity/models/new/new_diffusion_2/config.json",
         help="Path to model config JSON.",
     )
-    parser.add_argument("--output_ckpt", type=str, default="new_diffusion.pth", help="Checkpoint output path.")
+    parser.add_argument("--output_ckpt", type=str, default="new_diffusion_2.pth", help="Checkpoint output path.")
     parser.add_argument("--batch_size", type=int, default=32, help="Training batch size.")
     parser.add_argument("--epochs", type=int, default=10, help="Training epochs.")
     parser.add_argument("--learning_rate", type=float, default=None, help="Override learning rate.")

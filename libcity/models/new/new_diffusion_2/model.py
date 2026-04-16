@@ -27,6 +27,25 @@ def build_normalized_adjacency(adjacency_matrix, add_self_loop=True):
     return normalized_adjacency
 
 
+def expand_adjacency_batch(adjacency_matrix, target_batch_size):
+    """Expand or tile adjacency matrix batch dimension to a target batch size."""
+    if adjacency_matrix.dim() == 2:
+        return adjacency_matrix.unsqueeze(0).expand(target_batch_size, -1, -1)
+    if adjacency_matrix.dim() == 3:
+        if adjacency_matrix.size(0) == target_batch_size:
+            return adjacency_matrix
+        if adjacency_matrix.size(0) == 1:
+            return adjacency_matrix.expand(target_batch_size, -1, -1)
+        if target_batch_size % adjacency_matrix.size(0) != 0:
+            raise ValueError(
+                f"adjacency batch size {adjacency_matrix.size(0)} is incompatible with "
+                f"target batch size {target_batch_size}."
+            )
+        repeat_factor = target_batch_size // adjacency_matrix.size(0)
+        return adjacency_matrix.repeat_interleave(repeat_factor, dim=0)
+    raise ValueError("adjacency_matrix must be 2D or 3D tensor.")
+
+
 class SinusoidalTimeEmbedding(nn.Module):
     """Sinusoidal diffusion timestep embedding."""
 
@@ -120,21 +139,9 @@ class GraphConvolution(nn.Module):
     def forward(self, node_features, adjacency_matrix):
         """Apply normalized adjacency propagation on node features."""
         batch_size, num_nodes, _ = node_features.shape
-        if adjacency_matrix.dim() == 2:
-            adjacency_matrix = adjacency_matrix.unsqueeze(0).expand(batch_size, -1, -1)
-        elif adjacency_matrix.dim() == 3:
-            if adjacency_matrix.size(0) == 1:
-                adjacency_matrix = adjacency_matrix.expand(batch_size, -1, -1)
-            elif adjacency_matrix.size(0) != batch_size:
-                if batch_size % adjacency_matrix.size(0) != 0:
-                    raise ValueError(
-                        f"adjacency batch size {adjacency_matrix.size(0)} is incompatible with "
-                        f"node feature batch size {batch_size}."
-                    )
-                repeat_factor = batch_size // adjacency_matrix.size(0)
-                adjacency_matrix = adjacency_matrix.repeat_interleave(repeat_factor, dim=0)
-        else:
-            raise ValueError("adjacency_matrix must be 2D or 3D tensor.")
+        adjacency_matrix = expand_adjacency_batch(adjacency_matrix, batch_size).to(
+            device=node_features.device, dtype=node_features.dtype
+        )
         adjacency_norm = build_normalized_adjacency(adjacency_matrix)
         adjacency_power = torch.eye(num_nodes, device=node_features.device).unsqueeze(0).expand(batch_size, -1, -1)
 
@@ -163,7 +170,9 @@ class AdaptiveGraphLearner(nn.Module):
             raise ValueError("static_adjacency must be a square 2D tensor.")
         identity = torch.eye(static_adjacency.size(0), device=static_adjacency.device)
         static_adjacency = torch.relu(static_adjacency) + identity
+        static_adjacency = self._row_normalize(static_adjacency)
         self.register_buffer("static_adjacency", static_adjacency)
+        self.register_buffer("identity", identity)
 
         self.node_embeddings = nn.Parameter(torch.randn(num_nodes, embed_dim) * 0.02)
         self.feature_projection = nn.Linear(hidden_dim, embed_dim)
@@ -202,8 +211,11 @@ class AdaptiveGraphLearner(nn.Module):
             sparse_dynamic.scatter_(-1, top_indices, top_values)
             dynamic_adjacency = self._row_normalize(sparse_dynamic)
 
+        dynamic_adjacency = dynamic_adjacency + self.identity.to(dynamic_adjacency.dtype).unsqueeze(0)
+        dynamic_adjacency = self._row_normalize(dynamic_adjacency)
+
         static_adjacency = self.static_adjacency.unsqueeze(0).expand(batch_size, -1, -1)
-        static_adjacency = self._row_normalize(static_adjacency)
+        static_adjacency = static_adjacency.to(dtype=dynamic_adjacency.dtype)
 
         blend = torch.sigmoid(self.blend_logit)
         adaptive_adjacency = (1.0 - blend) * static_adjacency + blend * dynamic_adjacency
@@ -625,7 +637,7 @@ class DiffusionScheduler(nn.Module):
 
 
 class NewDiffusion(AbstractTrafficStateModel):
-    """Graph + Attention + Conditional Diffusion model for traffic state forecasting."""
+    """Graph + Attention + Conditional Diffusion with adaptive graph and conservation prior."""
 
     def __init__(self, config, data_feature):
         super().__init__(config, data_feature)
@@ -666,6 +678,12 @@ class NewDiffusion(AbstractTrafficStateModel):
         self.num_nodes = data_feature.get("num_nodes", 1)
         self.feature_dim = data_feature.get("feature_dim", 1)
         self.output_dim = data_feature.get("output_dim", 1)
+        if self.physics_channel_idx < 0:
+            raise ValueError("physics_channel_idx must be >= 0.")
+        if self.physics_channel_idx >= self.output_dim:
+            raise ValueError(
+                f"physics_channel_idx={self.physics_channel_idx} is out of range for output_dim={self.output_dim}."
+            )
 
         adjacency_matrix = data_feature.get("adj_mx", np.eye(self.num_nodes, dtype=np.float32))
         adjacency_matrix = torch.tensor(adjacency_matrix, dtype=torch.float32)
@@ -729,10 +747,19 @@ class NewDiffusion(AbstractTrafficStateModel):
         noisy_future, true_noise = self.diffusion_scheduler.add_noise(future_sequence, timesteps)
 
         adjacency_matrix = self.adjacency_matrix.to(history_sequence.device)
-        predicted_noise, adaptive_adjacency = self.noise_predictor(
-            noisy_future, timesteps, condition_features, adjacency_matrix, return_last_adjacency=True
-        )
+        need_physics = self.physics_loss_weight > 0
+        if need_physics:
+            predicted_noise, adaptive_adjacency = self.noise_predictor(
+                noisy_future, timesteps, condition_features, adjacency_matrix, return_last_adjacency=True
+            )
+        else:
+            predicted_noise = self.noise_predictor(
+                noisy_future, timesteps, condition_features, adjacency_matrix, return_last_adjacency=False
+            )
         diffusion_loss = F.mse_loss(predicted_noise, true_noise)
+        if not need_physics:
+            return diffusion_loss
+
         predicted_future = self.diffusion_scheduler.predict_start_from_noise(
             noisy_future, timesteps, predicted_noise
         )
@@ -743,21 +770,15 @@ class NewDiffusion(AbstractTrafficStateModel):
         """Penalize mismatch between temporal state change and graph net-flow."""
         if future_sequence.size(1) < 2:
             return future_sequence.new_tensor(0.0)
-        if self.physics_channel_idx >= future_sequence.size(-1):
-            return future_sequence.new_tensor(0.0)
 
         node_state = future_sequence[..., self.physics_channel_idx]  # [B, T, N]
         current_state = node_state[:, :-1, :]
         next_state = node_state[:, 1:, :]
         temporal_delta = next_state - current_state  # [B, T-1, N]
 
-        if adjacency_matrix.dim() == 2:
-            adjacency_matrix = adjacency_matrix.unsqueeze(0).expand(node_state.size(0), -1, -1)
-        elif adjacency_matrix.dim() == 3 and adjacency_matrix.size(0) != node_state.size(0):
-            if node_state.size(0) % adjacency_matrix.size(0) != 0:
-                raise ValueError("adjacency batch size is incompatible with conservation loss batch size.")
-            repeat_factor = node_state.size(0) // adjacency_matrix.size(0)
-            adjacency_matrix = adjacency_matrix.repeat_interleave(repeat_factor, dim=0)
+        adjacency_matrix = expand_adjacency_batch(adjacency_matrix, node_state.size(0)).to(
+            device=node_state.device, dtype=node_state.dtype
+        )
 
         outflow = current_state * adjacency_matrix.sum(dim=-1).unsqueeze(1)
         inflow = torch.einsum("bij,btj->bti", adjacency_matrix.transpose(1, 2), current_state)
