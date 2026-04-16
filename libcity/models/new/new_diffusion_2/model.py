@@ -18,7 +18,7 @@ def build_normalized_adjacency(adjacency_matrix, add_self_loop=True):
         adjacency_matrix = adjacency_matrix.unsqueeze(0)
     if add_self_loop:
         num_nodes = adjacency_matrix.size(-1)
-        identity = torch.eye(num_nodes, device=adjacency_matrix.device).unsqueeze(0)
+        identity = torch.eye(num_nodes, device=adjacency_matrix.device, dtype=adjacency_matrix.dtype).unsqueeze(0)
         adjacency_matrix = adjacency_matrix + identity
     degree = adjacency_matrix.sum(dim=-1)
     degree_inv_sqrt = degree.clamp_min(1e-12).pow(-0.5)
@@ -143,9 +143,9 @@ class GraphConvolution(nn.Module):
             device=node_features.device, dtype=node_features.dtype
         )
         adjacency_norm = build_normalized_adjacency(adjacency_matrix)
-        adjacency_power = torch.eye(num_nodes, device=node_features.device).unsqueeze(0).expand(batch_size, -1, -1)
+        adjacency_power = torch.eye(num_nodes, device=node_features.device, dtype=node_features.dtype).unsqueeze(0).expand(batch_size, -1, -1)
 
-        output = 0.0
+        output = torch.zeros_like(node_features)
         for hop_index, projection in enumerate(self.projections):
             if hop_index > 0:
                 adjacency_power = torch.bmm(adjacency_power, adjacency_norm)
@@ -512,7 +512,7 @@ class AttentionDenoiser(nn.Module):
                     f"future sequence length {future_steps} exceeds max_future_steps={self.max_future_steps}."
                 )
             denoiser_input = denoiser_input + self.future_position_embedding[:, :future_steps]
-        timestep_features = self.time_projection(self.time_embedding(timesteps))
+        timestep_features = self.time_projection(self.time_embedding(timesteps)).to(dtype=denoiser_input.dtype)
         denoiser_input = denoiser_input + timestep_features.unsqueeze(1).unsqueeze(2)
 
         current_adjacency = adjacency_matrix
@@ -657,9 +657,9 @@ class NewDiffusion(AbstractTrafficStateModel):
         self.diffusion_schedule = config.get("diffusion_schedule", "linear")
         self.beta_start = config.get("beta_start", 1e-4)
         self.beta_end = config.get("beta_end", 2e-2)
-        self.num_sampling_steps = min(
+        self.num_sampling_steps = max(1, min(
             config.get("num_sampling_steps", self.diffusion_steps), self.diffusion_steps
-        )
+        ))
         self.num_prediction_samples = config.get("num_prediction_samples", 1)
         self.sampling_method = config.get("sampling_method", "ddpm").lower()
         self.ddim_eta = config.get("ddim_eta", 0.0)
@@ -678,6 +678,10 @@ class NewDiffusion(AbstractTrafficStateModel):
         self.num_nodes = data_feature.get("num_nodes", 1)
         self.feature_dim = data_feature.get("feature_dim", 1)
         self.output_dim = data_feature.get("output_dim", 1)
+        if self.sampling_method not in {"ddpm", "ddim"}:
+            raise ValueError(f"Unsupported sampling_method: {self.sampling_method}")
+        if self.physics_loss_weight < 0:
+            raise ValueError("physics_loss_weight must be >= 0.")
         if self.physics_channel_idx < 0:
             raise ValueError("physics_channel_idx must be >= 0.")
         if self.physics_channel_idx >= self.output_dim:
