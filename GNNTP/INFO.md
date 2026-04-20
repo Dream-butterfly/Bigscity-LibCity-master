@@ -2,34 +2,34 @@
 
 ## 目录职责
 
-`GNNTP/` 是项目核心代码目录，负责配置解析、数据加载、模型构建、训练执行和评估流程。
+`GNNTP/` 是核心框架层，负责把“任务参数 -> 配置 -> 数据 -> 模型 -> 执行器 -> 评估 -> 落盘”串成完整实验流程。
 
-## 关键内容
+## 关键模块
 
-| 路径 | 说明 |
+| 路径 | 作用 |
 | --- | --- |
-| `pipeline.py` | 训练/评估主流程入口（被 `scripts/run/run_model.py` 等调用） |
-| `config_parser.py` | 配置加载与参数整合 |
-| `common/` | 执行器、评估器、调参等通用模块 |
-| `data/` | 数据集加载、预处理、dataloader 和注册机制 |
-| `models/` | 模型抽象类、模型注册与具体模型实现 |
-| `utils/` | 参数、数据、归一化、DTW、工具函数等通用能力 |
+| `pipeline.py` | 主流程编排：构建数据、模型、执行器并完成训练/评估 |
+| `config_parser.py` | 配置合并与运行时参数解析 |
+| `common/` | 执行器、评估器、调参流程与注册机制 |
+| `data/` | 数据构建、切分、dataloader 与数据集实现 |
+| `models/` | 模型抽象层、定位/注册器、具体模型实现 |
+| `utils/` | 路径、日志、随机种子、参数与通用工具 |
 
 ## 输入/输出
 
-- **输入**：任务参数（task/model/dataset）、配置文件、`resource_data/` 下原子数据文件。  
-- **输出**：训练日志、模型缓存、评估结果（写入 `outputs/` 和 `cache/`）。
+- **输入**：`task/model/dataset`、配置文件与 CLI 覆盖参数、`resource_data/` 原始数据。
+- **输出**：`cache/` 中间缓存、`outputs/<exp_id>/` 实验产物（日志、模型、指标等）。
 
 ## 调用关系
 
-- 上层脚本 `scripts/run/run_model.py / scripts/run/run_hyper.py / scripts/run/run_resume.py / scripts/run/run_data_prep.py` 调用 `GNNTP`。  
-- `pipeline.py` 会串联 `data -> models -> common(executor/evaluator)` 完成完整流程。  
-- `utils/` 和 `common/registry_*` 提供跨模块复用与注册机制支持。
+1. `scripts/run/*.py` 或 Web 子进程调用进入本目录。
+2. `pipeline.py` 调用 `data` 构建数据、`models` 构建模型、`common` 完成执行与评估。
+3. `utils` 提供贯穿全流程的日志、路径与公共工具支持。
 
 ## 修改注意事项
 
-1. 新增模型或执行器时，需同步注册逻辑（`registry.py`/定位器相关文件）。  
-2. 配置键名要和 `config_parser.py`、执行器读取逻辑保持一致。  
-3. 尽量复用 `utils/` 现有工具，避免重复实现数据处理或路径逻辑。  
-4. 涉及输出路径时，优先遵循现有 `exp_id` 与子目录组织规则。
+1. 新增模型/执行器/评估器必须补齐注册信息，避免运行期定位失败。
+2. 配置键名改动要同时检查：配置模板、`config_parser.py`、执行器读取位置。
+3. 公共工具函数变更需评估跨模块影响，避免在 `utils/` 引入业务耦合。
+4. 输出路径与目录结构变更需兼容历史实验，避免已有结果不可读取。
 

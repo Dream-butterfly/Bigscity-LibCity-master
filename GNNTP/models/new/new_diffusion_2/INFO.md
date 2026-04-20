@@ -1,21 +1,30 @@
 # new_diffusion_2/INFO.md
 
 ## 目录职责
-该目录是 `new_diffusion` 的迭代版本模型实现，用于验证改进策略。
+
+实现 `new_diffusion_2` 扩散类实验模型（v2），用于验证相对 v1 的改进方案。
 
 ## 关键文件
-- `model.py`：模型实现。
-- `config.json` / `manifest.json`：配置与注册信息。
+
+| 文件 | 作用 |
+| --- | --- |
+| `model.py` | 模型结构与前向逻辑 |
+| `config.json` | 默认实验参数 |
+| `manifest.json` | 模型注册元信息 |
 
 ## 输入/输出
-- 输入：与 diffusion 类模型兼容的时空数据批次。
-- 输出：预测结果与训练相关状态。
+
+- **输入**：扩散模型兼容的时空批数据与训练参数。
+- **输出**：预测结果、损失与训练中间状态。
 
 ## 调用关系
-- 与 `new_diffusion` 类似，通过模型注册机制接入主流程。
-- 若需独立实验训练，使用 `scripts/experiments/train_new_diffusion_2.py`。
+
+1. 可通过注册机制接入主流程。
+2. 独立实验入口为 `scripts/experiments/train_new_diffusion_2.py`。
 
 ## 修改注意事项
-1. 与 `new_diffusion` 的差异应尽量保持清晰可追踪。
-2. 若接口调整，需同步检查 executor、dataset 和独立实验脚本兼容。
+
+1. 保持与 `new_diffusion` 的差异可追踪（参数、结构、训练策略）。
+2. 接口调整需同步检查数据、执行器和独立实验脚本兼容性。
+3. 参数更新优先维护 `config.json`，减少代码硬编码。
 
