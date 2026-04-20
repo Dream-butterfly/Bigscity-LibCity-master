@@ -33,6 +33,7 @@ uv run python run_web.py --host 127.0.0.1 --port 7817
 | `resource_data/`    | 数据资源目录 | 数据集相关资源（如 `METR_LA/`、`PEMSD4/`）                     |
 | `scripts/`          | 脚本目录   | 辅助工具脚本与运行入口脚本                                       |
 | `scripts/run/`      | 运行入口目录 | `run_model/run_data_prep/run_hyper/run_resume` 入口脚本 |
+| `scripts/experiments/` | 实验脚本目录 | 不走主训练流水线的独立实验入口 |
 | `test/`             | 测试目录   | 传统基线模型测试与测试辅助代码                                     |
 | `cache/`            | 运行缓存目录 | 实验过程缓存与中间产物（通常由程序自动生成）                              |
 | `outputs/`          | 输出目录   | 训练输出、评估结果、模型产物等（通常由程序自动生成）                          |
@@ -41,8 +42,8 @@ uv run python run_web.py --host 127.0.0.1 --port 7817
 | `pyproject.toml`    | 项目配置   | 依赖、Python 版本、工具链配置                                  |
 | `uv.lock`           | 锁文件    | `uv` 依赖锁定结果                                         |
 | `readme_zh.md`      | 上游说明   | LibCity 原始中文说明文档（参考）                                |
-| `AI_EDIT_LOG`       | 修改记录   | 通过 AI 修改的记录日志（供之后进行迭代修改的参考）                         |
-| `AI代码准则`            | 代码规范   | 供 AI 修改代码时参考的规范准则（供之后进行迭代修改的参考）                     |
+| `AI_EDIT_LOG.md`    | 修改记录   | 通过 AI 修改的记录日志（供之后进行迭代修改的参考）                         |
+| `AI代码准则.md`     | 代码规范   | 供 AI 修改代码时参考的规范准则（供之后进行迭代修改的参考）                     |
 
 ## AI/开发者阅读顺序（建议）
 

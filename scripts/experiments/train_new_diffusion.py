@@ -2,12 +2,22 @@
 
 import argparse
 import json
+import sys
+from pathlib import Path
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from libcity.models.new.new_diffusion.model import NewDiffusion
+
+
+DEFAULT_CONFIG_PATH = PROJECT_ROOT / "libcity" / "models" / "new" / "new_diffusion" / "config.json"
 
 
 class TrafficNpzDataset(Dataset):
@@ -100,7 +110,7 @@ def parse_args():
     parser.add_argument(
         "--config_json",
         type=str,
-        default="libcity/models/new/new_diffusion/config.json",
+        default=str(DEFAULT_CONFIG_PATH),
         help="Path to model config JSON.",
     )
     parser.add_argument("--output_ckpt", type=str, default="new_diffusion.pth", help="Checkpoint output path.")

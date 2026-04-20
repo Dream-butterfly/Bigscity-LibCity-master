@@ -2,7 +2,7 @@
 
 ## 目录职责
 
-`test/` 存放测试与基线验证代码，当前以传统时间序列基线模型测试为主。
+`test/` 存放测试与基线验证代码，当前以传统时间序列基线测试和主框架接口冒烟测试为主。
 
 ## 关键内容
 
@@ -12,6 +12,7 @@
 | `test_HA.py` | HA（Historical Average）基线测试 |
 | `test_SVR.py` | SVR 基线测试 |
 | `test_VAR.py` | VAR 基线测试 |
+| `test_model_api.py` | 主框架模型 API 冒烟测试 |
 | `baseline_utils.py` | 基线测试公共工具 |
 | `readme.md` | 测试相关说明 |
 
