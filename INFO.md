@@ -42,9 +42,7 @@ uv run python run_web.py --host 127.0.0.1 --port 7817
 | `scripts/run/hyper_example.txt` | 配置文件   | 调参空间示例                                              |
 | `pyproject.toml`    | 项目配置   | 依赖、Python 版本、工具链配置                                  |
 | `uv.lock`           | 锁文件    | `uv` 依赖锁定结果                                         |
-| `readme_zh.md`      | 上游说明   | GNNTP 原始中文说明文档（参考）                                |
 | `ai_logs/`          | AI日志目录 | AI 日志主说明、索引与按月归档的更改/分析记录                               |
-| `AI_EDIT_LOG.md`    | 迁移入口   | 旧单文件入口，指向 `ai_logs/AI_LOGS_MAIN.md` 与 `ai_logs/index.md`         |
 | `AI代码准则.md`     | 代码规范   | 供 AI 修改代码时参考的规范准则（供之后进行迭代修改的参考）                     |
 
 ## AI 日志体系（ai_logs）

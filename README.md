@@ -54,7 +54,6 @@ uv run python scripts/run/run_resume.py --task traffic_state_pred --model STGCN 
 | `outputs/` | 训练输出、评估结果、模型产物 |
 | `test/` | 基线与接口测试脚本 |
 | `ai_logs/` | AI 日志规范、索引与按月归档记录 |
-| `AI_EDIT_LOG.md` | 旧日志入口（迁移指引） |
 
 ## 数据与产物约定
 
