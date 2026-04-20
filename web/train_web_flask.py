@@ -29,22 +29,35 @@ from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pyecharts_views import (
-    build_loss_line_option,
-    build_model_param_bar_option,
-    build_metrics_table_html,
-    build_model_param_pie_option,
-    build_prediction_line_option,
-)
+if __package__:
+    from .pyecharts_views import (
+        build_loss_line_option,
+        build_model_param_bar_option,
+        build_metrics_table_html,
+        build_model_param_pie_option,
+        build_prediction_line_option,
+    )
+else:
+    from pyecharts_views import (
+        build_loss_line_option,
+        build_model_param_bar_option,
+        build_metrics_table_html,
+        build_model_param_pie_option,
+        build_prediction_line_option,
+    )
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 WEB_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 MODELS_ROOT = PROJECT_ROOT / "libcity" / "models"
 RESOURCE_DATA_ROOT = PROJECT_ROOT / "resource_data"
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
+RUN_SCRIPTS_DIR = PROJECT_ROOT / "scripts" / "run"
+RUN_MODEL_ENTRY = str(RUN_SCRIPTS_DIR / "run_model.py")
+RUN_RESUME_ENTRY = str(RUN_SCRIPTS_DIR / "run_resume.py")
+RUN_DATA_PREP_ENTRY = str(RUN_SCRIPTS_DIR / "run_data_prep.py")
 DATA_VERSIONS_DIR = OUTPUTS_DIR / "data_versions"
 ACTIVE_DATA_VERSION_FILE = DATA_VERSIONS_DIR / "active_version.json"
 TRAIN_HISTORY_FILE = OUTPUTS_DIR / "web_train_history.json"
@@ -1284,7 +1297,7 @@ def _run_data_prep_background(
     cmd = [
         "uv",
         "run",
-        "run_data_prep.py",
+        RUN_DATA_PREP_ENTRY,
         "--task",
         task,
         "--model",
@@ -1426,7 +1439,7 @@ def _run_training_background(
     train: bool,
     cli_options: dict[str, Any],
     extra_args: str,
-    entry_script: str = "run_model.py",
+    entry_script: str = RUN_MODEL_ENTRY,
     history_record_id: str | None = None,
 ) -> None:
     history_id = str(history_record_id or "").strip()
@@ -1975,7 +1988,7 @@ async def api_start(request: Request):
 
     t = threading.Thread(
         target=_run_training_background,
-        args=(task, model, dataset, config_payload, saved_model, train, cli_options, extra_args, "run_model.py", history_record_id),
+        args=(task, model, dataset, config_payload, saved_model, train, cli_options, extra_args, RUN_MODEL_ENTRY, history_record_id),
         daemon=True,
     )
     t.start()
@@ -2064,7 +2077,7 @@ async def api_start_resume(request: Request):
 
     t = threading.Thread(
         target=_run_training_background,
-        args=(task, model, dataset, config_payload, saved_model, True, cli_options, extra_args, "run_resume.py", history_record_id),
+        args=(task, model, dataset, config_payload, saved_model, True, cli_options, extra_args, RUN_RESUME_ENTRY, history_record_id),
         daemon=True,
     )
     t.start()

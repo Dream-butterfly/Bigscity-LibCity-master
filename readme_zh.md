@@ -86,10 +86,10 @@ cd Bigscity-LibCity
 
 在 LibCity 中运行模型之前，请确保您至少下载了一个数据集并将其放在目录 `./raw_data/` 中。 数据集链接是 [BaiduDisk with code 1231](https://pan.baidu.com/s/1qEfcXBO-QwZfiT0G3IYMpQ) 或 [Google Drive](https://drive.google.com/drive/folders/1g5v2Gq1tkOq8XO0HDCZ9nOTtRpB6-gPe?usp=sharing) 。LibCity 中所用的数据集需要被处理成[原子文件](https://bigscity-libcity-docs.readthedocs.io/zh_CN/latest/user_guide/data/atomic_files.html)的格式。
 
-脚本 `run_model.py` 用于在 LibCity 中训练和评估单个模型。 运行`run_model.py`时，必须指定以下三个参数，即**task、dataset和model**。例如：
+脚本 `scripts/run/run_model.py` 用于在 LibCity 中训练和评估单个模型。运行 `scripts/run/run_model.py` 时，必须指定以下三个参数，即**task、dataset 和 model**。例如：
 
 ```sh
-python run_model.py --task traffic_state_pred --model GRU --dataset METR_LA
+python scripts/run/run_model.py --task traffic_state_pred --model GRU --dataset METR_LA
 ```
 
 该脚本将在默认配置下，在 METR_LA 数据集上运行 GRU 模型，以进行交通状态预测任务。**目前我们已经在 [文档](https://bigscity-libcity-docs.readthedocs.io/zh_CN/latest/user_guide/data/dataset_for_task.html) 发布了数据集、模型和任务之间的对应关系表格供用户参考。**更多细节请访问 [文档](https://bigscity-libcity-docs.readthedocs.io/zh_CN/latest/get_started/quick_start.html) 。

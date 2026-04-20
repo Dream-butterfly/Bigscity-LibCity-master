@@ -4,6 +4,14 @@
 
 import argparse
 import os
+import sys
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from libcity.pipeline import objective_function
 from libcity.common import HyperTuning
 from libcity.utils import str2bool, get_logger, set_random_seed, add_general_args, build_run_id, get_run_subdir
