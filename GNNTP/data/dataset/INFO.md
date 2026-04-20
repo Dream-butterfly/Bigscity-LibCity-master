@@ -6,7 +6,8 @@
 ## 关键文件
 - `abstract_dataset.py`：数据集抽象基类。
 - `traffic_state_dataset.py`：交通状态数据集主实现。
-- `traffic_state_dataset_mixins.py`：可复用的数据处理 mixin。
+- `mixins/`：按职责拆分的可复用数据处理 mixin（资源、图、时序加载、外部特征、流水线）。
+- `traffic_state_dataset_mixins.py`：兼容导入入口（重导出 `mixins/`）。
 - `traffic_state_point_dataset.py`：点位型交通状态数据集。
 - `traffic_flow_prediction/`：交通流预测任务专用数据集实现。
 

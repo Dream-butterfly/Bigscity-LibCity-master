@@ -4,7 +4,7 @@ from logging import getLogger
 import numpy as np
 
 from GNNTP.data.dataset import AbstractDataset
-from GNNTP.data.dataset.traffic_state_dataset_mixins import (
+from GNNTP.data.dataset.mixins import (
     TrafficStateExternalFeatureMixin,
     TrafficStateGraphMixin,
     TrafficStatePipelineMixin,
