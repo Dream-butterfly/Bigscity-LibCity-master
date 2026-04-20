@@ -5,10 +5,10 @@
 变更类型：修复问题 / 结构重构 / 依赖变更
 变更状态：已应用
 
-需求/目标：解决运行 LibCity 时因 torchtext 依赖导致的动态库加载失败（libtorchtext.so undefined symbol），确保数据集加载流程可正常执行。
+需求/目标：解决运行 GNNTP 时因 torchtext 依赖导致的动态库加载失败（libtorchtext.so undefined symbol），确保数据集加载流程可正常执行。
 
 变更文件：
-- libcity/data/dataset/dataset_subclass/geosan_dataset.py
+- GNNTP/data/dataset/dataset_subclass/geosan_dataset.py
 - pyproject.toml
 
 变更摘要：

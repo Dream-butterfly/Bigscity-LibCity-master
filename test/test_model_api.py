@@ -8,9 +8,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from libcity.common import ConfigParser
-from libcity.data import get_dataset
-from libcity.utils import get_model
+from GNNTP.common import ConfigParser
+from GNNTP.data import get_dataset
+from GNNTP.utils import get_model
 
 #############################################
 # The parameter to control the unit testing #

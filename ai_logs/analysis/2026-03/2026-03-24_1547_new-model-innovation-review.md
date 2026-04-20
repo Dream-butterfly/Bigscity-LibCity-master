@@ -5,7 +5,7 @@
 结论状态：推导
 
 输入内容：
-用户要求分析 `./libcity/model/new/new_model.py` 的模型流程，并与已有模型（AGCRN、STTN、STResNet、DMSTGCN 等）进行对比，判断其创新性，并进一步给出可提升为“论文级方法”的改进方向。
+用户要求分析 `./GNNTP/model/new/new_model.py` 的模型流程，并与已有模型（AGCRN、STTN、STResNet、DMSTGCN 等）进行对比，判断其创新性，并进一步给出可提升为“论文级方法”的改进方向。
 
 分析结果：
 
@@ -81,7 +81,7 @@
 → 可能未正确生成节点偏置
 
 3. 外部特征接口不兼容
-- 使用 `ext` 而非 LibCity 标准 `X_ext / y_ext`
+- 使用 `ext` 而非 GNNTP 标准 `X_ext / y_ext`
 → 模块可能未被实际调用
 
 4. 存在未使用变量

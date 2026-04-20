@@ -5,7 +5,7 @@
 结论状态：已验证
 
 输入内容：
-用户运行 LibCity 时出现错误：
+用户运行 GNNTP 时出现错误：
 - 表面：AttributeError（ASTGCNDataset 不存在）
 - 实际：torchtext 动态库加载失败（libtorchtext.so）
 
@@ -53,5 +53,5 @@
 
 补充说明：
 - 风险点：类似问题可能在 torch_geometric 等库中复现
-- 适用范围：LibCity 数据集加载机制分析
+- 适用范围：GNNTP 数据集加载机制分析
 - 限制条件：仅针对当前 Python 3.12 + torch 2.10 环境

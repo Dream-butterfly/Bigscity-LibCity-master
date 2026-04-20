@@ -4,9 +4,9 @@
 `web/` 存放 Web 训练控制台（FastAPI）及其前端资源，是当前主要的人机交互入口。
 
 ## 关键文件
-- `train_web_flask.py`：Web 后端主程序（接口、任务调度、日志与结果解析）。
+- `train_web_fastapi.py`：Web 后端主程序（接口、任务调度、日志与结果解析）。
 - `pyecharts_views.py`：图表配置构建（loss/参数/预测可视化）。
-- `templates/train_web_flask.html`：主页面模板。
+- `templates/train_web_fastapi.html`：主页面模板。
 - `static/`：前端 JS/CSS 与多语言资源。
 
 ## 输入/输出

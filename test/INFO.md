@@ -24,7 +24,7 @@
 ## 调用关系
 
 - 该目录用于验证和对比，不直接驱动主训练流水线。  
-- 与 `libcity.data` / `libcity.utils` 存在工具级复用关系。
+- 与 `GNNTP.data` / `GNNTP.utils` 存在工具级复用关系。
 
 ## 修改注意事项
 

@@ -15,7 +15,7 @@
 
 ## 调用关系
 - 可直接由命令行执行。
-- 由 `web/train_web_flask.py` 通过 `uv run` 子进程调用。
+- 由 `web/train_web_fastapi.py` 通过 `uv run` 子进程调用。
 
 ## 修改注意事项
 1. 参数定义变更需同步 Web 端调用参数。

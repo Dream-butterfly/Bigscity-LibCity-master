@@ -1,0 +1,11 @@
+{
+  "task": "traffic_state_pred",
+  "model": "PDFormer",
+  "model_entry": "GNNTP.models.traffic_flow_prediction.PDFormer.model:PDFormer",
+  "dataset_class": "PDFormerDataset",
+  "dataset_entry": "GNNTP.data.dataset.traffic_flow_prediction.pdformer_dataset:PDFormerDataset",
+  "executor": "PDFormerExecutor",
+  "executor_entry": "GNNTP.models.traffic_flow_prediction.PDFormer.executor:PDFormerExecutor",
+  "evaluator": "TrafficStateEvaluator",
+  "evaluator_entry": "GNNTP.common.traffic_state_evaluator:TrafficStateEvaluator"
+}

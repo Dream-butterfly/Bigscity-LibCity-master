@@ -5,7 +5,7 @@ from baseline_utils import get_project_root, load_dataset_3d
 
 root_path = get_project_root(__file__)
 sys.path.append(root_path)
-from libcity.common.evaluator_utils import evaluate_model
+from GNNTP.common.evaluator_utils import evaluate_model
 
 
 config = {

@@ -127,7 +127,7 @@ function applyTheme(theme) {
     const mode = theme === 'dark' ? 'dark' : 'light';
     state.theme = mode;
     window.localStorage.setItem('train_web_theme', mode);
-    const href = mode === 'dark' ? '/static/train_web_flask_dark.css' : '/static/train_web_flask.css';
+    const href = mode === 'dark' ? '/static/train_web_fastapi_dark.css' : '/static/train_web_fastapi.css';
     byId('theme_stylesheet').setAttribute('href', href);
 }
 

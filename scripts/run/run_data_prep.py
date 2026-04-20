@@ -12,9 +12,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from libcity.common import ConfigParser
-from libcity.data import get_dataset
-from libcity.utils import add_general_args, ensure_run_id, get_logger, set_random_seed, str2bool
+from GNNTP.common import ConfigParser
+from GNNTP.data import get_dataset
+from GNNTP.utils import add_general_args, ensure_run_id, get_logger, set_random_seed, str2bool
 
 
 def run_data_prep(task=None, model_name=None, dataset_name=None, config_file=None, other_args=None):

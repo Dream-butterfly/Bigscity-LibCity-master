@@ -10,9 +10,9 @@ The run method is as follows.
 
 `conda activate <your environment>`
 
-(2) Run the script **in the Bigscity-LibCity/ directory**: 
+(2) Run the script **in the Bigscity-GNNTP/ directory**: 
 
-`cd Bigscity-LibCity/`
+`cd Bigscity-GNNTP/`
 
 `python test/test_HA.py`
 

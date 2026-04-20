@@ -8,7 +8,7 @@
 - 仅数据准备与缓存构建：`scripts/run/run_data_prep.py`
 - 超参数搜索：`scripts/run/run_hyper.py`
 - 断点续训与评估：`scripts/run/run_resume.py`
-- Web 控制台：`run_web.py -> web/train_web_flask.py`
+- Web 控制台：`run_web.py -> web/train_web_fastapi.py`
 
 ## 环境要求
 
@@ -21,29 +21,33 @@
 # 1) 安装依赖
 uv sync
 
-# 2) 仅准备数据/缓存
+# 2) 启动 Web 控制台
+uv run python run_web.py --host 127.0.0.1 --port 7817
+
+# 下面的命令行示例均可通过 Web 控制台的命令输入框执行，或直接在终端运行：
+
+# 2.1) 仅准备数据/缓存
 uv run python scripts/run/run_data_prep.py --task traffic_state_pred --model STGCN --dataset PEMSD4
 
-# 3) 训练并评估
+# 2.2) 训练并评估
 uv run python scripts/run/run_model.py --task traffic_state_pred --model STGCN --dataset PEMSD4
 
-# 4) 超参数搜索
+# 2.3) 超参数搜索
 uv run python scripts/run/run_hyper.py --task traffic_state_pred --model STGCN --dataset PEMSD4 --params_file scripts/run/hyper_example.txt
 
-# 5) 续训并评估
+# 2.4) 续训并评估
 uv run python scripts/run/run_resume.py --task traffic_state_pred --model STGCN --dataset PEMSD4
 
-# 6) 启动 Web 控制台
-uv run python run_web.py --host 127.0.0.1 --port 7817
 ```
 
 ## 目录说明（当前结构）
 
 | 路径 | 作用 |
 |---|---|
-| `libcity/` | 核心训练框架与模型实现 |
+| `GNNTP/` | 核心训练框架与模型实现 |
 | `scripts/run/` | 主运行入口脚本（训练/调参/续训/数据准备） |
-| `scripts/` | 工具脚本与独立实验入口（含 `experiments/`） |
+| `scripts/tools/` | 辅助工具脚本（依赖/配置/数据检查、缓存维护、冒烟测试） |
+| `scripts/` | 脚本总目录（含 `run/`、`tools/`、`experiments/`） |
 | `web/` | Web 后端、模板、静态资源 |
 | `resource_data/` | 数据资源（如 `METR_LA/`、`PEMSD4/`） |
 | `cache/` | 运行缓存与中间产物 |
