@@ -1,3 +1,7 @@
+---
+apply: 始终
+---
+
 # GNN-TP 项目说明（根目录）
 
 本仓库是基于 **LibCity** 的交通时空预测实验工程，聚焦于图神经网络相关模型的训练、调参、续训和结果分析。
@@ -9,16 +13,16 @@
 uv sync
 
 # 仅做数据准备/缓存
-uv run python scripts/run/run_data_prep.py --task traffic_state_pred --model STGCN --dataset PEMSD4
+uv run python scripts/run/run_data_prep.py --task traffic_state_pred --model GRU --dataset METR_LA
 
 # 训练并评估单个模型
-uv run python scripts/run/run_model.py --task traffic_state_pred --model STGCN --dataset PEMSD4
+uv run python scripts/run/run_model.py --task traffic_state_pred --model GRU --dataset METR_LA
 
 # 超参数搜索
-uv run python scripts/run/run_hyper.py --task traffic_state_pred --model STGCN --dataset PEMSD4 --params_file scripts/run/hyper_example.txt
+uv run python scripts/run/run_hyper.py --task traffic_state_pred --model GRU --dataset METR_LA --params_file scripts/run/hyper_example.txt
 
 # 续训并评估
-uv run python scripts/run/run_resume.py --task traffic_state_pred --model STGCN --dataset PEMSD4
+uv run python scripts/run/run_resume.py --task traffic_state_pred --model GRU --dataset METR_LA
 
 # 启动 Web 训练控制台
 uv run python run_web.py --host 127.0.0.1 --port 7817
@@ -42,27 +46,16 @@ uv run python run_web.py --host 127.0.0.1 --port 7817
 | `pyproject.toml`    | 项目配置   | 依赖、Python 版本、工具链配置                                  |
 | `uv.lock`           | 锁文件    | `uv` 依赖锁定结果                                         |
 | `readme_zh.md`      | 上游说明   | LibCity 原始中文说明文档（参考）                                |
-| `ai_logs/`          | AI日志目录 | AI 日志主说明、索引与按月归档的更改/分析记录                               |
-| `AI_EDIT_LOG.md`    | 迁移入口   | 旧单文件入口，指向 `ai_logs/AI_LOGS_MAIN.md` 与 `ai_logs/index.md`         |
+| `AI_EDIT_LOG.md`    | 修改记录   | 通过 AI 修改的记录日志（供之后进行迭代修改的参考）                         |
 | `AI代码准则.md`     | 代码规范   | 供 AI 修改代码时参考的规范准则（供之后进行迭代修改的参考）                     |
-
-## AI 日志体系（ai_logs）
-
-- 规范主文件：`ai_logs/AI_LOGS_MAIN.md`
-- 索引文件：`ai_logs/index.md`（最新在上）
-- 记录归档：
-  - `ai_logs/change/YYYY-MM/*.md`：已落地或将落地的工程变更
-  - `ai_logs/analysis/YYYY-MM/*.md`：未落地的分析、设计、讨论与建议
-- 所有记录（更改/分析）都需包含来源信息：`来源类型（提问/处理）` 与 `来源说明`
 
 ## AI/开发者阅读顺序（建议）
 
-1. `ai_logs/AI_LOGS_MAIN.md` 与 `ai_logs/index.md`：先理解日志规范与最近更改/分析结论。
-2. `scripts/run/run_model.py`：确认训练入口参数与调用方式。
-3. `libcity/pipeline.py`：理解训练/评估主流程。
-4. `libcity/config_parser.py` 与 `libcity/common/`：理解配置与执行器。
-5. `libcity/data/`：理解数据加载、切分、特征构建。
-6. `libcity/models/`：定位具体模型实现。
+1. `scripts/run/run_model.py`：确认训练入口参数与调用方式。
+2. `libcity/pipeline.py`：理解训练/评估主流程。
+3. `libcity/config_parser.py` 与 `libcity/common/`：理解配置与执行器。
+4. `libcity/data/`：理解数据加载、切分、特征构建。
+5. `libcity/models/`：定位具体模型实现。
 
 ## 目录内说明文件规范（用于后续逐层补充）
 

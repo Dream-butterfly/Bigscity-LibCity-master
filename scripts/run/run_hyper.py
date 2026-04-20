@@ -34,7 +34,7 @@ if __name__ == '__main__':
                         help='whether re-train model if the model is \
                              trained before')
     parser.add_argument('--params_file', type=str,
-                        default='hyper_example.txt', help='the file which specify the \
+                        default=str(Path(__file__).resolve().with_name('hyper_example.txt')), help='the file which specify the \
                              hyper-parameters and ranges to be adjusted')
     parser.add_argument('--hyper_algo', type=str,
                         default='grid_search', help='hyper-parameters search algorithm: grid_search, random_search, tpe')
