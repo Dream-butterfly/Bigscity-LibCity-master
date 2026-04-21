@@ -624,6 +624,9 @@ class NewDiffusion(AbstractTrafficStateModel):
         self.fuzzy_graph_num_sets = config.get("fuzzy_graph_num_sets", 3)
         self.fuzzy_graph_sigma_init = config.get("fuzzy_graph_sigma_init", 0.7)
         self.physics_loss_weight = config.get("physics_loss_weight", 0.05)
+        self.physics_warmup_steps = int(max(0, config.get("physics_warmup_steps", 0)))
+        self.physics_warmup_start_ratio = float(config.get("physics_warmup_start_ratio", 0.2))
+        self.physics_warmup_mode = str(config.get("physics_warmup_mode", "linear")).lower()
         self.flow_conservation_coeff = config.get("flow_conservation_coeff", 1.0)
         self.physics_channel_idx = config.get("physics_channel_idx", 0)
         self.use_fuzzy_conservation = config.get("use_fuzzy_conservation", True)
@@ -638,6 +641,10 @@ class NewDiffusion(AbstractTrafficStateModel):
             raise ValueError(f"Unsupported sampling_method: {self.sampling_method}")
         if self.physics_loss_weight < 0:
             raise ValueError("physics_loss_weight must be >= 0.")
+        if not 0.0 <= self.physics_warmup_start_ratio <= 1.0:
+            raise ValueError("physics_warmup_start_ratio must be in [0, 1].")
+        if self.physics_warmup_mode not in {"linear", "cosine"}:
+            raise ValueError("physics_warmup_mode must be either `linear` or `cosine`.")
         if self.physics_channel_idx < 0:
             raise ValueError("physics_channel_idx must be >= 0.")
         if self.physics_channel_idx >= self.output_dim:
@@ -696,6 +703,22 @@ class NewDiffusion(AbstractTrafficStateModel):
             beta_start=self.beta_start,
             beta_end=self.beta_end,
         )
+        self._train_step_count = 0
+        self._physics_warmup_start_logged = False
+        self._physics_warmup_end_logged = False
+
+    def _get_effective_physics_weight(self):
+        """Gradually ramp up physics loss weight to stabilize early-stage training."""
+        if self.physics_loss_weight <= 0:
+            return 0.0
+        if self.physics_warmup_steps <= 0:
+            return float(self.physics_loss_weight)
+
+        progress = min(1.0, self._train_step_count / max(self.physics_warmup_steps, 1))
+        if self.physics_warmup_mode == "cosine":
+            progress = 0.5 * (1.0 - math.cos(math.pi * progress))
+        scale = self.physics_warmup_start_ratio + (1.0 - self.physics_warmup_start_ratio) * progress
+        return float(self.physics_loss_weight) * scale
 
     def encode_condition(self, history_sequence):
         """Encode historical traffic into condition feature H."""
@@ -708,6 +731,8 @@ class NewDiffusion(AbstractTrafficStateModel):
 
     def calculate_loss(self, batch):
         """Compute diffusion objective E[||epsilon - epsilon_theta||^2]."""
+        if self.training:
+            self._train_step_count += 1
         history_sequence = batch["X"]
         future_sequence = batch["y"][..., : self.output_dim]
         condition_features = self.encode_condition(history_sequence)
@@ -717,7 +742,20 @@ class NewDiffusion(AbstractTrafficStateModel):
         noisy_future, true_noise = self.diffusion_scheduler.add_noise(future_sequence, timesteps)
 
         adjacency_matrix = self.adjacency_matrix.to(history_sequence.device)
-        need_physics = self.physics_loss_weight > 0
+        effective_physics_weight = self._get_effective_physics_weight()
+        need_physics = effective_physics_weight > 0
+        if self.training and self.physics_warmup_steps > 0:
+            if not self._physics_warmup_start_logged:
+                self._logger.info(
+                    "Enable physics warmup: steps=%d start_ratio=%.3f mode=%s.",
+                    self.physics_warmup_steps,
+                    self.physics_warmup_start_ratio,
+                    self.physics_warmup_mode,
+                )
+                self._physics_warmup_start_logged = True
+            if self._train_step_count >= self.physics_warmup_steps and not self._physics_warmup_end_logged:
+                self._logger.info("Physics warmup reached full weight at step=%d.", self._train_step_count)
+                self._physics_warmup_end_logged = True
         if need_physics:
             predicted_noise, adaptive_adjacency = self.noise_predictor(
                 noisy_future, timesteps, condition_features, adjacency_matrix, return_last_adjacency=True
@@ -734,7 +772,7 @@ class NewDiffusion(AbstractTrafficStateModel):
             noisy_future, timesteps, predicted_noise
         )
         conservation_loss = self._traffic_conservation_loss(predicted_future, adaptive_adjacency)
-        return diffusion_loss + self.physics_loss_weight * conservation_loss
+        return diffusion_loss + effective_physics_weight * conservation_loss
 
     def _traffic_conservation_loss(self, future_sequence, adjacency_matrix):
         """Penalize mismatch between temporal state change and graph net-flow."""
