@@ -24,6 +24,7 @@
 4. 一些无状态辅助逻辑已下沉到 `utils/`，减少 `model.py` 的长度与重复。
 5. 已加入物理损失预热机制（`physics_warmup_*`），用于降低早期训练震荡风险。
 6. 已做第二轮推理降耗：默认 `num_sampling_steps=50`、`num_prediction_samples=2`，并在采样阶段引入时间步调度缓存与并行多样本采样，减少推理 wall-clock 开销。
+7. 已做第三轮容量缩放：默认 `hidden_dim=96`、`denoiser_layers=3`、`ffn_hidden_dim=192`、`adaptive_graph_topk=12`，在不改核心结构的前提下降低训练/推理计算与显存压力。
 
 ## 输入/输出
 
