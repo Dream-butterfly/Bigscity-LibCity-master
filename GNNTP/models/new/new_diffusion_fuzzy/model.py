@@ -610,7 +610,7 @@ class NewDiffusion(AbstractTrafficStateModel):
         self.num_sampling_steps = max(1, min(
             config.get("num_sampling_steps", self.diffusion_steps), self.diffusion_steps
         ))
-        self.num_prediction_samples = config.get("num_prediction_samples", 1)
+        self.num_prediction_samples = int(config.get("num_prediction_samples", 1))
         self.sampling_method = config.get("sampling_method", "ddpm").lower()
         self.ddim_eta = config.get("ddim_eta", 0.0)
         self.use_spatiotemporal_attention = config.get("use_spatiotemporal_attention", True)
@@ -639,6 +639,8 @@ class NewDiffusion(AbstractTrafficStateModel):
         self.output_dim = data_feature.get("output_dim", 1)
         if self.sampling_method not in {"ddpm", "ddim"}:
             raise ValueError(f"Unsupported sampling_method: {self.sampling_method}")
+        if self.num_prediction_samples < 1:
+            raise ValueError("num_prediction_samples must be >= 1.")
         if self.physics_loss_weight < 0:
             raise ValueError("physics_loss_weight must be >= 0.")
         if not 0.0 <= self.physics_warmup_start_ratio <= 1.0:
@@ -706,6 +708,7 @@ class NewDiffusion(AbstractTrafficStateModel):
         self._train_step_count = 0
         self._physics_warmup_start_logged = False
         self._physics_warmup_end_logged = False
+        self._sampling_schedule_cache = {}
 
     def _get_effective_physics_weight(self):
         """Gradually ramp up physics loss weight to stabilize early-stage training."""
@@ -831,17 +834,30 @@ class NewDiffusion(AbstractTrafficStateModel):
                 )
         return future_state
 
+    def _get_sampling_schedule(self, device):
+        """Cache reverse diffusion schedule per device to avoid repeated tensor rebuild."""
+        cache_key = str(device)
+        if cache_key not in self._sampling_schedule_cache:
+            self._sampling_schedule_cache[cache_key] = torch.linspace(
+                self.diffusion_steps - 1,
+                0,
+                self.num_sampling_steps,
+                device=device,
+            ).long()
+        return self._sampling_schedule_cache[cache_key]
+
     def sample(self, history_sequence, num_samples=1, return_all=False):
         """Sample future trajectories for uncertainty-aware prediction."""
+        num_samples = int(num_samples)
+        if num_samples < 1:
+            raise ValueError("num_samples must be >= 1.")
         condition_features = self.encode_condition(history_sequence)
-        sampling_schedule = torch.linspace(
-            self.diffusion_steps - 1,
-            0,
-            self.num_sampling_steps,
-            device=condition_features.device,
-        ).long()
-        sampled_futures = [self._sample_once(condition_features, sampling_schedule) for _ in range(num_samples)]
-        sampled_futures = torch.stack(sampled_futures, dim=0)
+        sampling_schedule = self._get_sampling_schedule(condition_features.device)
+        batch_size = condition_features.shape[0]
+        expanded_condition = condition_features.repeat_interleave(num_samples, dim=0)
+        sampled_futures = self._sample_once(expanded_condition, sampling_schedule).view(
+            num_samples, batch_size, self.output_window, self.num_nodes, self.output_dim
+        )
         if return_all:
             return sampled_futures
         return sampled_futures.mean(dim=0)
