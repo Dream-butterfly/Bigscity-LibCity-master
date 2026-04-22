@@ -11,6 +11,7 @@
 | `factory.py` | 根据配置构建具体数据集对象 |
 | `registry.py` | 数据集名称到类实现的注册与定位 |
 | `dataloader.py` | 批加载逻辑封装 |
+| `artifact_io.py` | 数据工件（artifact）读写、签名与严格校验 |
 | `dataset/` | 具体数据集实现（交通状态、交通流等） |
 | `core/` | 底层数据结构（Batch、ListDataset） |
 

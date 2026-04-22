@@ -8,6 +8,10 @@
 - 仅数据准备与缓存构建：`scripts/run/run_data_prep.py`
 - 超参数搜索：`scripts/run/run_hyper.py`
 - 断点续训与评估：`scripts/run/run_resume.py`
+- 数据工件构建（解耦链路）：`scripts/run/run_data_artifact.py`
+- 基于数据工件训练（解耦链路）：`scripts/run/run_train_artifact.py`
+- 基于数据工件调参（解耦链路）：`scripts/run/run_hyper_artifact.py`
+- 基于数据工件续训（解耦链路）：`scripts/run/run_resume_artifact.py`
 - Web 控制台：`run_web.py -> web/train_web_fastapi.py`
 
 ## 环境要求
@@ -38,7 +42,21 @@ uv run python scripts/run/run_hyper.py --task traffic_state_pred --model STGCN -
 # 2.4) 续训并评估
 uv run python scripts/run/run_resume.py --task traffic_state_pred --model STGCN --dataset PEMSD4
 
+# 2.5) 构建数据工件（推荐的新链路）
+uv run python scripts/run/run_data_artifact.py --task traffic_state_pred --model STGCN --dataset PEMSD4
+
+# 2.6) 仅消费数据工件进行训练（推荐的新链路）
+uv run python scripts/run/run_train_artifact.py --task traffic_state_pred --model STGCN --dataset PEMSD4 --artifact_id <artifact_id>
+
+# 2.7) 仅消费数据工件进行调参（推荐的新链路）
+uv run python scripts/run/run_hyper_artifact.py --task traffic_state_pred --model STGCN --dataset PEMSD4 --artifact_id <artifact_id> --params_file scripts/run/hyper_example.txt
+
+# 2.8) 基于 run_id + 数据工件续训（推荐的新链路）
+uv run python scripts/run/run_resume_artifact.py --run_id <run_id> --artifact_id <artifact_id> --epoch 10 --max_epoch 20
+
 ```
+
+> 兼容说明：`run_model.py/run_data_prep.py/run_hyper.py/run_resume.py` 旧链路仍可继续使用；新链路脚本独立，不影响旧命令。
 
 ## 目录说明（当前结构）
 
@@ -59,6 +77,7 @@ uv run python scripts/run/run_resume.py --task traffic_state_pred --model STGCN 
 
 - 数据放在 `resource_data/`，目录名需与 `--dataset` 对应。
 - 数据缓存默认写入 `cache/dataset_cache/`。
+- 解耦链路的数据工件默认写入 `cache/data_artifacts/<artifact_id>/`。
 - 训练产物默认写入 `outputs/<exp_id>/`（日志、模型、评估缓存）。
 
 ## AI 日志体系

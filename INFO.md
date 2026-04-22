@@ -27,6 +27,18 @@ uv run python scripts/run/run_hyper.py --task traffic_state_pred --model STGCN -
 
 # 6) 命令行：断点续训并评估
 uv run python scripts/run/run_resume.py --task traffic_state_pred --model STGCN --dataset METR_LA
+
+# 7) 命令行：构建数据工件（解耦链路）
+uv run python scripts/run/run_data_artifact.py --task traffic_state_pred --model STGCN --dataset METR_LA
+
+# 8) 命令行：仅消费数据工件训练（解耦链路）
+uv run python scripts/run/run_train_artifact.py --task traffic_state_pred --model STGCN --dataset METR_LA --artifact_id <artifact_id>
+
+# 9) 命令行：仅消费数据工件调参（解耦链路）
+uv run python scripts/run/run_hyper_artifact.py --task traffic_state_pred --model STGCN --dataset METR_LA --artifact_id <artifact_id> --params_file scripts/run/hyper_example.txt
+
+# 10) 命令行：基于 run_id + 数据工件续训（解耦链路）
+uv run python scripts/run/run_resume_artifact.py --run_id <run_id> --artifact_id <artifact_id> --epoch 10 --max_epoch 20
 ```
 
 ## 常用入口与职责（按工作流）
@@ -37,6 +49,10 @@ uv run python scripts/run/run_resume.py --task traffic_state_pred --model STGCN 
 | 训练评估 | `scripts/run/run_model.py` | 训练模型并在测试集评估 | `outputs/<exp_id>/` |
 | 调参搜索 | `scripts/run/run_hyper.py` | 多组参数试验并记录最优结果 | `outputs/<exp_id>/artifacts/hyper.result` |
 | 断点续训 | `scripts/run/run_resume.py` | 基于现有训练状态继续训练并评估 | `outputs/<exp_id>/` |
+| 数据工件构建（解耦） | `scripts/run/run_data_artifact.py` | 完整数据处理并写入数据工件 | `cache/data_artifacts/<artifact_id>/` |
+| 数据工件训练（解耦） | `scripts/run/run_train_artifact.py` | 仅读取数据工件训练与评估 | `outputs/<exp_id>/` |
+| 数据工件调参（解耦） | `scripts/run/run_hyper_artifact.py` | 基于固定数据工件执行超参数搜索 | `outputs/<exp_id>/artifacts/hyper.result` |
+| 数据工件续训（解耦） | `scripts/run/run_resume_artifact.py` | 基于 `run_id` 和数据工件继续训练 | `outputs/<run_id>/` |
 | Web 控制台 | `run_web.py -> web/train_web_fastapi.py` | 提供可视化训练控制与命令触发 | Web 页面与对应实验输出 |
 
 ## 关键参数约定（CLI）
@@ -72,6 +88,7 @@ uv run python scripts/run/run_resume.py --task traffic_state_pred --model STGCN 
 ## 运行输出与落盘约定
 
 - 数据缓存默认在：`cache/dataset_cache/`
+- 解耦链路数据工件默认在：`cache/data_artifacts/`
 - 实验输出默认在：`outputs/<exp_id>/`
 - 常见子目录：
   - `outputs/<exp_id>/logs/`：运行日志（含 `run.log`）
