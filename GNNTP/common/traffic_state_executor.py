@@ -122,7 +122,7 @@ class TrafficStateExecutor(AbstractExecutor):
             cache_name(str): 保存的文件名
         """
         self._logger.info("Loaded model at " + cache_name)
-        model_state, optimizer_state = torch.load(cache_name)
+        model_state, optimizer_state = torch.load(cache_name, map_location=self.device)
         self.model.load_state_dict(model_state)
         self.optimizer.load_state_dict(optimizer_state)
 

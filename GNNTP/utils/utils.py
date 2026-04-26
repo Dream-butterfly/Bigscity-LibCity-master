@@ -6,11 +6,7 @@ import sys
 import numpy as np
 import random
 import torch
-
-
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUTPUT_ROOT = os.path.join(PROJECT_ROOT, "outputs")
-CACHE_ROOT = os.path.join(PROJECT_ROOT, "cache")
+from GNNTP.utils.paths import CACHE_ROOT, OUTPUT_ROOT
 
 
 def _slugify(value):
@@ -31,13 +27,13 @@ def ensure_run_id(config):
 
 
 def get_output_root():
-    ensure_dir(OUTPUT_ROOT)
-    return OUTPUT_ROOT
+    ensure_dir(str(OUTPUT_ROOT))
+    return str(OUTPUT_ROOT)
 
 
 def get_cache_root():
-    ensure_dir(CACHE_ROOT)
-    return CACHE_ROOT
+    ensure_dir(str(CACHE_ROOT))
+    return str(CACHE_ROOT)
 
 
 def get_cache_subdir(*parts):
@@ -156,19 +152,21 @@ def get_logger(config, name=None):
     logger.setLevel(level)
 
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    file_handler = logging.FileHandler(logfilepath)
-    file_handler.setFormatter(formatter)
 
     console_formatter = logging.Formatter(
         '%(asctime)s - %(levelname)s - %(message)s')
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(console_formatter)
-
-    if not any(isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", None) == os.path.abspath(logfilepath)
-               for handler in logger.handlers):
-        logger.addHandler(file_handler)
+    for handler in list(logger.handlers):
+        if isinstance(handler, logging.FileHandler) and getattr(handler, "_gnntp_managed", False):
+            logger.removeHandler(handler)
+            handler.close()
+    file_handler = logging.FileHandler(logfilepath)
+    file_handler.setFormatter(formatter)
+    file_handler._gnntp_managed = True
+    logger.addHandler(file_handler)
     if not any(isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler)
                for handler in logger.handlers):
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
 
     logger.info('Log directory: %s', log_dir)

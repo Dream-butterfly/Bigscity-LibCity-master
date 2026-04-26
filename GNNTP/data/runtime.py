@@ -1,0 +1,96 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from GNNTP.data.artifact_io import (
+    deserialize_scaler,
+    load_data_artifact,
+    validate_artifact_for_config,
+)
+from GNNTP.data.dataloader import generate_dataloader
+from GNNTP.data.factory import get_dataset
+from GNNTP.models.locator import get_model_metadata
+
+
+@dataclass
+class DataRuntime:
+    train_loader: Any
+    valid_loader: Any
+    test_loader: Any
+    data_feature: dict[str, Any]
+    feature_name: dict[str, Any]
+    source: str
+    dataset: Any | None = None
+    artifact_meta: dict[str, Any] = field(default_factory=dict)
+    artifact_dir: Path | None = None
+    warnings: list[str] = field(default_factory=list)
+
+
+def build_dataset_runtime(config: Any) -> DataRuntime:
+    dataset = get_dataset(config)
+    train_loader, valid_loader, test_loader = dataset.get_data()
+    data_feature = dataset.get_data_feature()
+    feature_name = dict(getattr(dataset, "feature_name", {"X": "float", "y": "float"}))
+    return DataRuntime(
+        train_loader=train_loader,
+        valid_loader=valid_loader,
+        test_loader=test_loader,
+        data_feature=dict(data_feature),
+        feature_name=feature_name,
+        dataset=dataset,
+        source="dataset",
+    )
+
+
+def build_artifact_runtime(
+    config: Any,
+    *,
+    task: str,
+    model_name: str,
+    artifact_id: str | None = None,
+    artifact_path: str | None = None,
+    force_reuse: bool = False,
+) -> DataRuntime:
+    bundle = load_data_artifact(artifact_id=artifact_id, artifact_path=artifact_path)
+    artifact_meta = dict(bundle["meta"])
+    model_metadata = get_model_metadata(task, model_name)
+    warnings = validate_artifact_for_config(
+        artifact_meta=artifact_meta,
+        config_like=config,
+        model_dataset_class=str(model_metadata.get("dataset_class", "")),
+        force_reuse=bool(force_reuse),
+    )
+
+    feature_name = artifact_meta.get("feature_name", {"X": "float", "y": "float"})
+    if not isinstance(feature_name, dict):
+        feature_name = {"X": "float", "y": "float"}
+
+    train_loader, valid_loader, test_loader = generate_dataloader(
+        bundle["train"],
+        bundle["valid"],
+        bundle["test"],
+        feature_name=feature_name,
+        batch_size=int(config.get("batch_size", 64)),
+        num_workers=int(config.get("num_workers", 0)),
+        shuffle=True,
+        pad_with_last_sample=bool(config.get("pad_with_last_sample", True)),
+    )
+
+    data_feature = dict(bundle["data_feature"])
+    data_feature["scaler"] = deserialize_scaler(artifact_meta.get("scaler"))
+    data_feature["ext_scaler"] = deserialize_scaler(artifact_meta.get("ext_scaler"))
+    data_feature["num_batches"] = len(train_loader)
+
+    return DataRuntime(
+        train_loader=train_loader,
+        valid_loader=valid_loader,
+        test_loader=test_loader,
+        data_feature=data_feature,
+        feature_name=dict(feature_name),
+        source="artifact",
+        artifact_meta=artifact_meta,
+        artifact_dir=Path(bundle["artifact_dir"]),
+        warnings=warnings,
+    )

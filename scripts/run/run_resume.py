@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from GNNTP.common import ConfigParser
-from GNNTP.data import get_dataset
+from GNNTP.data import build_dataset_runtime
 from GNNTP.utils import (
     add_general_args,
     ensure_run_id,
@@ -47,20 +47,18 @@ def run_resume(task=None, model_name=None, dataset_name=None, config_file=None, 
     seed = config.get("seed", 0)
     set_random_seed(seed)
 
-    dataset = get_dataset(config)
-    train_data, valid_data, test_data = dataset.get_data()
-    data_feature = dataset.get_data_feature()
+    runtime = build_dataset_runtime(config)
 
-    model = get_model(config, data_feature)
-    executor = get_executor(config, model, data_feature)
-    executor.train(train_data, valid_data)
+    model = get_model(config, runtime.data_feature)
+    executor = get_executor(config, model, runtime.data_feature)
+    executor.train(runtime.train_loader, runtime.valid_loader)
     if saved_model:
         model_cache_file = os.path.join(
             get_run_subdir(exp_id, "model_cache"),
             "{}_{}.m".format(model_name, dataset_name),
         )
         executor.save_model(model_cache_file)
-    executor.evaluate(test_data)
+    executor.evaluate(runtime.test_loader)
 
 
 if __name__ == "__main__":

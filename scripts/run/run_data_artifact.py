@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from GNNTP.common import ConfigParser
-from GNNTP.data import get_dataset
+from GNNTP.data import build_dataset_runtime
 from GNNTP.data.artifact_io import (
     build_data_artifact_id,
     build_data_signature_payload,
@@ -63,9 +63,12 @@ def run_data_artifact(
     # 数据工件阶段禁用补齐，避免引入 batch_size 维度耦合。
     config["pad_with_last_sample"] = False
 
-    dataset = get_dataset(config)
-    train_loader, valid_loader, test_loader = dataset.get_data()
-    data_feature = dataset.get_data_feature()
+    runtime = build_dataset_runtime(config)
+    dataset = runtime.dataset
+    train_loader = runtime.train_loader
+    valid_loader = runtime.valid_loader
+    test_loader = runtime.test_loader
+    data_feature = runtime.data_feature
 
     train_x, train_y = extract_xy_arrays_from_loader(train_loader, "train")
     valid_x, valid_y = extract_xy_arrays_from_loader(valid_loader, "valid")

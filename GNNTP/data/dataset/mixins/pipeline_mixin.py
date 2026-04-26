@@ -17,6 +17,29 @@ from GNNTP.utils import (
 
 
 class TrafficStatePipelineMixin:
+    def _load_or_prepare_raw_splits(self):
+        if self.data is None:
+            if self.cache_dataset and os.path.exists(self.cache_file_name):
+                x_train, y_train, x_val, y_val, x_test, y_test = self._load_cache_train_val_test()
+            else:
+                x_train, y_train, x_val, y_val, x_test, y_test = self._generate_train_val_test()
+            self.data = {
+                "x_train": np.array(x_train, copy=True),
+                "y_train": np.array(y_train, copy=True),
+                "x_val": np.array(x_val, copy=True),
+                "y_val": np.array(y_val, copy=True),
+                "x_test": np.array(x_test, copy=True),
+                "y_test": np.array(y_test, copy=True),
+            }
+        return (
+            np.array(self.data["x_train"], copy=True),
+            np.array(self.data["y_train"], copy=True),
+            np.array(self.data["x_val"], copy=True),
+            np.array(self.data["y_val"], copy=True),
+            np.array(self.data["x_test"], copy=True),
+            np.array(self.data["y_test"], copy=True),
+        )
+
     def _generate_input_data(self, df):
         num_samples = df.shape[0]
         input_w = self.input_window
@@ -269,13 +292,7 @@ class TrafficStatePipelineMixin:
                 test_dataloader: Dataloader composed of Batch (class)
         """
         # 加载数据集
-        x_train, y_train, x_val, y_val, x_test, y_test = [], [], [], [], [], []
-        if self.data is None:
-            self.data = {}
-            if self.cache_dataset and os.path.exists(self.cache_file_name):
-                x_train, y_train, x_val, y_val, x_test, y_test = self._load_cache_train_val_test()
-            else:
-                x_train, y_train, x_val, y_val, x_test, y_test = self._generate_train_val_test()
+        x_train, y_train, x_val, y_val, x_test, y_test = self._load_or_prepare_raw_splits()
         # 在测试集上添加随机扰动
         if self.robustness_test:
             x_test = self._add_noise(x_test)

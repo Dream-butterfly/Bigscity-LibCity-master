@@ -1050,7 +1050,7 @@ async function startResumeTrain() {
     }
     byId('resume_epoch').value = String(resumeEpoch);
     byId('resume_max_epoch').value = String(targetMaxEpoch);
-    const expId = String(run.run_id || '').split('__')[0];
+    const targetRunId = String(run.run_id || '').trim();
     const body = {
         task: run.task,
         model: run.model,
@@ -1059,7 +1059,7 @@ async function startResumeTrain() {
         saved_model: byId('resume_saved_model').value,
         train: true,
         extra_args: byId('resume_extra_args').value || '',
-        cli_options: {exp_id: expId},
+        cli_options: {exp_id: targetRunId},
         config: {
             epoch: resumeEpoch,
             max_epoch: targetMaxEpoch,

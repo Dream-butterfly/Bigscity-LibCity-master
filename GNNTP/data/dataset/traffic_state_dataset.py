@@ -12,6 +12,7 @@ from GNNTP.data.dataset.mixins import (
     TrafficStateTemporalLoaderMixin,
 )
 from GNNTP.utils import ensure_dir, get_dataset_cache_dir
+from GNNTP.utils.paths import RESOURCE_DATA_ROOT
 
 
 class TrafficStateDataset(
@@ -79,7 +80,7 @@ class TrafficStateDataset(
         )
         self.cache_file_folder = get_dataset_cache_dir()
         ensure_dir(self.cache_file_folder)
-        self.data_path = "./resource_data/" + self.dataset + "/"
+        self.data_path = str(RESOURCE_DATA_ROOT / self.dataset) + os.sep
         if not os.path.exists(self.data_path):
             raise ValueError(
                 "Dataset {} not exist! Please ensure the path "

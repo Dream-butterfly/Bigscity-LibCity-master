@@ -6,6 +6,7 @@ from GNNTP.models.locator import get_model_metadata, get_model_resource_path, ha
 from GNNTP.data.registry import get_dataset_class
 from GNNTP.common.registry_evaluator import get_evaluator_class
 from GNNTP.common.registry_executor import get_executor_class
+from GNNTP.utils.paths import PROJECT_ROOT, RESOURCE_DATA_ROOT
 
 
 class ConfigParser(object):
@@ -60,8 +61,9 @@ class ConfigParser(object):
     def _parse_config_file(self, config_file):
         if config_file is not None:
             # TODO: 对 config file 的格式进行检查
-            if os.path.exists('./{}.json'.format(config_file)):
-                with open('./{}.json'.format(config_file), 'r') as f:
+            config_path = PROJECT_ROOT / f"{config_file}.json"
+            if config_path.exists():
+                with config_path.open('r', encoding="utf-8") as f:
                     x = json.load(f)
                     for key in x:
                         if key not in self.config:
@@ -100,8 +102,8 @@ class ConfigParser(object):
         # 加载数据集config.json
         # with open('./resource_data/{}/config.json'.format(self.config['dataset']), 'r') as f:
         # 不要使用硬编码，而是通过项目根目录下的raw_data
-        dataset_config_path = os.path.join('resource_data', self.config['dataset'], 'config.json')
-        with open(dataset_config_path, 'r') as f:
+        dataset_config_path = RESOURCE_DATA_ROOT / self.config['dataset'] / 'config.json'
+        with dataset_config_path.open('r', encoding="utf-8") as f:
             x = json.load(f)
             for key in x:
                 if key == 'info':

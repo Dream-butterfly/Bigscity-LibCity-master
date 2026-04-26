@@ -10,6 +10,7 @@ from GNNTP.utils.argument_list import general_arguments, str2bool, \
 from GNNTP.utils.normalization import Scaler, NoneScaler, NormalScaler, \
     StandardScaler, MinMax01Scaler, MinMax11Scaler, LogScaler
 from GNNTP.utils.disturbance import zero_noise, gaussian_noise
+from GNNTP.utils.paths import PROJECT_ROOT, RESOURCE_DATA_ROOT
 
 __all__ = [
     "get_executor",
@@ -53,4 +54,6 @@ __all__ = [
     "add_hyper_args",
     "zero_noise",
     "gaussian_noise",
+    "PROJECT_ROOT",
+    "RESOURCE_DATA_ROOT",
 ]

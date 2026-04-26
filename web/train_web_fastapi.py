@@ -45,6 +45,7 @@ else:
         build_model_param_pie_option,
         build_prediction_line_option,
     )
+from GNNTP.common import ConfigParser
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -55,15 +56,15 @@ MODELS_ROOT = PROJECT_ROOT / "GNNTP" / "models"
 RESOURCE_DATA_ROOT = PROJECT_ROOT / "resource_data"
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 RUN_SCRIPTS_DIR = PROJECT_ROOT / "scripts" / "run"
-RUN_MODEL_ENTRY = str(RUN_SCRIPTS_DIR / "run_model.py")
-RUN_RESUME_ENTRY = str(RUN_SCRIPTS_DIR / "run_resume.py")
-RUN_DATA_PREP_ENTRY = str(RUN_SCRIPTS_DIR / "run_data_prep.py")
+RUN_TRAIN_ARTIFACT_ENTRY = str(RUN_SCRIPTS_DIR / "run_train_artifact.py")
+RUN_RESUME_ARTIFACT_ENTRY = str(RUN_SCRIPTS_DIR / "run_resume_artifact.py")
+RUN_DATA_PREP_ENTRY = str(RUN_SCRIPTS_DIR / "run_data_artifact.py")
 DATA_VERSIONS_DIR = OUTPUTS_DIR / "data_versions"
 ACTIVE_DATA_VERSION_FILE = DATA_VERSIONS_DIR / "active_version.json"
 TRAIN_HISTORY_FILE = OUTPUTS_DIR / "web_train_history.json"
 TRAIN_HISTORY_MAX_ITEMS = 2000
 TRAIN_HISTORY_LOCK = threading.Lock()
-EXP_ID_RE = re.compile(r"exp_id=([A-Za-z0-9_.:-]+)")
+RUN_ID_RE = re.compile(r"(?:exp_id|run_id)=([A-Za-z0-9_.:-]+)")
 LOG_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2} [\d:,]+ - (?:INFO|WARNING|ERROR|DEBUG) - (.*)$")
 MODEL_START_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\($")
 PARAM_LINE_RE = re.compile(r"^([A-Za-z0-9_.]+)\s+torch\.Size\(\[([0-9,\s]+)\]\)")
@@ -457,60 +458,24 @@ def _load_json_if_exists(path: Path) -> dict[str, Any]:
     return obj
 
 
-def _build_default_config_without_config_parser(task: str, model: str, dataset: str) -> dict[str, Any]:
-    manifest, manifest_path = _get_manifest_meta(task, model)
-    model_dir = manifest_path.parent
+def _build_default_config(task: str, model: str, dataset: str) -> dict[str, Any]:
+    config = ConfigParser(task, model, dataset, saved_model=True, train=True, other_args={"max_epoch": 10})
+    return dict(config.config)
 
-    dataset_class = manifest.get("dataset_class")
-    executor = manifest.get("executor")
-    evaluator = manifest.get("evaluator")
-    if not dataset_class or not executor or not evaluator:
-        raise ValueError(f"Manifest missing dataset/executor/evaluator for task={task}, model={model}")
 
-    merged: dict[str, Any] = {
-        "task": task,
-        "model": model,
-        "dataset": dataset,
-        "saved_model": True,
-        "train": True,
-        "dataset_class": dataset_class,
-        "executor": executor,
-        "evaluator": evaluator,
+def _get_data_version_artifact_meta(data_meta: dict[str, Any]) -> dict[str, Any]:
+    script_meta = data_meta.get("script_meta", {})
+    if not isinstance(script_meta, dict):
+        script_meta = {}
+    artifact_id = str(script_meta.get("artifact_id", "") or "").strip()
+    artifact_dir = str(script_meta.get("artifact_dir", "") or "").strip()
+    if not artifact_id:
+        raise ValueError("Data version is missing bound artifact_id.")
+    return {
+        "artifact_id": artifact_id,
+        "artifact_dir": artifact_dir,
+        "script_meta": script_meta,
     }
-
-    # Follow ConfigParser's default merge priority:
-    # model config -> dataset config -> executor config -> evaluator config -> resource_data config
-    merged.update(_load_json_if_exists(model_dir / "config.json"))
-
-    dataset_cfg = _load_json_if_exists(PROJECT_ROOT / "GNNTP" / "data" / "dataset" / f"{dataset_class}.json")
-    merged.update(dataset_cfg)
-
-    executor_cfg = _load_json_if_exists(model_dir / "executor.json")
-    if not executor_cfg:
-        executor_cfg = _load_json_if_exists(PROJECT_ROOT / "GNNTP" / "common" / f"{executor}.json")
-    merged.update(executor_cfg)
-
-    evaluator_cfg = _load_json_if_exists(PROJECT_ROOT / "GNNTP" / "common" / f"{evaluator}.json")
-    merged.update(evaluator_cfg)
-
-    dataset_config_path = RESOURCE_DATA_ROOT / dataset / "config.json"
-    if dataset_config_path.exists():
-        with dataset_config_path.open("r", encoding="utf-8") as f:
-            data_cfg = json.load(f)
-        if isinstance(data_cfg, dict):
-            for k, v in data_cfg.items():
-                if k == "info" and isinstance(v, dict):
-                    merged.update(v)
-                else:
-                    merged[k] = v
-
-    # Keep compatibility with original parser behavior.
-    if model.upper() in {"LSTM", "GRU", "RNN"}:
-        merged["rnn_type"] = model
-        merged["model"] = "RNN"
-    merged["max_epoch"] = 10
-
-    return merged
 
 
 def _find_run_dir(task: str, model: str, dataset: str, exp_id: str | None) -> Path | None:
@@ -1040,7 +1005,7 @@ class TrainState:
     loss_points: list[dict[str, Any]] = field(default_factory=list)
     saved_epochs: list[int] = field(default_factory=list)
     process: subprocess.Popen[str] | None = None
-    exp_id: str | None = None
+    run_id: str | None = None
     return_code: int | None = None
     error: str | None = None
     result: dict[str, Any] | None = None
@@ -1062,7 +1027,7 @@ class TrainState:
             self.loss_points = []
             self.saved_epochs = []
             self.process = None
-            self.exp_id = None
+            self.run_id = None
             self.return_code = None
             self.error = None
             self.result = None
@@ -1183,7 +1148,7 @@ class TrainState:
             self.loss_points = []
             self.saved_epochs = []
             self.process = None
-            self.exp_id = None
+            self.run_id = None
             self.return_code = None
             self.error = None
             self.result = None
@@ -1439,10 +1404,15 @@ def _run_training_background(
     train: bool,
     cli_options: dict[str, Any],
     extra_args: str,
-    entry_script: str = RUN_MODEL_ENTRY,
+    entry_script: str = RUN_TRAIN_ARTIFACT_ENTRY,
     history_record_id: str | None = None,
+    script_args: list[str] | None = None,
+    include_task_model_dataset: bool = True,
+    include_train_flag: bool = True,
+    expected_run_id: str | None = None,
 ) -> None:
     history_id = str(history_record_id or "").strip()
+    resolved_run_id = str(expected_run_id or cli_options.get("exp_id", "") or "").strip()
     runtime_config_path: Path | None = None
     try:
         effective_config = {}
@@ -1461,7 +1431,7 @@ def _run_training_background(
                     "model": model,
                     "dataset": dataset,
                     "status": "failed",
-                    "run_id": str(cli_options.get("exp_id", "")).strip(),
+                    "run_id": resolved_run_id,
                     "ended_at": time.time(),
                     "duration_sec": None,
                     "major_metrics": {},
@@ -1484,7 +1454,7 @@ def _run_training_background(
                     "model": model,
                     "dataset": dataset,
                     "status": "failed",
-                    "run_id": str(cli_options.get("exp_id", "")).strip(),
+                    "run_id": resolved_run_id,
                     "ended_at": time.time(),
                     "duration_sec": None,
                     "major_metrics": {},
@@ -1493,23 +1463,23 @@ def _run_training_background(
                 },
             )
         return
-    cmd = [
-        "uv",
-        "run",
-        entry_script,
-        "--task",
-        task,
-        "--model",
-        model,
-        "--dataset",
-        dataset,
-        "--config_file",
-        config_file,
-        "--saved_model",
-        str(saved_model).lower(),
-        "--train",
-        str(train).lower(),
-    ]
+    cmd = ["uv", "run", entry_script]
+    if include_task_model_dataset:
+        cmd.extend(
+            [
+                "--task",
+                task,
+                "--model",
+                model,
+                "--dataset",
+                dataset,
+            ]
+        )
+    cmd.extend(["--config_file", config_file, "--saved_model", str(saved_model).lower()])
+    if include_train_flag:
+        cmd.extend(["--train", str(train).lower()])
+    if script_args:
+        cmd.extend(script_args)
     for key in CLI_OPTION_KEYS:
         if key == "config_file":
             continue
@@ -1526,6 +1496,9 @@ def _run_training_background(
         cmd.extend(shlex.split(extra_args, posix=False))
 
     STATE.reset(cmd)
+    if resolved_run_id:
+        with STATE.lock:
+            STATE.run_id = resolved_run_id
     STATE.append_log("$ " + " ".join(cmd))
     if history_id:
         _upsert_train_history_item(
@@ -1535,7 +1508,7 @@ def _run_training_background(
                 "model": model,
                 "dataset": dataset,
                 "status": "running",
-                "run_id": str(cli_options.get("exp_id", "")).strip(),
+                "run_id": resolved_run_id,
                 "started_at": STATE.started_at,
                 "ended_at": None,
                 "duration_sec": None,
@@ -1584,10 +1557,10 @@ def _run_training_background(
     assert proc.stdout is not None
     for line in proc.stdout:
         STATE.append_log(line)
-        m = EXP_ID_RE.search(line)
+        m = RUN_ID_RE.search(line)
         if m:
             with STATE.lock:
-                STATE.exp_id = m.group(1)
+                STATE.run_id = m.group(1)
                 current_started_at = STATE.started_at
             if history_id:
                 _upsert_train_history_item(
@@ -1627,7 +1600,8 @@ def _run_training_background(
             return
         with STATE.lock:
             started_at = STATE.started_at
-        run_dir = _find_run_dir(task, model, dataset, STATE.exp_id)
+            finished_run_id = STATE.run_id
+        run_dir = _find_run_dir(task, model, dataset, finished_run_id)
         if run_dir is None:
             STATE.finish(code, "Training finished but output run directory was not found.", None)
             if history_id:
@@ -1902,7 +1876,7 @@ async def api_default_config(request: Request):
     model = str(body.get("model", "STGCN")).strip()
     dataset = str(body.get("dataset", "PEMSD4")).strip()
     try:
-        cfg = _build_default_config_without_config_parser(task=task, model=model, dataset=dataset)
+        cfg = _build_default_config(task=task, model=model, dataset=dataset)
         manifest, manifest_path = _get_manifest_meta(task, model)
         model_dir = manifest_path.parent
         executor = manifest.get("executor")
@@ -1933,6 +1907,10 @@ async def api_start(request: Request):
         data_meta, resolved_version_id = _resolve_data_version(data_version_id)
     except Exception as exc:
         return JSONResponse(status_code=400, content={"error": f"Invalid data_version_id: {exc}"})
+    try:
+        artifact_meta = _get_data_version_artifact_meta(data_meta)
+    except Exception as exc:
+        return JSONResponse(status_code=400, content={"error": f"Invalid prepared data binding: {exc}"})
     task = str(data_meta.get("task", body.get("task", "traffic_state_pred"))).strip() or "traffic_state_pred"
     model = str(data_meta.get("model", body.get("model", "STGCN"))).strip() or "STGCN"
     dataset = str(data_meta.get("dataset", body.get("dataset", "PEMSD4"))).strip() or "PEMSD4"
@@ -1988,7 +1966,22 @@ async def api_start(request: Request):
 
     t = threading.Thread(
         target=_run_training_background,
-        args=(task, model, dataset, config_payload, saved_model, train, cli_options, extra_args, RUN_MODEL_ENTRY, history_record_id),
+        args=(
+            task,
+            model,
+            dataset,
+            config_payload,
+            saved_model,
+            train,
+            cli_options,
+            extra_args,
+            RUN_TRAIN_ARTIFACT_ENTRY,
+            history_record_id,
+            ["--artifact_id", artifact_meta["artifact_id"]],
+            True,
+            True,
+            str(cli_options.get("exp_id", "")).strip(),
+        ),
         daemon=True,
     )
     t.start()
@@ -2007,6 +2000,10 @@ async def api_start_resume(request: Request):
         data_meta, resolved_version_id = _resolve_data_version(data_version_id)
     except Exception as exc:
         return JSONResponse(status_code=400, content={"error": f"Invalid data_version_id: {exc}"})
+    try:
+        artifact_meta = _get_data_version_artifact_meta(data_meta)
+    except Exception as exc:
+        return JSONResponse(status_code=400, content={"error": f"Invalid prepared data binding: {exc}"})
     task = str(data_meta.get("task", body.get("task", "traffic_state_pred"))).strip() or "traffic_state_pred"
     model = str(data_meta.get("model", body.get("model", "STGCN"))).strip() or "STGCN"
     dataset = str(data_meta.get("dataset", body.get("dataset", "PEMSD4"))).strip() or "PEMSD4"
@@ -2077,7 +2074,22 @@ async def api_start_resume(request: Request):
 
     t = threading.Thread(
         target=_run_training_background,
-        args=(task, model, dataset, config_payload, saved_model, True, cli_options, extra_args, RUN_RESUME_ENTRY, history_record_id),
+        args=(
+            task,
+            model,
+            dataset,
+            config_payload,
+            saved_model,
+            True,
+            cli_options,
+            extra_args,
+            RUN_RESUME_ARTIFACT_ENTRY,
+            history_record_id,
+            ["--run_id", exp_id, "--artifact_id", artifact_meta["artifact_id"]],
+            False,
+            False,
+            exp_id,
+        ),
         daemon=True,
     )
     t.start()
@@ -2161,7 +2173,7 @@ def api_status():
         return {
             "running": STATE.running,
             "command": STATE.command,
-            "exp_id": STATE.exp_id,
+            "exp_id": STATE.run_id,
             "return_code": STATE.return_code,
             "error": STATE.error,
             "result_ready": STATE.result is not None,

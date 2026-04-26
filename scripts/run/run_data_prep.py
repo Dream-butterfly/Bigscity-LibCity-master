@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from GNNTP.common import ConfigParser
-from GNNTP.data import get_dataset
+from GNNTP.data import build_dataset_runtime
 from GNNTP.utils import add_general_args, ensure_run_id, get_logger, set_random_seed, str2bool
 
 
@@ -28,18 +28,18 @@ def run_data_prep(task=None, model_name=None, dataset_name=None, config_file=Non
     )
     seed = config.get("seed", 0)
     set_random_seed(seed)
-    dataset = get_dataset(config)
-    train_data, valid_data, test_data = dataset.get_data()
-    data_feature = dataset.get_data_feature()
+    runtime = build_dataset_runtime(config)
+    dataset = runtime.dataset
+    data_feature = runtime.data_feature
     return {
         "task": task,
         "model": model_name,
         "dataset": dataset_name,
         "exp_id": str(exp_id),
         "cache_file_name": str(getattr(dataset, "cache_file_name", "") or ""),
-        "train_batches": len(train_data) if train_data is not None else 0,
-        "valid_batches": len(valid_data) if valid_data is not None else 0,
-        "test_batches": len(test_data) if test_data is not None else 0,
+        "train_batches": len(runtime.train_loader) if runtime.train_loader is not None else 0,
+        "valid_batches": len(runtime.valid_loader) if runtime.valid_loader is not None else 0,
+        "test_batches": len(runtime.test_loader) if runtime.test_loader is not None else 0,
         "data_feature_keys": sorted([str(k) for k in data_feature.keys()]) if isinstance(data_feature, dict) else [],
     }
 

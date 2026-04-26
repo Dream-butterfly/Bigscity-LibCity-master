@@ -14,9 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from GNNTP.common import ConfigParser, HyperTuning
-from GNNTP.data.artifact_io import deserialize_scaler, load_data_artifact, validate_artifact_for_config
-from GNNTP.data.dataloader import generate_dataloader
-from GNNTP.models.locator import get_model_metadata
+from GNNTP.data import build_artifact_runtime
 from GNNTP.utils import (
     add_general_args,
     build_run_id,
@@ -56,42 +54,18 @@ def objective_function_artifact(
     resolved_model = str(config.get("model", model_name))
     set_random_seed(config.get("seed", 0))
 
-    bundle = load_data_artifact(artifact_id=artifact_id, artifact_path=artifact_path)
-    artifact_meta = dict(bundle["meta"])
-    model_metadata = get_model_metadata(resolved_task, resolved_model)
-    validate_artifact_for_config(
-        artifact_meta=artifact_meta,
-        config_like=config,
-        model_dataset_class=str(model_metadata.get("dataset_class", "")),
-        force_reuse=bool(force_reuse),
+    runtime = build_artifact_runtime(
+        config,
+        task=resolved_task,
+        model_name=resolved_model,
+        artifact_id=artifact_id,
+        artifact_path=artifact_path,
+        force_reuse=force_reuse,
     )
-
-    train_data = bundle["train"]
-    valid_data = bundle["valid"]
-    test_data = bundle["test"]
-    feature_name = artifact_meta.get("feature_name", {"X": "float", "y": "float"})
-    if not isinstance(feature_name, dict):
-        feature_name = {"X": "float", "y": "float"}
-    train_loader, valid_loader, test_loader = generate_dataloader(
-        train_data,
-        valid_data,
-        test_data,
-        feature_name=feature_name,
-        batch_size=int(config.get("batch_size", 64)),
-        num_workers=int(config.get("num_workers", 0)),
-        shuffle=True,
-        pad_with_last_sample=bool(config.get("pad_with_last_sample", True)),
-    )
-
-    data_feature = dict(bundle["data_feature"])
-    data_feature["scaler"] = deserialize_scaler(artifact_meta.get("scaler"))
-    data_feature["ext_scaler"] = deserialize_scaler(artifact_meta.get("ext_scaler"))
-    data_feature["num_batches"] = len(train_loader)
-
-    model = get_model(config, data_feature)
-    executor = get_executor(config, model, data_feature)
-    best_valid_score = executor.train(train_loader, valid_loader)
-    test_result = executor.evaluate(test_loader)
+    model = get_model(config, runtime.data_feature)
+    executor = get_executor(config, model, runtime.data_feature)
+    best_valid_score = executor.train(runtime.train_loader, runtime.valid_loader)
+    test_result = executor.evaluate(runtime.test_loader)
     return {"best_valid_score": best_valid_score, "test_result": test_result}
 
 
