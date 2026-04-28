@@ -81,6 +81,7 @@ uv run python scripts/run/run_resume_artifact.py --run_id <run_id> --artifact_id
 | `cache/` | 缓存与中间产物（尤其是数据缓存） |
 | `outputs/` | 每次实验产物（日志、模型、评估、调参结果） |
 | `test/` | 测试脚本与测试辅助代码 |
+| `paper/` | 论文写作工作区（LaTeX 源码、模板、图表） |
 | `ai_logs/` | AI 变更与分析记录体系 |
 | `AI代码准则.md` | AI/开发协作规范 |
 | `README.md` | 面向使用者的对外快速说明 |
@@ -120,6 +121,14 @@ uv run python scripts/run/run_resume_artifact.py --run_id <run_id> --artifact_id
 4. 涉及缓存清理的脚本要严格限定目录范围，避免误删 `outputs/`。
 5. 先阅读对应目录 `INFO.md` 再改代码，减少跨层误改风险。
 
+## 论文
+
+- **目标期刊**：Information Sciences (Elsevier)
+- **模型**：FuzDiff（`GNNTP/models/new/new_diffusion_fuzzy/`）
+- **源码目录**：`paper/src/`，中文版主力 `main_cn.tex`
+- **模板**：Elsevier CAS Bundle 2.4（`paper/els-cas-templates/`）
+- **编译**：`cd paper/src && pdflatex main_cn && bibtex main_cn && pdflatex main_cn && pdflatex main_cn`
+
 ## 建议阅读顺序
 
 1. `README.md`：快速理解项目能力和入口命令
@@ -127,7 +136,8 @@ uv run python scripts/run/run_resume_artifact.py --run_id <run_id> --artifact_id
 3. `GNNTP/pipeline.py`：训练/评估主流程
 4. `GNNTP/config_parser.py`、`GNNTP/common/`：配置与执行机制
 5. `GNNTP/data/`、`GNNTP/models/`：数据与模型实现细节
-6. `ai_logs/index.md`：近期变更与分析上下文
+6. `paper/INFO.md` → `paper/src/INFO.md`：论文结构与写作规范
+7. `ai_logs/index.md`：近期变更与分析上下文
 
 ## 子目录 INFO 统一模板（后续补充时遵循）
 
