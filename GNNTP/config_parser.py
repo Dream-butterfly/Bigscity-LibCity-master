@@ -17,11 +17,13 @@ class ConfigParser(object):
     config 优先级：命令行 > config file > default config
     """
 
-    def __init__(self, task, model, dataset, config_file=None,
+    def __init__(self, task, model=None, dataset=None, config_file=None,
                  saved_model=True, train=True, other_args=None, hyper_config_dict=None):
         """
         Args:
-            task, model, dataset (str): 用户在命令行必须指明的三个参数
+            task (str): 任务名（必须）
+            model (str | None): 模型名。数据预处理阶段可为 None
+            dataset (str | None): 数据集名。数据预处理阶段必须提供
             config_file (str): 配置文件的文件名，将在项目根目录下进行搜索
             other_args (dict): 通过命令行传入的其他参数
         """
@@ -35,11 +37,8 @@ class ConfigParser(object):
                                saved_model=True, train=True, other_args=None, hyper_config_dict=None):
         if task is None:
             raise ValueError('the parameter task should not be None!')
-        if model is None:
-            raise ValueError('the parameter model should not be None!')
-        if dataset is None:
-            raise ValueError('the parameter dataset should not be None!')
-        # 目前暂定这三个参数必须由用户指定
+        # model 可选：数据预处理阶段不需要 model
+        # 目前暂定 task/dataset 必须由用户指定（dataset 在无 model 时仍需提供）
         self.config['task'] = task
         self.config['model'] = model
         self.config['dataset'] = dataset
@@ -75,23 +74,38 @@ class ConfigParser(object):
                     file.'.format(config_file))
 
     def _load_default_config(self):
-        model_metadata = get_model_metadata(self.config['task'], self.config['model'])
-        if 'dataset_class' not in self.config:
-            self.config['dataset_class'] = model_metadata['dataset_class']
-        if 'executor' not in self.config:
-            self.config['executor'] = model_metadata['executor']
-        if 'evaluator' not in self.config:
-            self.config['evaluator'] = model_metadata['evaluator']
-        if self.config['model'].upper() in ['LSTM', 'GRU', 'RNN']:
-            self.config['rnn_type'] = self.config['model']
-            self.config['model'] = 'RNN'
-        # 接着加载每个阶段的 default config
+        has_model = self.config.get('model') is not None
+
+        if has_model:
+            # ── 有模型：通过 manifest 获取 dataset_class / executor / evaluator ──
+            model_metadata = get_model_metadata(self.config['task'], self.config['model'])
+            if 'dataset_class' not in self.config:
+                self.config['dataset_class'] = model_metadata['dataset_class']
+            if 'executor' not in self.config:
+                self.config['executor'] = model_metadata['executor']
+            if 'evaluator' not in self.config:
+                self.config['evaluator'] = model_metadata['evaluator']
+            if self.config['model'].upper() in ['LSTM', 'GRU', 'RNN']:
+                self.config['rnn_type'] = self.config['model']
+                self.config['model'] = 'RNN'
+        else:
+            # ── 无模型（纯数据预处理）：dataset_class 必须显式提供 ──
+            if 'dataset_class' not in self.config:
+                raise ValueError(
+                    'dataset_class is required when model is not specified. '
+                    'Pass it via --dataset_class or in the config file.'
+                )
+
+        # 组装 config 文件加载列表：dataset class config 总是加载
         default_file_list = [
-            self._get_model_default_config_path(),
             self._get_dataset_default_config_path(),
-            self._get_executor_default_config_path(),
-            self._get_evaluator_default_config_path(),
         ]
+        if has_model:
+            default_file_list.extend([
+                self._get_model_default_config_path(),
+                self._get_executor_default_config_path(),
+                self._get_evaluator_default_config_path(),
+            ])
         # 加载所有默认配置
         for file_name in default_file_list:
             with open(file_name, 'r') as f:
@@ -99,20 +113,19 @@ class ConfigParser(object):
                 for key in x:
                     if key not in self.config:
                         self.config[key] = x[key]
-        # 加载数据集config.json
-        # with open('./resource_data/{}/config.json'.format(self.config['dataset']), 'r') as f:
-        # 不要使用硬编码，而是通过项目根目录下的raw_data
-        dataset_config_path = RESOURCE_DATA_ROOT / self.config['dataset'] / 'config.json'
-        with dataset_config_path.open('r', encoding="utf-8") as f:
-            x = json.load(f)
-            for key in x:
-                if key == 'info':
-                    for ik in x[key]:
-                        if ik not in self.config:
-                            self.config[ik] = x[key][ik]
-                else:
-                    if key not in self.config:
-                        self.config[key] = x[key]
+        # 加载数据集 resource_data config.json（如果 dataset 已提供）
+        if self.config.get('dataset'):
+            dataset_config_path = RESOURCE_DATA_ROOT / self.config['dataset'] / 'config.json'
+            with dataset_config_path.open('r', encoding="utf-8") as f:
+                x = json.load(f)
+                for key in x:
+                    if key == 'info':
+                        for ik in x[key]:
+                            if ik not in self.config:
+                                self.config[ik] = x[key][ik]
+                    else:
+                        if key not in self.config:
+                            self.config[key] = x[key]
 
     def _init_device(self):
         import logging

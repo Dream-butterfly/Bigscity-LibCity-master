@@ -1,5 +1,8 @@
 """
-独立数据工件构建脚本：执行完整数据处理并输出可复用的数据工件。
+数据工件构建脚本：执行完整数据处理并输出可复用的数据工件。
+支持两种模式：
+- 有模型模式：--task --model --dataset，从模型 manifest 自动获取 dataset_class
+- 无模型模式（数据-训练解耦）：--task --dataset --dataset_class，纯数据集驱动
 """
 
 import argparse
@@ -30,6 +33,7 @@ def run_data_artifact(
     task=None,
     model_name=None,
     dataset_name=None,
+    dataset_class=None,
     config_file=None,
     artifact_id=None,
     artifact_overwrite=False,
@@ -44,8 +48,11 @@ def run_data_artifact(
         train=False,
         other_args=other_args,
     )
+    # 无模型模式下通过参数显式提供 dataset_class
+    if dataset_class and 'dataset_class' not in config:
+        config['dataset_class'] = dataset_class
     resolved_task = str(config.get("task", task))
-    resolved_model = str(config.get("model", model_name))
+    resolved_model = str(config.get("model") or "") or None
     resolved_dataset = str(config.get("dataset", dataset_name))
     exp_id = ensure_run_id(config)
     logger = get_logger(config)
@@ -138,8 +145,9 @@ def run_data_artifact(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", type=str, default="traffic_state_pred", help="the name of task")
-    parser.add_argument("--model", type=str, default="STGCN", help="the name of model")
+    parser.add_argument("--model", type=str, default=None, help="model name (optional; omit for model-free data prep)")
     parser.add_argument("--dataset", type=str, default="METR_LA", help="the name of dataset")
+    parser.add_argument("--dataset_class", type=str, default=None, help="dataset class name (required if --model is not set)")
     parser.add_argument("--config_file", type=str, default=None, help="the file name of config file")
     parser.add_argument("--saved_model", type=str2bool, default=False, help="unused for data artifact build")
     parser.add_argument("--train", type=str2bool, default=False, help="unused for data artifact build")
@@ -164,6 +172,7 @@ if __name__ == "__main__":
             "task",
             "model",
             "dataset",
+            "dataset_class",
             "config_file",
             "saved_model",
             "train",
@@ -177,6 +186,7 @@ if __name__ == "__main__":
         task=args.task,
         model_name=args.model,
         dataset_name=args.dataset,
+        dataset_class=args.dataset_class,
         config_file=args.config_file,
         artifact_id=args.artifact_id,
         artifact_overwrite=args.artifact_overwrite,

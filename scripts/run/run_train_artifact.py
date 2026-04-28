@@ -1,10 +1,14 @@
 """
 仅消费数据工件进行训练与评估，不触发数据处理流程。
+支持两种 artifact 指定方式：
+- 显式指定：--artifact_id <id> 或 --artifact_path <path>
+- 自动匹配（默认）：按 dataset + dataset_class 扫描并选择最新签名匹配的工件
 """
 
 import argparse
 import os
 import sys
+import time
 from pathlib import Path
 
 
@@ -14,6 +18,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from GNNTP.common import ConfigParser
 from GNNTP.data.artifact_io import (
+    find_latest_artifact,
+    list_artifact_metas,
     write_run_meta,
 )
 from GNNTP.data import build_artifact_runtime
@@ -38,6 +44,8 @@ def run_train_artifact(
     train=True,
     artifact_id=None,
     artifact_path=None,
+    artifact_latest=False,
+    artifact_list=False,
     force_reuse=False,
     other_args=None,
 ):
@@ -47,6 +55,36 @@ def run_train_artifact(
     resolved_dataset = str(config.get("dataset", dataset_name))
     exp_id = ensure_run_id(config)
     logger = get_logger(config)
+
+    # 自动匹配 artifact（当未显式指定时）
+    if not artifact_id and not artifact_path:
+        dataset_class = str(config.get("dataset_class", ""))
+        if not dataset_class:
+            raise ValueError(
+                "Cannot auto-match artifact: dataset_class not found in config. "
+                "Provide --artifact_id or --artifact_path explicitly."
+            )
+        metas = list_artifact_metas(dataset=resolved_dataset, dataset_class=dataset_class)
+        if artifact_list or not metas:
+            logger.info(
+                "Artifacts for dataset=%s, dataset_class=%s: %d found.",
+                resolved_dataset, dataset_class, len(metas),
+            )
+            for m in metas:
+                logger.info(
+                    "  %s  created=%s  signature=%s",
+                    m.get("artifact_id", "?"),
+                    time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(m.get("created_at", 0))),
+                    str(m.get("data_signature", ""))[:8],
+                )
+            if artifact_list:
+                return None
+        # 自动匹配最新且签名一致的
+        found = find_latest_artifact(resolved_dataset, dataset_class, config)
+        artifact_id = found["artifact_id"]
+        artifact_path = str(found["artifact_dir"])
+        logger.info("Auto-matched artifact: %s", artifact_id)
+
     logger.info(
         "Begin artifact training pipeline, task=%s, model_name=%s, dataset_name=%s, exp_id=%s",
         resolved_task,
@@ -115,6 +153,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--artifact_id", type=str, default=None, help="data artifact id")
     parser.add_argument("--artifact_path", type=str, default=None, help="data artifact directory path")
+    parser.add_argument("--artifact_list", action="store_true", default=False, help="list available artifacts and exit")
     parser.add_argument("--force_reuse", type=str2bool, default=False, help="force reuse even if signature mismatch")
     parser.add_argument("--exp_id", type=str, default=None, help="id of experiment")
     parser.add_argument("--seed", type=int, default=0, help="random seed")
@@ -134,6 +173,7 @@ if __name__ == "__main__":
             "train",
             "artifact_id",
             "artifact_path",
+            "artifact_list",
             "force_reuse",
         ]
         and val is not None
@@ -147,6 +187,7 @@ if __name__ == "__main__":
         train=args.train,
         artifact_id=args.artifact_id,
         artifact_path=args.artifact_path,
+        artifact_list=args.artifact_list,
         force_reuse=args.force_reuse,
         other_args=other_args,
     )

@@ -4,7 +4,7 @@
 
 > **不在根 INFO 直接定义**：具体模型结构、单数据集字段语义、子目录实现细节。这些请跳转对应子目录 `INFO.md`。
 
-- **GitHub**：`Dream-butterfly/Bigscity-LibCity-master`，分支 `重构-数据集处理独立`
+- **GitHub**：`Dream-butterfly/Bigscity-LibCity-master`，分支 `新模型`
 - **代码准则**：`AI代码准则.md`（Karpathy 四原则，所有 AI 修改的硬约束）
 - **安全护栏**：gnntp-guard skill 三层权限（🔴核心 / 🟡确认 / 🟢自由），修改前自动检查
 

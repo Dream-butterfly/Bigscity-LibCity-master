@@ -322,6 +322,96 @@ def load_data_artifact(artifact_id: str | None = None, artifact_path: str | None
     return bundle
 
 
+def list_artifact_metas(
+    dataset: str | None = None,
+    dataset_class: str | None = None,
+) -> list[dict[str, Any]]:
+    """扫描 artifacts 根目录，返回按 created_at 降序排列的 meta 列表。
+
+    Args:
+        dataset: 可选，仅返回匹配此数据集名的 artifact
+        dataset_class: 可选，仅返回匹配此 dataset_class 的 artifact
+    """
+    root = get_data_artifacts_root()
+    if not root.exists():
+        return []
+    results: list[dict[str, Any]] = []
+    for child in sorted(root.iterdir()):
+        if not child.is_dir():
+            continue
+        meta_path = child / "meta.json"
+        if not meta_path.exists():
+            continue
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if not isinstance(meta, dict):
+            continue
+        if str(meta.get("status", "")).lower() != "ready":
+            continue
+        if dataset is not None and str(meta.get("dataset", "")) != dataset:
+            continue
+        if dataset_class is not None and str(meta.get("dataset_class", "")) != dataset_class:
+            continue
+        results.append(meta)
+    results.sort(key=lambda m: float(m.get("created_at", 0)), reverse=True)
+    return results
+
+
+def find_latest_artifact(
+    dataset: str,
+    dataset_class: str,
+    config_like: Any | None = None,
+) -> dict[str, Any]:
+    """查找最新且签名匹配的 artifact。
+
+    扫描 data_artifacts/，按 (dataset, dataset_class) 过滤，
+    选 created_at 最新的，若提供 config_like 则校验签名。
+    返回 (artifact_id, artifact_dir, meta) 的字典。
+    """
+    metas = list_artifact_metas(dataset=dataset, dataset_class=dataset_class)
+    if not metas:
+        raise FileNotFoundError(
+            "No ready artifact found for dataset={}, dataset_class={}.".format(
+                dataset, dataset_class
+            )
+        )
+    if config_like is not None:
+        # 尝试所有候选，直到找到签名匹配的
+        for meta in metas:
+            try:
+                validate_artifact_for_config(
+                    artifact_meta=meta,
+                    config_like=config_like,
+                    model_dataset_class=dataset_class,
+                    force_reuse=False,
+                )
+                artifact_id = str(meta.get("artifact_id", ""))
+                return {
+                    "artifact_id": artifact_id,
+                    "artifact_dir": get_data_artifacts_root() / artifact_id,
+                    "meta": meta,
+                }
+            except ValueError:
+                continue
+        raise ValueError(
+            "Found {} artifact(s) for dataset={}, dataset_class={}, "
+            "but none match the current config signature. "
+            "Re-run data artifact build or use --force_reuse.".format(
+                len(metas), dataset, dataset_class
+            )
+        )
+    # 无 config → 返回最新的
+    meta = metas[0]
+    artifact_id = str(meta.get("artifact_id", ""))
+    return {
+        "artifact_id": artifact_id,
+        "artifact_dir": get_data_artifacts_root() / artifact_id,
+        "meta": meta,
+    }
+
+
 def _mismatch_items(expected: dict[str, Any], actual: dict[str, Any]) -> list[str]:
     keys = sorted(set(expected.keys()) | set(actual.keys()))
     mismatch = []
