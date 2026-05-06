@@ -80,6 +80,8 @@ CLI_OPTION_KEYS = [
     "seed",
     "gpu",
     "gpu_id",
+    "num_gpus",
+    "gpu_ids",
     "train_rate",
     "eval_rate",
     "batch_size",
@@ -95,6 +97,8 @@ CLI_OPTION_TYPE = {
     "seed": "int",
     "gpu": "bool",
     "gpu_id": "int",
+    "num_gpus": "int",
+    "gpu_ids": "str",
     "train_rate": "float",
     "eval_rate": "float",
     "batch_size": "int",
@@ -1463,7 +1467,17 @@ def _run_training_background(
                 },
             )
         return
-    cmd = ["uv", "run", entry_script]
+    num_gpus = int(cli_options.get("num_gpus", "1") or "1")
+    gpu_ids_raw = str(cli_options.get("gpu_ids", "")).strip()
+    extra_env: dict[str, str] = {}
+
+    cmd = ["uv", "run"]
+    if num_gpus > 1:
+        cmd.extend(["torchrun", f"--nproc_per_node={num_gpus}", "--tee", "0"])
+        if gpu_ids_raw:
+            extra_env["CUDA_VISIBLE_DEVICES"] = gpu_ids_raw
+    cmd.append(entry_script)
+
     if include_task_model_dataset:
         cmd.extend(
             [
@@ -1480,8 +1494,13 @@ def _run_training_background(
         cmd.extend(["--train", str(train).lower()])
     if script_args:
         cmd.extend(script_args)
+
+    # Multi-GPU: skip gpu/gpu_id, inject dist_backend + scale_lr
+    is_multi_gpu = num_gpus > 1
     for key in CLI_OPTION_KEYS:
         if key == "config_file":
+            continue
+        if is_multi_gpu and key in ("gpu", "gpu_id", "num_gpus", "gpu_ids"):
             continue
         value = cli_options.get(key, None)
         if value is None:
@@ -1492,6 +1511,9 @@ def _run_training_background(
         if key == "gpu":
             text = text.lower()
         cmd.extend([f"--{key}", text])
+    if is_multi_gpu:
+        cmd.extend(["--dist_backend", "nccl", "--scale_lr", "true"])
+
     if extra_args.strip():
         cmd.extend(shlex.split(extra_args, posix=False))
 
@@ -1521,17 +1543,21 @@ def _run_training_background(
         creationflags = 0
         if os.name == "nt":
             creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
-        proc = subprocess.Popen(
-            cmd,
-            cwd=str(PROJECT_ROOT),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
-            creationflags=creationflags,
-        )
+        popen_kwargs: dict[str, Any] = {
+            "cwd": str(PROJECT_ROOT),
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.STDOUT,
+            "text": True,
+            "encoding": "utf-8",
+            "errors": "replace",
+            "bufsize": 1,
+            "creationflags": creationflags,
+        }
+        if extra_env:
+            env = os.environ.copy()
+            env.update(extra_env)
+            popen_kwargs["env"] = env
+        proc = subprocess.Popen(cmd, **popen_kwargs)
     except Exception as exc:
         _remove_runtime_config(runtime_config_path)
         STATE.finish(return_code=-1, error=f"Failed to start process: {exc}", result=None)

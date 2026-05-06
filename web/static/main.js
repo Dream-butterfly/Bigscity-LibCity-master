@@ -39,7 +39,7 @@ const state = {
 };
 const byId = (id) => document.getElementById(id);
 const esc = (s) => String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-const CLI_FIELDS = ["config_file", "exp_id", "seed", "gpu", "gpu_id", "train_rate", "eval_rate", "batch_size", "learning_rate", "max_epoch", "dataset_class", "executor", "evaluator"];
+const CLI_FIELDS = ["config_file", "exp_id", "seed", "gpu", "gpu_id", "num_gpus", "gpu_ids", "train_rate", "eval_rate", "batch_size", "learning_rate", "max_epoch", "dataset_class", "executor", "evaluator"];
 const HIDDEN_TRAIN_PARAM_KEYS = new Set(["config_file", "train_rate", "eval_rate", "dataset_class", "task", "model", "dataset", "seed"]);
 const normalizeLang = (lang) => {
     const x = String(lang || '').trim();
@@ -314,6 +314,25 @@ function collectConfigFromTable() {
     return cfg;
 }
 
+function onNumGpusChanged() {
+    const numEl = byId('num_gpus');
+    const num = Number(numEl?.value) || 1;
+    const singleGroup = byId('gpu_single_group');
+    const multiGroup = byId('gpu_multi_group');
+    const gpuSelect = byId('gpu');
+    if (singleGroup) singleGroup.style.display = num > 1 ? 'none' : '';
+    if (multiGroup) multiGroup.style.display = num > 1 ? '' : 'none';
+    if (gpuSelect && num > 1) gpuSelect.value = 'true';
+    // Clear hidden field values so they don't leak into cli_options
+    if (num <= 1) {
+        const el = byId('gpu_ids');
+        if (el) el.value = '';
+    } else {
+        const el = byId('gpu_id');
+        if (el) el.value = '';
+    }
+}
+
 function applyDefaultToCliFields(config) {
     const setIf = (k, v) => {
         if (v !== undefined && v !== null && byId(k)) byId(k).value = String(v);
@@ -321,6 +340,8 @@ function applyDefaultToCliFields(config) {
     setIf('max_epoch', config.max_epoch ?? 10);
     setIf('seed', config.seed);
     setIf('gpu_id', config.gpu_id);
+    setIf('num_gpus', config.num_gpus ?? 1);
+    setIf('gpu_ids', config.gpu_ids);
     setIf('train_rate', config.train_rate);
     setIf('eval_rate', config.eval_rate);
     setIf('batch_size', config.batch_size);
@@ -1925,6 +1946,8 @@ async function init() {
     byId('pred_node').addEventListener('change', refreshPredictionSeries);
     byId('pred_feature').addEventListener('change', refreshPredictionSeries);
     byId('resume_run_id').addEventListener('change', onResumeRunChanged);
+    byId('num_gpus').addEventListener('change', onNumGpusChanged);
+    onNumGpusChanged();
     resetPredictionSelectors();
     initPaneResizers();
     initLayoutControls();

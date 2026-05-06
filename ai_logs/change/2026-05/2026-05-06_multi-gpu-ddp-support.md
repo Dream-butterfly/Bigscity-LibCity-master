@@ -1,6 +1,6 @@
 # 更改 14：多卡训练（DDP）支持
 
-> 时间: 2026-05-06 | 状态: 已实现 (Phase 1-4) | 基于计划: ai_logs/analysis/2026-05/multi_gpu_refactoring_plan.md
+> 时间: 2026-05-06 | 状态: 已实现 (Phase 1-5) | 基于计划: ai_logs/analysis/2026-05/multi_gpu_refactoring_plan.md
 
 ## 概述
 
@@ -62,9 +62,22 @@ torchrun --nproc_per_node=4 run_train_artifact.py --model STGformer --dataset ME
 4. **`find_unused_parameters=False`**：性能最优，若模型有条件分支需改为 `True`
 5. **LR 线性缩放**：`lr = lr_base × world_size`，可在 executor.json 中通过 `scale_lr: false` 关闭
 
+### Phase 5: Web 控制台适配 ✅
+**文件: 3**
+
+| 文件 | 改动 |
+|------|------|
+| `web/train_web_fastapi.py` | CLI_OPTION_KEYS/TYPE 新增 `num_gpus`(int) `gpu_ids`(str)；`_run_training_background()` 检测 `num_gpus>1` 时自动切换为 `uv run torchrun --nproc_per_node=N --tee 0` 启动器；跳过 `gpu`/`gpu_id` 参数，注入 `--dist_backend nccl --scale_lr true`；`CUDA_VISIBLE_DEVICES` 通过 `Popen(env=...)` 传递 |
+| `web/templates/train_web_fastapi.html` | 运行环境组重设计：`num_gpus` 下拉(1/2/4/8) + `gpu_single_group`(gpu开关+gpu_id) + `gpu_multi_group`(gpu_ids) |
+| `web/static/main.js` | `CLI_FIELDS` 新增 `num_gpus`/`gpu_ids`；`onNumGpusChanged()` 根据 GPU 数量切换单/多卡控件的显隐并清理隐藏字段值；`applyDefaultToCliFields` 支持 num_gpus/gpu_ids |
+
+**关键设计：**
+- `torchrun --tee 0`：仅 rank 0 进程的 stdout 输出到控制台，其他 rank 写入文件 → Web 端日志自动只显示主进程输出
+- 单卡/多卡控件互斥：切换 `num_gpus` 时自动清空隐藏字段，避免参数泄漏
+- 数据预处理 (`_run_data_prep_background`) 不受影响：其前端使用独立的 `collectDataCliOptions()`，不含 GPU 字段
+
 ## 待完成（后续 Phase）
 
-- Phase 5: Web 控制台适配（`web/train_web_fastapi.py` 命令行改为 `torchrun`）
 - Phase 5: 独立实验脚本适配（`train_new_diffusion.py`, `train_new_diffusion_2.py`）
 - Phase 6: 测试验证
 

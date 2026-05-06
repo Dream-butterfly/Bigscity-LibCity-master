@@ -229,14 +229,27 @@
                 <div class="group-grid">
                     <div><label data-param-label="exp_id">exp_id</label><input id="exp_id" data-i18n-placeholder="placeholder_optional" placeholder="可选"/></div>
                     <div>
-                        <label data-param-label="gpu">gpu</label>
-                        <select id="gpu">
-                            <option value=""></option>
-                            <option value="true">true</option>
-                            <option value="false">false</option>
+                        <label data-param-label="num_gpus">num_gpus</label>
+                        <select id="num_gpus">
+                            <option value="1" selected>1</option>
+                            <option value="2">2</option>
+                            <option value="4">4</option>
+                            <option value="8">8</option>
                         </select>
                     </div>
-                    <div><label data-param-label="gpu_id">gpu_id</label><input id="gpu_id" placeholder="0"/></div>
+                    <div id="gpu_single_group">
+                        <label data-param-label="gpu">gpu</label>
+                        <select id="gpu">
+                            <option value="true" selected>true</option>
+                            <option value="false">false</option>
+                        </select>
+                        <label data-param-label="gpu_id">gpu_id</label>
+                        <input id="gpu_id" placeholder="0"/>
+                    </div>
+                    <div id="gpu_multi_group" style="display:none">
+                        <label data-param-label="gpu_ids">gpu_ids</label>
+                        <input id="gpu_ids" placeholder="0,1,2,3"/>
+                    </div>
                 </div>
             </div>
             <div class="config-group">
