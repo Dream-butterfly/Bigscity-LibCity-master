@@ -210,8 +210,9 @@ class PDFormerExecutor(TrafficStateExecutor):
 
     def load_model_with_initial_ckpt(self, initial_ckpt):
         assert os.path.exists(initial_ckpt), 'Weights at %s not found' % initial_ckpt
-        model_state, optimizer_state = torch.load(initial_ckpt, map_location=torch.device('cpu'))
-        model_keys = self.model.state_dict()
+        model_state, optimizer_state = torch.load(initial_ckpt, map_location=self.device)
+        model = self._unwrap_model()
+        model_keys = model.state_dict()
         state_dict_load = {}
         unexpect_keys = []
         for k, v in model_state.items():
@@ -223,7 +224,7 @@ class PDFormerExecutor(TrafficStateExecutor):
             if k not in model_state.keys():
                 unexpect_keys.append(k)
         self._logger.info("unexpected keys: {}".format(unexpect_keys))
-        self.model.load_state_dict(state_dict_load, strict=False)
+        model.load_state_dict(state_dict_load, strict=False)
         self._logger.info("Initialize model from {}".format(initial_ckpt))
 
     def _calculate_normalized_laplacian(self, adj):
@@ -319,26 +320,36 @@ class PDFormerExecutor(TrafficStateExecutor):
         return lr_scheduler
 
     def train(self, train_dataloader, eval_dataloader):
-        self._logger.info('Start training ...')
+        rank0 = self._is_rank0()
+        if rank0:
+            self._logger.info('Start training ...')
         min_val_loss = float('inf')
         wait = 0
         best_epoch = 0
         train_time = []
         eval_time = []
         num_batches = len(train_dataloader)
-        self._logger.info("num_batches:{}".format(num_batches))
+        if rank0:
+            self._logger.info("num_batches:{}".format(num_batches))
 
         batches_seen = num_batches * self._epoch_num
         for epoch_idx in range(self._epoch_num, self.epochs):
+            # DDP: 每 epoch 设置 sampler epoch
+            if self.is_distributed and hasattr(train_dataloader, 'sampler'):
+                if hasattr(train_dataloader.sampler, 'set_epoch'):
+                    train_dataloader.sampler.set_epoch(epoch_idx)
+
             start_time = time.time()
             losses, batches_seen = self._train_epoch(train_dataloader, epoch_idx, batches_seen, self.loss_func)
             t1 = time.time()
             train_time.append(t1 - start_time)
             train_loss = np.mean(losses)
             self._writer.add_scalar('training loss', train_loss, batches_seen)
-            self._logger.info("epoch complete!")
+            if rank0:
+                self._logger.info("epoch complete!")
 
-            self._logger.info("evaluating now!")
+            if rank0:
+                self._logger.info("evaluating now!")
             t2 = time.time()
             val_loss = self._valid_epoch(eval_dataloader, epoch_idx, batches_seen, self.loss_func)
             end_time = time.time()
@@ -354,7 +365,7 @@ class PDFormerExecutor(TrafficStateExecutor):
                 else:
                     self.lr_scheduler.step()
 
-            if (epoch_idx % self.log_every) == 0:
+            if rank0 and (epoch_idx % self.log_every) == 0:
                 log_lr = self.optimizer.param_groups[0]['lr']
                 message = 'Epoch [{}/{}] ({}) train_loss: {:.4f}, val_loss: {:.4f}, lr: {:.6f}, {:.2f}s'. \
                     format(epoch_idx, self.epochs, batches_seen, train_loss, val_loss, log_lr, epoch_time)
@@ -368,7 +379,7 @@ class PDFormerExecutor(TrafficStateExecutor):
 
             if val_loss < min_val_loss:
                 wait = 0
-                if self.saved:
+                if self.saved and rank0:
                     model_file_name = self.save_model_with_epoch(epoch_idx)
                     self._logger.info('Val loss decrease from {:.4f} to {:.4f}, '
                                       'saving to {}'.format(min_val_loss, val_loss, model_file_name))
@@ -377,15 +388,16 @@ class PDFormerExecutor(TrafficStateExecutor):
             else:
                 wait += 1
                 if wait == self.patience and self.use_early_stop:
-                    self._logger.warning('Early stopping at epoch: %d' % epoch_idx)
+                    if rank0:
+                        self._logger.warning('Early stopping at epoch: %d' % epoch_idx)
                     break
-        if len(train_time) > 0:
+        if rank0 and len(train_time) > 0:
             average_train_time = sum(train_time) / len(train_time)
             average_eval_time = sum(eval_time) / len(eval_time)
             self._logger.info('Trained totally {} epochs, average train time is {:.3f}s, '
                               'average eval time is {:.3f}s'.
                               format(len(train_time), average_train_time, average_eval_time))
-        if self.load_best_epoch:
+        if self.load_best_epoch and rank0:
             self.load_model_with_epoch(best_epoch)
         return min_val_loss
 
@@ -418,6 +430,12 @@ class PDFormerExecutor(TrafficStateExecutor):
                     if self.lr_scheduler_type.lower() == 'cosinelr':
                         self.lr_scheduler.step_update(num_updates=batches_seen)
                 self.optimizer.zero_grad()
+        # DDP: all_reduce loss
+        if self.is_distributed:
+            import torch.distributed as dist
+            loss_tensor = torch.tensor([np.mean(losses)], device=self.device)
+            dist.all_reduce(loss_tensor, op=dist.ReduceOp.AVG)
+            losses = [loss_tensor.item()] * len(losses)
         return losses, batches_seen
 
     def _valid_epoch(self, eval_dataloader, epoch_idx, batches_seen=None, loss_func=None):
@@ -434,6 +452,11 @@ class PDFormerExecutor(TrafficStateExecutor):
                 self._logger.debug(loss.item())
                 losses.append(loss.item())
             mean_loss = np.mean(losses)
+            if self.is_distributed:
+                import torch.distributed as dist
+                loss_tensor = torch.tensor([mean_loss], device=self.device)
+                dist.all_reduce(loss_tensor, op=dist.ReduceOp.AVG)
+                mean_loss = loss_tensor.item()
             self._writer.add_scalar('eval loss', mean_loss, batches_seen)
             return mean_loss
 

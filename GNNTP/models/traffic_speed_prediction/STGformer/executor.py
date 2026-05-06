@@ -72,33 +72,34 @@ class STGformerExecutor(TrafficStateExecutor):
 
             if val_loss < min_val_loss:
                 wait = 0
-                best_state_dict = copy.deepcopy(self.model.state_dict())
-                if self.saved:
+                best_state_dict = copy.deepcopy(self._unwrap_model().state_dict())
+                if self.saved and self._is_rank0():
                     model_file_name = self.save_model_with_epoch(epoch_idx)
                     self._logger.info(
                         "Val loss decrease from {:.4f} to {:.4f}, saving to {}".format(
                             min_val_loss, val_loss, model_file_name
                         )
                     )
-                else:
+                elif self._is_rank0():
                     self._logger.info("Val loss decrease from {:.4f} to {:.4f}".format(min_val_loss, val_loss))
                 min_val_loss = val_loss
                 best_epoch = epoch_idx
             else:
                 wait += 1
                 if wait >= self.patience and self.use_early_stop:
-                    self._logger.warning("Early stopping at epoch: %d" % epoch_idx)
+                    if self._is_rank0():
+                        self._logger.warning("Early stopping at epoch: %d" % epoch_idx)
                     break
 
-        if len(train_time) > 0:
+        if self._is_rank0() and len(train_time) > 0:
             self._logger.info(
                 "Trained totally {} epochs, average train time is {:.3f}s, average eval time is {:.3f}s".format(
                     len(train_time), sum(train_time) / len(train_time), sum(eval_time) / len(eval_time)
                 )
             )
-        if self.load_best_epoch and best_state_dict is not None:
+        if self.load_best_epoch and best_state_dict is not None and self._is_rank0():
             self._logger.info("Loading best model state from epoch {}".format(best_epoch))
-            self.model.load_state_dict(best_state_dict)
+            self._unwrap_model().load_state_dict(best_state_dict)
         return min_val_loss
 
     def _train_epoch(self, train_dataloader, epoch_idx, loss_func=None):

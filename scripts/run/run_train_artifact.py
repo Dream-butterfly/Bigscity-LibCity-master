@@ -23,6 +23,7 @@ from GNNTP.data.artifact_io import (
     write_run_meta,
 )
 from GNNTP.data import build_artifact_runtime
+from GNNTP.pipeline import _maybe_wrap_ddp
 from GNNTP.utils import (
     add_general_args,
     ensure_run_id,
@@ -109,18 +110,29 @@ def run_train_artifact(
         logger.warning("[FORCE_REUSE] %s", msg)
 
     model = get_model(config, runtime.data_feature)
+    model = _maybe_wrap_ddp(config, model)
     executor = get_executor(config, model, runtime.data_feature)
+    is_distributed = config.get('is_distributed', False)
+    rank = config.get('rank', 0)
     model_cache_file = os.path.join(
         get_run_subdir(exp_id, "model_cache"),
         "{}_{}.m".format(resolved_model, resolved_dataset),
     )
     if train or not os.path.exists(model_cache_file):
         executor.train(runtime.train_loader, runtime.valid_loader)
-        if saved_model:
+        if saved_model and rank == 0:
             executor.save_model(model_cache_file)
     else:
         executor.load_model(model_cache_file)
-    test_result = executor.evaluate(runtime.test_loader)
+    if rank == 0 or not is_distributed:
+        test_result = executor.evaluate(runtime.test_loader)
+    else:
+        executor.evaluate(runtime.test_loader)
+    if is_distributed:
+        import torch.distributed as dist
+        dist.barrier()
+        if rank == 0:
+            dist.destroy_process_group()
 
     write_run_meta(
         exp_id,

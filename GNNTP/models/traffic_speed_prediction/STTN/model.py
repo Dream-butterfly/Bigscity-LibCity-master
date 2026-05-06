@@ -138,7 +138,7 @@ class STransformer(nn.Module):
                  forward_expansion=4, dropout_rate=0, device=torch.device('cpu')):
         super().__init__()
         self.device = device
-        self.adj_mx = torch.FloatTensor(adj_mx).to(device)
+        self.register_buffer('adj_mx', torch.FloatTensor(adj_mx).to(device))
         self.D_S = nn.Parameter(torch.FloatTensor(adj_mx).to(device))
         self.embed_linear = nn.Linear(adj_mx.shape[0], embed_dim)
 

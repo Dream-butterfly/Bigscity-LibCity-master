@@ -241,13 +241,13 @@ class STGCN(AbstractTrafficStateModel):
         # 计算GCN邻接矩阵的归一化拉普拉斯矩阵和对应的切比雪夫多项式或一阶近似
         if self.graph_conv_type.lower() == 'chebconv':
             laplacian_mx = calculate_scaled_laplacian(adj_mx)
-            self.Lk = calculate_cheb_poly(laplacian_mx, self.Ks)
-            self._logger.info('Chebyshev_polynomial_Lk shape: ' + str(self.Lk.shape))
-            self.Lk = torch.FloatTensor(self.Lk).to(self.device)
+            Lk = calculate_cheb_poly(laplacian_mx, self.Ks)
+            self._logger.info('Chebyshev_polynomial_Lk shape: ' + str(Lk.shape))
+            self.register_buffer('Lk', torch.FloatTensor(Lk).to(self.device))
         elif self.graph_conv_type.lower() == 'gcnconv':
-            self.Lk = calculate_first_approx(adj_mx)
-            self._logger.info('First_approximation_Lk shape: ' + str(self.Lk.shape))
-            self.Lk = torch.FloatTensor(self.Lk).to(self.device)
+            Lk = calculate_first_approx(adj_mx)
+            self._logger.info('First_approximation_Lk shape: ' + str(Lk.shape))
+            self.register_buffer('Lk', torch.FloatTensor(Lk).to(self.device))
             self.Ks = 1  # 一阶近似保留到K0和K1，但是不是数组形式，只有一个n*n矩阵，所以是1（本质上是2）
         else:
             raise ValueError('Error graph_conv_type, must be chebconv or gcnconv.')

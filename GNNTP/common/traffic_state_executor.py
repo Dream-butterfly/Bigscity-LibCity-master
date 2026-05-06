@@ -26,7 +26,12 @@ class TrafficStateExecutor(AbstractExecutor):
         self.device = self.config.get('device', torch.device('cpu'))
         if not isinstance(self.device, torch.device):
             self.device = torch.device(self.device)
-        self.model = model.to(self.device)
+        self.is_distributed = self.config.get('is_distributed', False)
+        # 模型设备迁移: 单卡时在此执行，DDP 时由外部 pipeline 完成
+        if not self.is_distributed:
+            self.model = model.to(self.device)
+        else:
+            self.model = model  # 已在 pipeline 中 DDP 包装并移到设备
         self.exp_id = self.config.get('exp_id', None)
 
         self.run_dir = get_run_dir(self.exp_id)
@@ -36,12 +41,13 @@ class TrafficStateExecutor(AbstractExecutor):
         self._writer = _NoopSummaryWriter()
         self._logger = getLogger()
         self._scaler = self.data_feature.get('scaler')
-        self._logger.info(self.model)
-        for name, param in self.model.named_parameters():
-            self._logger.info(str(name) + '\t' + str(param.shape) + '\t' +
-                              str(param.device) + '\t' + str(param.requires_grad))
-        total_num = sum([param.nelement() for param in self.model.parameters()])
-        self._logger.info('Total parameter numbers: {}'.format(total_num))
+        if self._is_rank0():
+            self._logger.info(self.model)
+            for name, param in self.model.named_parameters():
+                self._logger.info(str(name) + '\t' + str(param.shape) + '\t' +
+                                  str(param.device) + '\t' + str(param.requires_grad))
+            total_num = sum([param.nelement() for param in self.model.parameters()])
+            self._logger.info('Total parameter numbers: {}'.format(total_num))
 
         self.epochs = self.config.get('max_epoch', 100)
         self.train_loss = self.config.get('train_loss', 'none')
@@ -93,7 +99,7 @@ class TrafficStateExecutor(AbstractExecutor):
         if self.use_amp and self.device.type != 'cuda':
             self._logger.warning('AMP is only enabled on CUDA devices, disable AMP on device `%s`.', self.device)
         self.amp_enabled = self.use_amp and self.device.type == 'cuda'
-        self.grad_scaler = torch.amp.GradScaler('cuda', enabled=self.amp_enabled and self.amp_dtype == 'float16')
+        self.grad_scaler = torch.amp.GradScaler(self.device.type, enabled=self.amp_enabled and self.amp_dtype == 'float16')
         if self.amp_enabled:
             self._logger.info('Enable AMP training (dtype=%s).', self.amp_dtype)
         self.optimizer = self._build_optimizer()
@@ -102,6 +108,25 @@ class TrafficStateExecutor(AbstractExecutor):
         if self._epoch_num > 0:
             self.load_model_with_epoch(self._epoch_num)
         self.loss_func = self._build_train_loss()
+
+    def _unwrap_model(self):
+        """获取原始模型（DDP 包装下取 .module）"""
+        if self.is_distributed:
+            return self.model.module
+        return self.model
+
+    def _is_rank0(self):
+        """当前进程是否为主进程（rank 0）"""
+        if not self.is_distributed:
+            return True
+        import torch.distributed as dist
+        return not dist.is_initialized() or dist.get_rank() == 0
+
+    def _barrier(self):
+        """所有进程同步点"""
+        if self.is_distributed:
+            import torch.distributed as dist
+            dist.barrier()
 
     def save_model(self, cache_name):
         """
@@ -112,7 +137,8 @@ class TrafficStateExecutor(AbstractExecutor):
         """
         ensure_dir(self.cache_dir)
         self._logger.info("Saved model at " + cache_name)
-        torch.save((self.model.state_dict(), self.optimizer.state_dict()), cache_name)
+        model = self._unwrap_model()
+        torch.save((model.state_dict(), self.optimizer.state_dict()), cache_name)
 
     def load_model(self, cache_name):
         """
@@ -123,7 +149,8 @@ class TrafficStateExecutor(AbstractExecutor):
         """
         self._logger.info("Loaded model at " + cache_name)
         model_state, optimizer_state = torch.load(cache_name, map_location=self.device)
-        self.model.load_state_dict(model_state)
+        model = self._unwrap_model()
+        model.load_state_dict(model_state)
         self.optimizer.load_state_dict(optimizer_state)
 
     def save_model_with_epoch(self, epoch):
@@ -135,7 +162,8 @@ class TrafficStateExecutor(AbstractExecutor):
         """
         ensure_dir(self.cache_dir)
         config = dict()
-        config['model_state_dict'] = self.model.state_dict()
+        model = self._unwrap_model()
+        config['model_state_dict'] = model.state_dict()
         config['optimizer_state_dict'] = self.optimizer.state_dict()
         config['grad_scaler_state_dict'] = self.grad_scaler.state_dict()
         config['epoch'] = epoch
@@ -153,9 +181,9 @@ class TrafficStateExecutor(AbstractExecutor):
         """
         model_path = self.cache_dir + '/' + self.config['model'] + '_' + self.config['dataset'] + '_epoch%d.tar' % epoch
         assert os.path.exists(model_path), 'Weights at epoch %d not found' % epoch
-        load_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        checkpoint = torch.load(model_path, map_location=load_device)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
+        checkpoint = torch.load(model_path, map_location=self.device)
+        model = self._unwrap_model()
+        model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         if 'grad_scaler_state_dict' in checkpoint:
             self.grad_scaler.load_state_dict(checkpoint['grad_scaler_state_dict'])
@@ -190,7 +218,7 @@ class TrafficStateExecutor(AbstractExecutor):
 
     def _autocast_context(self):
         if self.amp_enabled:
-            return torch.autocast(device_type='cuda', dtype=self.amp_torch_dtype)
+            return torch.autocast(device_type=self.device.type, dtype=self.amp_torch_dtype)
         return nullcontext()
 
     def _build_lr_scheduler(self):
@@ -322,24 +350,34 @@ class TrafficStateExecutor(AbstractExecutor):
             train_dataloader(torch.Dataloader): Dataloader
             eval_dataloader(torch.Dataloader): Dataloader
         """
-        self._logger.info('Start training ...')
+        rank0 = self._is_rank0()
+        if rank0:
+            self._logger.info('Start training ...')
         min_val_loss = float('inf')
         wait = 0
         best_epoch = 0
         train_time = []
         eval_time = []
         num_batches = len(train_dataloader)
-        self._logger.info("num_batches:{}".format(num_batches))
+        if rank0:
+            self._logger.info("num_batches:{}".format(num_batches))
 
         for epoch_idx in range(self._epoch_num, self.epochs):
+            # DDP: 每 epoch 设置 sampler epoch 以保证 shuffle 随机性
+            if self.is_distributed and hasattr(train_dataloader, 'sampler'):
+                if hasattr(train_dataloader.sampler, 'set_epoch'):
+                    train_dataloader.sampler.set_epoch(epoch_idx)
+
             start_time = time.time()
             losses = self._train_epoch(train_dataloader, epoch_idx, self.loss_func)
             t1 = time.time()
             train_time.append(t1 - start_time)
             self._writer.add_scalar('training loss', np.mean(losses), epoch_idx)
-            self._logger.info("epoch complete!")
+            if rank0:
+                self._logger.info("epoch complete!")
 
-            self._logger.info("evaluating now!")
+            if rank0:
+                self._logger.info("evaluating now!")
             t2 = time.time()
             val_loss = self._valid_epoch(eval_dataloader, epoch_idx, self.loss_func)
             end_time = time.time()
@@ -351,7 +389,7 @@ class TrafficStateExecutor(AbstractExecutor):
                 else:
                     self.lr_scheduler.step()
 
-            if (epoch_idx % self.log_every) == 0:
+            if rank0 and (epoch_idx % self.log_every) == 0:
                 log_lr = self.optimizer.param_groups[0]['lr']
                 message = 'Epoch [{}/{}] train_loss: {:.4f}, val_loss: {:.4f}, lr: {:.6f}, {:.2f}s'. \
                     format(epoch_idx, self.epochs, np.mean(losses), val_loss, log_lr, (end_time - start_time))
@@ -367,7 +405,7 @@ class TrafficStateExecutor(AbstractExecutor):
 
             if val_loss < min_val_loss:
                 wait = 0
-                if self.saved:
+                if self.saved and rank0:
                     model_file_name = self.save_model_with_epoch(epoch_idx)
                     self._logger.info('Val loss decrease from {:.4f} to {:.4f}, '
                                       'saving to {}'.format(min_val_loss, val_loss, model_file_name))
@@ -376,14 +414,15 @@ class TrafficStateExecutor(AbstractExecutor):
             else:
                 wait += 1
                 if wait == self.patience and self.use_early_stop:
-                    self._logger.warning('Early stopping at epoch: %d' % epoch_idx)
+                    if rank0:
+                        self._logger.warning('Early stopping at epoch: %d' % epoch_idx)
                     break
-        if len(train_time) > 0:
+        if rank0 and len(train_time) > 0:
             self._logger.info('Trained totally {} epochs, average train time is {:.3f}s, '
                               'average eval time is {:.3f}s'.
                               format(len(train_time), sum(train_time) / len(train_time),
                                      sum(eval_time) / len(eval_time)))
-        if self.load_best_epoch:
+        if self.load_best_epoch and rank0:
             self.load_model_with_epoch(best_epoch)
         return min_val_loss
 
@@ -421,6 +460,12 @@ class TrafficStateExecutor(AbstractExecutor):
                 if self.clip_grad_norm:
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
                 self.optimizer.step()
+        # DDP: 对 losses 做 all_reduce 求全局均值
+        if self.is_distributed:
+            import torch.distributed as dist
+            loss_tensor = torch.tensor([np.mean(losses)], device=self.device)
+            dist.all_reduce(loss_tensor, op=dist.ReduceOp.AVG)
+            losses = [loss_tensor.item()] * len(losses)
         return losses
 
     def _valid_epoch(self, eval_dataloader, epoch_idx, loss_func=None):
@@ -446,5 +491,10 @@ class TrafficStateExecutor(AbstractExecutor):
                 self._logger.debug(loss.item())
                 losses.append(loss.item())
             mean_loss = np.mean(losses)
+            if self.is_distributed:
+                import torch.distributed as dist
+                loss_tensor = torch.tensor([mean_loss], device=self.device)
+                dist.all_reduce(loss_tensor, op=dist.ReduceOp.AVG)
+                mean_loss = loss_tensor.item()
             self._writer.add_scalar('eval loss', mean_loss, epoch_idx)
             return mean_loss
