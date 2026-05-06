@@ -9,7 +9,7 @@ from GNNTP.data.artifact_io import (
     load_data_artifact,
     validate_artifact_for_config,
 )
-from GNNTP.data.dataloader import generate_dataloader
+from GNNTP.data.dataloader import _build_dataset, generate_dataloader
 from GNNTP.data.factory import get_dataset
 from GNNTP.models.locator import get_model_metadata
 
@@ -44,6 +44,38 @@ def build_dataset_runtime(config: Any) -> DataRuntime:
     )
 
 
+def _make_samplers(config, train_data, eval_data, test_data):
+    """根据配置创建 DistributedSampler，非 DDP 时返回 None"""
+    if not config.get('is_distributed', False):
+        return None, None, None
+
+    from torch.utils.data.distributed import DistributedSampler
+
+    train_dataset = _build_dataset(train_data)
+    eval_dataset = _build_dataset(eval_data)
+    test_dataset = _build_dataset(test_data)
+
+    train_sampler = DistributedSampler(
+        train_dataset,
+        num_replicas=config['world_size'],
+        rank=config['rank'],
+        shuffle=True,
+    )
+    eval_sampler = DistributedSampler(
+        eval_dataset,
+        num_replicas=config['world_size'],
+        rank=config['rank'],
+        shuffle=False,
+    )
+    test_sampler = DistributedSampler(
+        test_dataset,
+        num_replicas=config['world_size'],
+        rank=config['rank'],
+        shuffle=False,
+    )
+    return train_sampler, eval_sampler, test_sampler
+
+
 def build_artifact_runtime(
     config: Any,
     *,
@@ -67,6 +99,11 @@ def build_artifact_runtime(
     if not isinstance(feature_name, dict):
         feature_name = {"X": "float", "y": "float"}
 
+    is_distributed = config.get('is_distributed', False)
+    train_sampler, eval_sampler, test_sampler = _make_samplers(
+        config, bundle["train"], bundle["valid"], bundle["test"]
+    )
+
     train_loader, valid_loader, test_loader = generate_dataloader(
         bundle["train"],
         bundle["valid"],
@@ -75,7 +112,13 @@ def build_artifact_runtime(
         batch_size=int(config.get("batch_size", 64)),
         num_workers=int(config.get("num_workers", 0)),
         shuffle=True,
-        pad_with_last_sample=bool(config.get("pad_with_last_sample", True)),
+        pad_with_last_sample=(
+            False if is_distributed
+            else bool(config.get("pad_with_last_sample", True))
+        ),
+        train_sampler=train_sampler,
+        eval_sampler=eval_sampler,
+        test_sampler=test_sampler,
     )
 
     data_feature = dict(bundle["data_feature"])

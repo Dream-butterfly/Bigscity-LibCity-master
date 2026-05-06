@@ -14,6 +14,26 @@ general_arguments = {
         "default": None,
         "help": "the gpu id to use"
     },
+    "local_rank": {
+        "type": "int",
+        "default": None,
+        "help": "local rank for DDP (set by torchrun automatically)"
+    },
+    "world_size": {
+        "type": "int",
+        "default": None,
+        "help": "total number of GPUs (set by torchrun automatically)"
+    },
+    "dist_backend": {
+        "type": "str",
+        "default": "nccl",
+        "help": "DDP backend (nccl/gloo)"
+    },
+    "scale_lr": {
+        "type": "bool",
+        "default": True,
+        "help": "whether to linearly scale learning rate by world_size in DDP"
+    },
     "train_rate": {
         "type": "float",
         "default": None,
@@ -81,6 +101,26 @@ hyper_arguments = {
         "type": "int",
         "default": None,
         "help": "the gpu id to use"
+    },
+    "local_rank": {
+        "type": "int",
+        "default": None,
+        "help": "local rank for DDP (set by torchrun automatically)"
+    },
+    "world_size": {
+        "type": "int",
+        "default": None,
+        "help": "total number of GPUs (set by torchrun automatically)"
+    },
+    "dist_backend": {
+        "type": "str",
+        "default": "nccl",
+        "help": "DDP backend (nccl/gloo)"
+    },
+    "scale_lr": {
+        "type": "bool",
+        "default": True,
+        "help": "whether to linearly scale learning rate by world_size in DDP"
     },
     "train_rate": {
         "type": "float",
