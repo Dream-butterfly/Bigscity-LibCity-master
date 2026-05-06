@@ -20,6 +20,8 @@ def _maybe_wrap_ddp(config, model):
             init_method='env://'
         )
     local_rank = config.get('local_rank', 0)
+    # DDP requires model parameters already on the target device before wrapping
+    model = model.cuda(local_rank)
     model = torch.nn.parallel.DistributedDataParallel(
         model,
         device_ids=[local_rank],
