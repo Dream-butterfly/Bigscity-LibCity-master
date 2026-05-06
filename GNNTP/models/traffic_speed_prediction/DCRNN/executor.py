@@ -29,7 +29,7 @@ class DCRNNExecutor(TrafficStateExecutor):
 
         def func(batch, batches_seen=None):
             y_true = batch['y']
-            y_predicted = self.model.predict(batch, batches_seen)
+            y_predicted = self._unwrap_model().predict(batch, batches_seen)
             y_true = self._scaler.inverse_transform(y_true[..., :self.output_dim])
             y_predicted = self._scaler.inverse_transform(y_predicted[..., :self.output_dim])
             if self.train_loss.lower() == 'mae':
@@ -165,7 +165,7 @@ class DCRNNExecutor(TrafficStateExecutor):
                 batches_seen(int): 全局batch数
         """
         self.model.train()
-        loss_func = loss_func if loss_func is not None else self.model.calculate_loss
+        loss_func = loss_func if loss_func is not None else self._unwrap_model().calculate_loss
         losses = []
         for batch in train_dataloader:
             self.optimizer.zero_grad()
@@ -201,7 +201,7 @@ class DCRNNExecutor(TrafficStateExecutor):
         """
         with torch.no_grad():
             self.model.eval()
-            loss_func = loss_func if loss_func is not None else self.model.calculate_loss
+            loss_func = loss_func if loss_func is not None else self._unwrap_model().calculate_loss
             losses = []
             for batch in eval_dataloader:
                 batch.to_tensor(self.device)

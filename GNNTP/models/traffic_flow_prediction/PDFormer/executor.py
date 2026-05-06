@@ -404,7 +404,7 @@ class PDFormerExecutor(TrafficStateExecutor):
     def _train_epoch(self, train_dataloader, epoch_idx, batches_seen=None, loss_func=None):
         self.model.train()
         if loss_func is None:
-            loss_func = self.model.calculate_loss_without_predict
+            loss_func = self._unwrap_model().calculate_loss_without_predict
         losses = []
         for batch in train_dataloader:
             batch.to_tensor(self.device)
@@ -442,7 +442,7 @@ class PDFormerExecutor(TrafficStateExecutor):
         with torch.no_grad():
             self.model.eval()
             if loss_func is None:
-                loss_func = self.model.calculate_loss_without_predict
+                loss_func = self._unwrap_model().calculate_loss_without_predict
             losses = []
             for batch in eval_dataloader:
                 batch.to_tensor(self.device)
@@ -468,7 +468,7 @@ class PDFormerExecutor(TrafficStateExecutor):
             y_preds = []
             for batch in test_dataloader:
                 batch.to_tensor(self.device)
-                output = self.model.predict(batch, lap_mx=self.lap_mx)
+                output = self._unwrap_model().predict(batch, lap_mx=self.lap_mx)
                 y_true = self._scaler.inverse_transform(batch['y'][..., :self.output_dim])
                 y_pred = self._scaler.inverse_transform(output[..., :self.output_dim])
                 y_truths.append(y_true.cpu().numpy())
