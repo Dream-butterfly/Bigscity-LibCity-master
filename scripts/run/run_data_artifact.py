@@ -147,7 +147,7 @@ if __name__ == "__main__":
     parser.add_argument("--task", type=str, default="traffic_state_pred", help="the name of task")
     parser.add_argument("--model", type=str, default=None, help="model name (optional; omit for model-free data prep)")
     parser.add_argument("--dataset", type=str, default="METR_LA", help="the name of dataset")
-    parser.add_argument("--dataset_class", type=str, default=None, help="dataset class name (required if --model is not set)")
+    # --dataset_class is registered by add_general_args() below
     parser.add_argument("--config_file", type=str, default=None, help="the file name of config file")
     parser.add_argument("--saved_model", type=str2bool, default=False, help="unused for data artifact build")
     parser.add_argument("--train", type=str2bool, default=False, help="unused for data artifact build")
