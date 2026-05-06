@@ -85,8 +85,16 @@ def objective_function(task=None, model_name=None, dataset_name=None, config_fil
     model = get_model(config, runtime.data_feature)
     model = _maybe_wrap_ddp(config, model)
     executor = get_executor(config, model, runtime.data_feature)
+    is_distributed = config.get('is_distributed', False)
+    rank = config.get('rank', 0)
     best_valid_score = executor.train(runtime.train_loader, runtime.valid_loader)
-    test_result = executor.evaluate(runtime.test_loader)
+    test_result = executor.evaluate(runtime.test_loader) if (rank == 0 or not is_distributed) else {}
+
+    if is_distributed:
+        import torch.distributed as dist
+        dist.barrier()
+        if rank == 0:
+            dist.destroy_process_group()
 
     return {
         'best_valid_score': best_valid_score,

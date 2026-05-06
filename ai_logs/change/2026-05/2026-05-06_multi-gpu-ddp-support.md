@@ -76,10 +76,21 @@ torchrun --nproc_per_node=4 run_train_artifact.py --model STGformer --dataset ME
 - 单卡/多卡控件互斥：切换 `num_gpus` 时自动清空隐藏字段，避免参数泄漏
 - 数据预处理 (`_run_data_prep_background`) 不受影响：其前端使用独立的 `collectDataCliOptions()`，不含 GPU 字段
 
+### 审计发现与修复（2026-05-06，当天修复）✅
+系统性 DDP 正确性审计发现 6 个问题，全部修复：
+
+| # | 严重度 | 文件 | 问题 | 修复 |
+|---|--------|------|------|------|
+| 1 | 致命 | `STTN/model.py:169-171` | `forward()` 中用普通 tensor 重新赋值 `self.adj_mx`，破坏 registered buffer | 改用局部变量 `adj_mx_norm` |
+| 2 | 高 | `STGformer/model.py:181` | `GraphPropagate.gso` 为普通 Python 属性，`model.to(device)` 不会移动 | 改为 `register_buffer('gso', gso)` |
+| 3 | 高 | `STGformer/executor.py` | 缺少 `sampler.set_epoch()` + `all_reduce` + rank guard | 补全三项，与基类一致 |
+| 4 | 高 | `traffic_state_executor.py:398` | `hyper_tune` 块所有 rank 同时执行 → checkpoint 损坏 | 加 `and rank0` 条件 |
+| 5 | 高 | `pipeline.py:80-94` | `objective_function()` 无 rank guard 无 cleanup | 加 rank guard + barrier + destroy |
+| 6 | 高 | `run_train_artifact.py:127-149` | 所有 rank 调用 `evaluate()` + `write_run_meta()` → 文件写入竞态 | 加 rank guard |
+
 ## 待完成（后续 Phase）
 
-- Phase 5: 独立实验脚本适配（`train_new_diffusion.py`, `train_new_diffusion_2.py`）
-- Phase 6: 测试验证
+- Phase 6: 测试验证（单卡回归、2/4 卡、checkpoint 兼容）
 
 ---
 

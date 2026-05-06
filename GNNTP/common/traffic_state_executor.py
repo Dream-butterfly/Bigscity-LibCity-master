@@ -395,12 +395,10 @@ class TrafficStateExecutor(AbstractExecutor):
                     format(epoch_idx, self.epochs, np.mean(losses), val_loss, log_lr, (end_time - start_time))
                 self._logger.info(message)
 
-            if self.hyper_tune:
-                # use ray tune to checkpoint
+            if self.hyper_tune and rank0:
                 with tune.checkpoint_dir(step=epoch_idx) as checkpoint_dir:
                     path = os.path.join(checkpoint_dir, "checkpoint")
                     self.save_model(path)
-                # ray tune use loss to determine which params are best
                 tune.report(loss=val_loss)
 
             if val_loss < min_val_loss:

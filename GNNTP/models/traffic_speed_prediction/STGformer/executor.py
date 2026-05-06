@@ -30,7 +30,8 @@ class STGformerExecutor(TrafficStateExecutor):
         self._logger = getLogger()
 
     def train(self, train_dataloader, eval_dataloader):
-        self._logger.info("Start training ...")
+        if self._is_rank0():
+            self._logger.info("Start training ...")
         min_val_loss = float("inf")
         wait = 0
         best_epoch = 0
@@ -38,10 +39,13 @@ class STGformerExecutor(TrafficStateExecutor):
         train_time = []
         eval_time = []
         num_batches = len(train_dataloader)
-        self._logger.info("num_batches:{}".format(num_batches))
+        if self._is_rank0():
+            self._logger.info("num_batches:{}".format(num_batches))
 
         for epoch_idx in range(self._epoch_num, self.epochs):
             start_time = time.time()
+            if self.is_distributed and hasattr(train_dataloader, 'sampler') and hasattr(train_dataloader.sampler, 'set_epoch'):
+                train_dataloader.sampler.set_epoch(epoch_idx)
             losses = self._train_epoch(train_dataloader, epoch_idx, self.loss_func)
             train_loss = float(np.mean(losses))
             train_time.append(time.time() - start_time)
@@ -57,14 +61,14 @@ class STGformerExecutor(TrafficStateExecutor):
             if self.lr_scheduler is not None and self.lr_scheduler_type.lower() == "reducelronplateau":
                 self.lr_scheduler.step(val_loss)
 
-            if (epoch_idx % self.log_every) == 0:
+            if self._is_rank0() and (epoch_idx % self.log_every) == 0:
                 log_lr = self.optimizer.param_groups[0]["lr"]
                 message = "Epoch [{}/{}] train_loss: {:.4f}, val_loss: {:.4f}, lr: {:.6f}, {:.2f}s".format(
                     epoch_idx, self.epochs, train_loss, val_loss, log_lr, (time.time() - start_time)
                 )
                 self._logger.info(message)
 
-            if self.hyper_tune:
+            if self.hyper_tune and self._is_rank0():
                 with tune.checkpoint_dir(step=epoch_idx) as checkpoint_dir:
                     path = os.path.join(checkpoint_dir, "checkpoint")
                     self.save_model(path)
@@ -72,7 +76,8 @@ class STGformerExecutor(TrafficStateExecutor):
 
             if val_loss < min_val_loss:
                 wait = 0
-                best_state_dict = copy.deepcopy(self._unwrap_model().state_dict())
+                if self._is_rank0():
+                    best_state_dict = copy.deepcopy(self._unwrap_model().state_dict())
                 if self.saved and self._is_rank0():
                     model_file_name = self.save_model_with_epoch(epoch_idx)
                     self._logger.info(
@@ -116,6 +121,11 @@ class STGformerExecutor(TrafficStateExecutor):
             if self.clip_grad_norm:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
             self.optimizer.step()
+        if self.is_distributed:
+            import torch.distributed as dist
+            loss_tensor = torch.tensor([np.mean(losses)], device=self.device)
+            dist.all_reduce(loss_tensor, op=dist.ReduceOp.AVG)
+            losses = [loss_tensor.item()] * len(losses)
         return losses
 
     def _valid_epoch(self, eval_dataloader, epoch_idx):
@@ -132,6 +142,11 @@ class STGformerExecutor(TrafficStateExecutor):
                 self._logger.debug(loss.item())
                 losses.append(loss.item())
             mean_loss = float(np.mean(losses))
+            if self.is_distributed:
+                import torch.distributed as dist
+                loss_tensor = torch.tensor([mean_loss], device=self.device)
+                dist.all_reduce(loss_tensor, op=dist.ReduceOp.AVG)
+                mean_loss = loss_tensor.item()
             self._writer.add_scalar("eval loss", mean_loss, epoch_idx)
             return mean_loss
 

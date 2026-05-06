@@ -178,7 +178,7 @@ class GraphPropagate(nn.Module):
     def __init__(self, Ks, gso, dropout=0.2):
         super(GraphPropagate, self).__init__()
         self.Ks = Ks
-        self.gso = gso
+        self.register_buffer('gso', gso)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, graph):

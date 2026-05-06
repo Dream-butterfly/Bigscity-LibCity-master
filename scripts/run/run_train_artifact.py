@@ -126,27 +126,26 @@ def run_train_artifact(
         executor.load_model(model_cache_file)
     if rank == 0 or not is_distributed:
         test_result = executor.evaluate(runtime.test_loader)
-    else:
-        executor.evaluate(runtime.test_loader)
     if is_distributed:
         import torch.distributed as dist
         dist.barrier()
         if rank == 0:
             dist.destroy_process_group()
 
-    write_run_meta(
-        exp_id,
-        {
-            "task": resolved_task,
-            "model": resolved_model,
-            "dataset": resolved_dataset,
-            "artifact_id": str(runtime.artifact_meta.get("artifact_id", "") or ""),
-            "artifact_dir": str(runtime.artifact_dir or ""),
-            "data_signature": str(runtime.artifact_meta.get("data_signature", "") or ""),
-            "force_reuse": bool(force_reuse),
-            "source": "run_train_artifact",
-        },
-    )
+    if rank == 0 or not is_distributed:
+        write_run_meta(
+            exp_id,
+            {
+                "task": resolved_task,
+                "model": resolved_model,
+                "dataset": resolved_dataset,
+                "artifact_id": str(runtime.artifact_meta.get("artifact_id", "") or ""),
+                "artifact_dir": str(runtime.artifact_dir or ""),
+                "data_signature": str(runtime.artifact_meta.get("data_signature", "") or ""),
+                "force_reuse": bool(force_reuse),
+                "source": "run_train_artifact",
+            },
+        )
     return test_result
 
 

@@ -166,12 +166,12 @@ class STransformer(nn.Module):
         D_S = D_S.permute(0, 2, 1, 3)
 
         X_G = torch.Tensor(query.shape[0], query.shape[1], 0, query.shape[3]).to(self.device)
-        self.adj_mx = self.adj_mx.unsqueeze(0).unsqueeze(0)
-        self.adj_mx = self.norm_adj(self.adj_mx)
-        self.adj_mx = self.adj_mx.squeeze(0).squeeze(0)
+        adj_mx_norm = self.adj_mx.unsqueeze(0).unsqueeze(0)
+        adj_mx_norm = self.norm_adj(adj_mx_norm)
+        adj_mx_norm = adj_mx_norm.squeeze(0).squeeze(0)
 
         for t in range(query.shape[2]):
-            o = self.gcn(query[:, :, t, :], self.adj_mx)
+            o = self.gcn(query[:, :, t, :], adj_mx_norm)
             o = o.unsqueeze(2)
             X_G = torch.cat((X_G, o), dim=2)
 
