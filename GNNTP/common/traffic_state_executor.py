@@ -271,7 +271,7 @@ class TrafficStateExecutor(AbstractExecutor):
 
         def func(batch):
             y_true = batch['y']
-            y_predicted = self.model.predict(batch)
+            y_predicted = self._unwrap_model().predict(batch)
             y_true = self._scaler.inverse_transform(y_true[..., :self.output_dim])
             y_predicted = self._scaler.inverse_transform(y_predicted[..., :self.output_dim])
             if self.train_loss.lower() == 'mae':
@@ -322,7 +322,7 @@ class TrafficStateExecutor(AbstractExecutor):
             for batch in test_dataloader:
                 batch.to_tensor(self.device)
                 with self._autocast_context():
-                    output = self.model.predict(batch)
+                    output = self._unwrap_model().predict(batch)
                 y_true = self._scaler.inverse_transform(batch['y'][..., :self.output_dim])
                 y_pred = self._scaler.inverse_transform(output[..., :self.output_dim])
                 y_truths.append(y_true.cpu().numpy())
@@ -437,7 +437,7 @@ class TrafficStateExecutor(AbstractExecutor):
             list: 每个batch的损失的数组
         """
         self.model.train()
-        loss_func = loss_func if loss_func is not None else self.model.calculate_loss
+        loss_func = loss_func if loss_func is not None else self._unwrap_model().calculate_loss
         losses = []
         for batch in train_dataloader:
             self.optimizer.zero_grad()
@@ -480,7 +480,7 @@ class TrafficStateExecutor(AbstractExecutor):
         """
         with torch.no_grad():
             self.model.eval()
-            loss_func = loss_func if loss_func is not None else self.model.calculate_loss
+            loss_func = loss_func if loss_func is not None else self._unwrap_model().calculate_loss
             losses = []
             for batch in eval_dataloader:
                 batch.to_tensor(self.device)
