@@ -1,7 +1,9 @@
 /* ═══════════════════════════════════════════════════════
    GNNTP Web Console — v2 Main Script
    基于 main.js 迁移，保留核心功能，适配 sidebar 新布局
+   v=20260507d — DDP log fix
    ═══════════════════════════════════════════════════════ */
+console.log('[train_web_v2] loaded v=20260507d');
 
 "use strict";
 
@@ -993,6 +995,7 @@ async function pollTrainLogs() {
       setTimeout(pollTrainLogs, 1500);
     }
   } catch (e) {
+    console.error('[pollTrainLogs] error:', e);
     setTimeout(pollTrainLogs, 2000);
   }
 }
@@ -1163,6 +1166,7 @@ async function pollResumeLogs() {
       setTimeout(pollResumeLogs, 1000);
     }
   } catch (e) {
+    console.error('[pollResumeLogs] error:', e);
     setTimeout(pollResumeLogs, 2000);
   }
 }

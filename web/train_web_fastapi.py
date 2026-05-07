@@ -2013,6 +2013,8 @@ async def api_start(request: Request):
         ),
         daemon=True,
     )
+    with STATE.lock:
+        STATE.running = True
     t.start()
     return {"message": "Training started."}
 
@@ -2121,6 +2123,8 @@ async def api_start_resume(request: Request):
         ),
         daemon=True,
     )
+    with STATE.lock:
+        STATE.running = True
     t.start()
     return {"message": "Resume training started."}
 
