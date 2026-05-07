@@ -468,9 +468,11 @@ class AttentionDenoiser(nn.Module):
         timestep_features = self.time_projection(self.time_embedding(timesteps)).to(dtype=denoiser_input.dtype)
         denoiser_input = denoiser_input + timestep_features.unsqueeze(1).unsqueeze(2)
 
-        # Fuse condition directly into denoiser input BEFORE blocks.
+        # Fuse last history step as condition anchor BEFORE blocks.
+        # The last step carries the most recent spatial+trend signal and
+        # is far more informative than a time-average for short-term forecasting.
         # Cross-attention inside blocks is retained as secondary temporal pathway.
-        condition_pooled = condition_features.mean(dim=1, keepdim=True)
+        condition_pooled = condition_features[:, -1:, :, :].unsqueeze(1)
         condition_pooled = condition_pooled.expand(-1, denoiser_input.size(1), -1, -1)
         denoiser_input = self.condition_fusion(torch.cat([denoiser_input, condition_pooled], dim=-1))
 
