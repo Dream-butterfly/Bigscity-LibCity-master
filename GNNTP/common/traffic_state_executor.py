@@ -197,6 +197,9 @@ class TrafficStateExecutor(AbstractExecutor):
         if self.learner.lower() == 'adam':
             optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate,
                                          eps=self.lr_epsilon, betas=self.lr_betas, weight_decay=self.weight_decay)
+        elif self.learner.lower() == 'adamw':
+            optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate,
+                                          eps=self.lr_epsilon, betas=self.lr_betas, weight_decay=self.weight_decay)
         elif self.learner.lower() == 'sgd':
             optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate,
                                         momentum=self.lr_momentum, weight_decay=self.weight_decay)
