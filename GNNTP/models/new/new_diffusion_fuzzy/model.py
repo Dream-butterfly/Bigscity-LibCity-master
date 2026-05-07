@@ -579,10 +579,17 @@ class DiffusionScheduler(nn.Module):
         nonzero_mask = (timesteps > 0).float().reshape(current_state.shape[0], 1, 1, 1)
         return model_mean + nonzero_mask * torch.sqrt(posterior_variance_t) * noise
 
-    def ddim_step(self, current_state, timesteps, predicted_noise, eta=0.0):
-        """Single DDIM reverse step for faster deterministic or stochastic sampling."""
+    def ddim_step(self, current_state, timesteps, predicted_noise, eta=0.0, t_next=None):
+        """Single DDIM reverse step for faster deterministic or stochastic sampling.
+
+        When sampling with non-consecutive timesteps (num_sampling_steps < diffusion_steps),
+        pass `t_next` to use the correct ᾱ of the previous sampling step instead of ᾱ[t-1].
+        """
         alpha_bar_t = self._extract(self.alphas_cumprod, timesteps, current_state.shape)
-        alpha_bar_prev = self._extract(self.alphas_cumprod_prev, timesteps, current_state.shape)
+        if t_next is not None:
+            alpha_bar_prev = self._extract(self.alphas_cumprod, t_next, current_state.shape)
+        else:
+            alpha_bar_prev = self._extract(self.alphas_cumprod_prev, timesteps, current_state.shape)
         sqrt_alpha_bar_t = torch.sqrt(alpha_bar_t)
         sqrt_one_minus_alpha_bar_t = torch.sqrt((1.0 - alpha_bar_t).clamp_min(1e-12))
         predicted_start = (current_state - sqrt_one_minus_alpha_bar_t * predicted_noise) / sqrt_alpha_bar_t
@@ -830,14 +837,18 @@ class NewDiffusion(AbstractTrafficStateModel):
             device=condition_features.device,
         )
         adjacency_matrix = self.adjacency_matrix.to(condition_features.device)
-        for step in sampling_schedule:
+        for i, step in enumerate(sampling_schedule):
             timestep = step.expand(batch_size)
             predicted_noise = self.noise_predictor(
                 future_state, timestep, condition_features, adjacency_matrix
             )
             if self.sampling_method == "ddim":
+                t_next = None
+                if i < len(sampling_schedule) - 1:
+                    t_next = sampling_schedule[i + 1].expand(batch_size)
                 future_state = self.diffusion_scheduler.ddim_step(
-                    future_state, timestep, predicted_noise, eta=self.ddim_eta
+                    future_state, timestep, predicted_noise,
+                    eta=self.ddim_eta, t_next=t_next,
                 )
             else:
                 future_state = self.diffusion_scheduler.ddpm_step(
