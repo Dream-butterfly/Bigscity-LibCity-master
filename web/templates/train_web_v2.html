@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>GNNTP Console v2</title>
+<title data-i18n="app_title">GNNTP Console v2</title>
 <script src="https://assets.pyecharts.org/assets/v5/echarts.min.js"></script>
 <link rel="stylesheet" href="/static/design-tokens.css"/>
 <link rel="stylesheet" href="/static/train_web_v2.css"/>
@@ -16,34 +16,34 @@
     <div class="sidebar-brand-icon">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M19.07 4.93l-2.83 2.83m-8.48 8.48-2.83 2.83"/></svg>
     </div>
-    <span class="sidebar-brand-text">GNNTP Console</span>
+    <span class="sidebar-brand-text" data-i18n="sidebar_brand">GNNTP Console</span>
   </div>
   <nav class="sidebar-nav">
     <button class="sidebar-nav-item active" data-tab="data">
       <svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>
-      <span>数据处理</span>
+      <span data-i18n="sidebar_data">数据处理</span>
     </button>
     <button class="sidebar-nav-item" data-tab="train">
       <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-      <span>训练</span>
+      <span data-i18n="sidebar_train">训练</span>
     </button>
     <button class="sidebar-nav-item" data-tab="resume">
       <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-      <span>继续训练</span>
+      <span data-i18n="sidebar_resume">继续训练</span>
     </button>
     <button class="sidebar-nav-item" data-tab="compare">
       <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-      <span>模型对比</span>
+      <span data-i18n="sidebar_compare">模型对比</span>
     </button>
     <button class="sidebar-nav-item" data-tab="history">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      <span>运行历史</span>
+      <span data-i18n="sidebar_history">运行历史</span>
     </button>
   </nav>
   <div class="sidebar-footer">
     <button class="sidebar-footer-item" id="themeToggleSidebar">
       <svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-      <span>切换主题</span>
+      <span data-i18n="sidebar_theme_toggle">切换主题</span>
     </button>
     <span style="font-size:.7rem;color:var(--text-sidebar);padding:4px var(--spacing-md);opacity:.5">GNNTP v2.0</span>
   </div>
@@ -54,10 +54,16 @@
 
   <div class="page-header">
     <div class="page-header-left">
-      <h1 id="tabTitle">数据处理</h1>
-      <div class="sub">数据工件生成 · 版本管理 · 数据集预览</div>
+      <h1 id="tabTitle" data-i18n="tab_data_title">数据处理</h1>
+      <div class="sub" id="tabSub" data-i18n="tab_data_sub">数据工件生成 · 版本管理 · 数据集预览</div>
     </div>
     <div class="card-controls">
+      <label for="lang_select" class="small" data-i18n="lang_label" style="margin:0">语言</label>
+      <select id="lang_select" style="width:auto;font-size:.78rem">
+        <option value="zh-CN">中文</option>
+        <option value="ja-JP">日本語</option>
+        <option value="en-US">English</option>
+      </select>
       <span class="badge badge-idle" id="globalStatus">idle</span>
     </div>
   </div>
@@ -67,17 +73,17 @@
 
     <!-- 数据预处理 -->
     <div class="card">
-      <div class="card-header"><strong>数据预处理</strong></div>
+      <div class="card-header"><strong data-i18n="data_process_title">数据预处理</strong></div>
       <div class="param-groups">
-        <div class="param-group"><div class="param-group-title">任务配置</div>
+        <div class="param-group"><div class="param-group-title" data-i18n="group_basic_task">任务配置</div>
           <div class="group-grid">
-            <div><label>task</label><select id="data_task"></select></div>
-            <div><label>model</label><select id="data_model"></select></div>
-            <div><label>dataset</label><select id="data_dataset"></select></div>
-            <div><label>seed</label><input id="data_seed" value="42"/></div>
+            <div><label data-param-label="task">task</label><select id="data_task"></select></div>
+            <div><label data-param-label="model">model</label><select id="data_model"></select></div>
+            <div><label data-param-label="dataset">dataset</label><select id="data_dataset"></select></div>
+            <div><label data-param-label="seed">seed</label><input id="data_seed" value="42"/></div>
           </div>
         </div>
-        <div class="param-group"><div class="param-group-title">数据划分</div>
+        <div class="param-group"><div class="param-group-title" data-i18n="group_data_split">数据划分</div>
           <div class="group-grid">
             <div><label>train rate</label><input id="data_train_rate" value="0.6"/></div>
             <div><label>eval rate</label><input id="data_eval_rate" value="0.2"/></div>
@@ -111,7 +117,7 @@
     <!-- 数据版本 -->
     <div class="card">
       <div class="card-header">
-        <strong>数据版本</strong>
+        <strong data-i18n="data_version_title">数据版本</strong>
         <div class="card-controls">
           <select id="data_versions_dataset_filter" style="width:auto;"><option value="">全部数据集</option></select>
           <span class="chip" id="dataVersionCount">0 versions</span>
@@ -131,7 +137,7 @@
     <div class="pane pane-2">
       <div class="card">
         <div class="card-header">
-          <strong>数据集预览</strong>
+          <strong data-i18n="data_preview_title">数据集预览</strong>
           <div class="card-controls">
             <select id="data_preview_file_type" style="width:auto"><option>dyna</option><option>geo</option><option>rel</option></select>
             <input id="data_preview_entity_id" placeholder="entity_id" style="width:100px"/>
@@ -148,7 +154,7 @@
         </div>
       </div>
       <div class="card">
-        <div class="card-header"><strong>处理日志</strong></div>
+        <div class="card-header"><strong data-i18n="data_log_title">处理日志</strong></div>
         <div class="terminal">
           <div class="terminal-bar">
             <span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span>

@@ -290,6 +290,24 @@
     "error_clear_failed": "Failed to clear state",
     "error_bool_value": "Invalid boolean value: {raw}",
     "error_int_value": "Invalid integer value: {raw}",
-    "error_float_value": "Invalid float value: {raw}"
+    "error_float_value": "Invalid float value: {raw}",
+    "data_process_title": "Data Preprocessing",
+    "data_version_title": "Data Versions",
+    "data_preview_title": "Dataset Preview",
+    "data_log_title": "Processing Log",
+    "group_data_split": "Data Split",
+    "sidebar_data": "Data Processing",
+    "sidebar_train": "Training",
+    "sidebar_resume": "Resume Training",
+    "sidebar_compare": "Model Comparison",
+    "sidebar_history": "Run History",
+    "sidebar_theme_toggle": "Toggle Theme",
+    "sidebar_brand": "GNNTP Console",
+    "tab_data_title": "Data Processing",
+    "tab_data_sub": "Data Artifact Generation · Version Management · Dataset Preview",
+    "tab_train_sub": "Parameter Configuration · Real-Time Logs · Loss/Metrics Visualization",
+    "tab_resume_sub": "Checkpoint Resume · History Run Recovery",
+    "tab_compare_sub": "Multi-Model Metrics Comparison · Prediction Curve Overlay",
+    "tab_history_sub": "Training Record Search · Metric Tracking"
   }
 }

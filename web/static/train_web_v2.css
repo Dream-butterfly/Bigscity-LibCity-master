@@ -229,6 +229,9 @@ tr:hover td{background:var(--accent-subtle)}
 .movable-tile.tile-moving .toolbar{cursor:grabbing}
 
 /* ═══ RESPONSIVE ═══ */
+@media (max-width:1200px){
+  .layout-popup{width:min(360px,calc(100vw - 20px))}
+}
 @media (max-width:1024px){
   .pane-2,.pane-2-1,.pane-1-2{grid-template-columns:1fr}
   .content{margin-left:var(--sidebar-collapsed-w);padding:var(--spacing-lg)}

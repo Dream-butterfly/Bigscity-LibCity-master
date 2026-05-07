@@ -6,6 +6,9 @@
 "use strict";
 
 /* ═══════════════════════ GLOBALS ═══════════════════════ */
+const DEFAULT_LANG = new URLSearchParams(window.location.search).get('lang')
+  || window.localStorage.getItem('train_web_lang') || 'zh-CN';
+
 const TAB_MAP = {
   data:    { title: '数据处理',    sub: '数据工件生成 · 版本管理 · 数据集预览',      id: 'tab-data' },
   train:   { title: '训练',        sub: '参数配置 · 实时日志 · Loss/指标可视化',     id: 'tab-train' },
@@ -13,6 +16,91 @@ const TAB_MAP = {
   compare: { title: '模型对比',    sub: '多模型指标对比 · 预测曲线叠加',             id: 'tab-compare' },
   history: { title: '运行历史',    sub: '训练记录查询 · 指标追踪',                   id: 'tab-history' },
 };
+
+const TAB_I18N_KEYS = {
+  data:    { title: 'tab_data_title',    sub: 'tab_data_sub' },
+  train:   { title: 'tab_train_title',   sub: 'tab_train_sub' },
+  resume:  { title: 'tab_resume_title',  sub: 'tab_resume_sub' },
+  compare: { title: 'tab_compare_title', sub: 'tab_compare_sub' },
+  history: { title: 'tab_history_title', sub: 'tab_history_sub' },
+};
+
+/* ── i18n State ── */
+let _i18nUI = {};
+let _i18nParams = {};
+
+function t(key, fallback) {
+  return _i18nUI[key] || fallback || key;
+}
+
+function getParamDisplayName(key) {
+  return _i18nParams[key] || key;
+}
+
+function applyI18n() {
+  // data-i18n 元素
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (!key) return;
+    if (!el.dataset.i18nFallback) el.dataset.i18nFallback = el.innerText;
+    el.innerText = t(key, el.dataset.i18nFallback);
+  });
+  // data-i18n-placeholder 元素
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    if (!key) return;
+    if (!el.dataset.i18nPlaceholderFallback) {
+      el.dataset.i18nPlaceholderFallback = el.getAttribute('placeholder') || '';
+    }
+    el.setAttribute('placeholder', t(key, el.dataset.i18nPlaceholderFallback));
+  });
+  // data-param-label 元素
+  document.querySelectorAll('[data-param-label]').forEach(el => {
+    const key = el.getAttribute('data-param-label');
+    if (!key) return;
+    el.innerText = getParamDisplayName(key);
+  });
+}
+
+async function loadI18n(lang) {
+  const normalized = lang.replace(/_/g, '-');
+  window.localStorage.setItem('train_web_lang', normalized);
+  try {
+    const r = await fetch(`/static/i18n/${encodeURIComponent(normalized)}.json`);
+    if (r.ok) {
+      const data = await r.json();
+      _i18nUI = data.ui || {};
+      _i18nParams = data.params || {};
+      document.documentElement.lang = data.lang || normalized;
+    } else {
+      _i18nUI = {}; _i18nParams = {};
+    }
+  } catch (_) {
+    _i18nUI = {}; _i18nParams = {};
+  }
+  applyI18n();
+  // 更新 lang 选择器
+  const sel = document.getElementById('lang_select');
+  if (sel) sel.value = normalized;
+  // 更新 page header
+  updatePageHeaderI18n();
+}
+
+function updatePageHeaderI18n() {
+  const activeTab = document.querySelector('.sidebar-nav-item.active');
+  if (!activeTab) return;
+  const name = activeTab.dataset.tab;
+  const keys = TAB_I18N_KEYS[name];
+  if (!keys) return;
+  const titleEl = document.getElementById('tabTitle');
+  const subEl = document.getElementById('tabSub');
+  if (titleEl && keys.title) {
+    titleEl.textContent = t(keys.title, TAB_MAP[name].title);
+  }
+  if (subEl && keys.sub) {
+    subEl.textContent = t(keys.sub, TAB_MAP[name].sub);
+  }
+}
 
 /* ── ECharts 实例池 ── */
 const CHART_IDS = ['chartModelParams','chartLoss','chartPred','chartCompare'];
@@ -28,9 +116,13 @@ function switchTab(name) {
   if (tabEl) tabEl.classList.add('active');
   const btn = document.querySelector(`[data-tab="${name}"]`);
   if (btn) btn.classList.add('active');
-  // 更新 header
-  document.getElementById('tabTitle').textContent = TAB_MAP[name].title;
-  document.querySelector('.page-header-left .sub').textContent = TAB_MAP[name].sub;
+  // 更新 header (优先用 i18n)
+  const titleEl = document.getElementById('tabTitle');
+  const subEl = document.querySelector('.page-header-left .sub');
+  const i18nTitle = t(TAB_I18N_KEYS[name].title, TAB_MAP[name].title);
+  const i18nSub = t(TAB_I18N_KEYS[name].sub, TAB_MAP[name].sub);
+  if (titleEl) titleEl.textContent = i18nTitle;
+  if (subEl) subEl.textContent = i18nSub;
   // 延迟 resize 图表
   setTimeout(resizeAllCharts, 300);
 }
@@ -448,6 +540,16 @@ function init() {
 
   // 数据版本同步
   document.getElementById('btnSyncToTrain')?.addEventListener('click', applySelectedDataVersionToTrain);
+
+  // i18n 加载（自动调用 applyI18n）
+  loadI18n(DEFAULT_LANG);
+
+  // 语言切换
+  const langSelect = document.getElementById('lang_select');
+  if (langSelect) {
+    langSelect.value = DEFAULT_LANG;
+    langSelect.addEventListener('change', e => loadI18n(e.target.value));
+  }
 
   // 加载元数据
   loadMeta();

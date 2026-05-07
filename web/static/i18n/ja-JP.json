@@ -290,6 +290,24 @@
     "error_clear_failed": "状態クリアに失敗しました",
     "error_bool_value": "真偽値エラー: {raw}",
     "error_int_value": "整数エラー: {raw}",
-    "error_float_value": "浮動小数エラー: {raw}"
+    "error_float_value": "浮動小数エラー: {raw}",
+    "data_process_title": "データ前処理",
+    "data_version_title": "データバージョン",
+    "data_preview_title": "データセットプレビュー",
+    "data_log_title": "処理ログ",
+    "group_data_split": "データ分割",
+    "sidebar_data": "データ処理",
+    "sidebar_train": "訓練",
+    "sidebar_resume": "継続学習",
+    "sidebar_compare": "モデル比較",
+    "sidebar_history": "実行履歴",
+    "sidebar_theme_toggle": "テーマ切替",
+    "sidebar_brand": "GNNTP Console",
+    "tab_data_title": "データ処理",
+    "tab_data_sub": "データアーティファクト生成 · バージョン管理 · データセットプレビュー",
+    "tab_train_sub": "パラメータ設定 · リアルタイムログ · Loss/指標可視化",
+    "tab_resume_sub": "チェックポイント再開 · 実行履歴復元",
+    "tab_compare_sub": "複数モデル指標比較 · 予測曲線重ね表示",
+    "tab_history_sub": "訓練記録検索 · 指標追跡"
   }
 }

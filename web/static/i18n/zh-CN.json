@@ -287,6 +287,24 @@
     "error_clear_failed": "清空状态失败",
     "error_bool_value": "布尔值错误: {raw}",
     "error_int_value": "整数错误: {raw}",
-    "error_float_value": "浮点数错误: {raw}"
+    "error_float_value": "浮点数错误: {raw}",
+    "data_process_title": "数据预处理",
+    "data_version_title": "数据版本",
+    "data_preview_title": "数据集预览",
+    "data_log_title": "处理日志",
+    "group_data_split": "数据划分",
+    "sidebar_data": "数据处理",
+    "sidebar_train": "训练",
+    "sidebar_resume": "继续训练",
+    "sidebar_compare": "模型对比",
+    "sidebar_history": "运行历史",
+    "sidebar_theme_toggle": "切换主题",
+    "sidebar_brand": "GNNTP Console",
+    "tab_data_title": "数据处理",
+    "tab_data_sub": "数据工件生成 · 版本管理 · 数据集预览",
+    "tab_train_sub": "参数配置 · 实时日志 · Loss/指标可视化",
+    "tab_resume_sub": "Checkpoint续训 · 历史运行恢复",
+    "tab_compare_sub": "多模型指标对比 · 预测曲线叠加",
+    "tab_history_sub": "训练记录查询 · 指标追踪"
   }
 }
