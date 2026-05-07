@@ -472,7 +472,7 @@ class AttentionDenoiser(nn.Module):
         # The last step carries the most recent spatial+trend signal and
         # is far more informative than a time-average for short-term forecasting.
         # Cross-attention inside blocks is retained as secondary temporal pathway.
-        condition_pooled = condition_features[:, -1:, :, :].unsqueeze(1)
+        condition_pooled = condition_features[:, -1:, :, :]
         condition_pooled = condition_pooled.expand(-1, denoiser_input.size(1), -1, -1)
         denoiser_input = self.condition_fusion(torch.cat([denoiser_input, condition_pooled], dim=-1))
 

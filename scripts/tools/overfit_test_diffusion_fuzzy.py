@@ -27,7 +27,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import torch
 from torch.utils.data.dataloader import DataLoader
 
-from GNNTP.config_parser import ConfigParser
+from GNNTP.common import ConfigParser
 from GNNTP.data import build_dataset_runtime
 from GNNTP.data.core.batch import Batch
 from GNNTP.data.core.list_dataset import ListDataset
