@@ -121,6 +121,8 @@ th,td{padding:8px var(--spacing-md);text-align:left;border-bottom:1px solid var(
 th{background:var(--bg-input);font-weight:650;font-size:.78rem;color:var(--text-secondary);position:sticky;top:0;z-index:1}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--accent-subtle)}
+tr.is-selected td{background:var(--accent-subtle)}
+tr.is-selected td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
 .mono{font-family:var(--font-mono);font-size:.8rem}
 
 /* ═══ TERMINAL ═══ */
