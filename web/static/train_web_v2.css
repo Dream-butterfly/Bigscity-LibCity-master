@@ -230,6 +230,13 @@ tr.is-selected td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
 .movable-tile.tile-moving{transition:none;border-color:var(--accent);box-shadow:0 16px 34px rgba(37,99,235,.28);z-index:1200}
 .movable-tile.tile-moving .toolbar{cursor:grabbing}
 
+/* ═══ GPU MULTI-SELECT ═══ */
+.gpu-checkboxes{display:flex;flex-wrap:wrap;gap:6px}
+.gpu-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.8rem;cursor:pointer;user-select:none;transition:border-color .15s,background .15s}
+.gpu-chip:hover{border-color:var(--accent)}
+.gpu-chip input[type=checkbox]{width:auto;margin:0}
+.gpu-chip:has(input:checked){background:var(--accent);border-color:var(--accent);color:#fff}
+
 /* ═══ RESPONSIVE ═══ */
 @media (max-width:1200px){
   .layout-popup{width:min(360px,calc(100vw - 20px))}

@@ -189,10 +189,32 @@
         <div class="param-group"><div class="param-group-title">运行环境</div>
           <div class="group-grid">
             <div><label>exp_id</label><input id="exp_id" placeholder="可选"/></div>
-            <div><label>gpu</label><select id="gpu"><option value=""></option><option value="true">true</option><option value="false">false</option></select></div>
-            <div><label>gpu_id</label><input id="gpu_id" placeholder="0"/></div>
+            <div><label>gpu</label><select id="gpu"><option value=""></option><option value="true" selected>true</option><option value="false">false</option></select></div>
+            <div><label>gpu_id（单卡）</label><input id="gpu_id" placeholder="0"/></div>
             <div><label>executor</label><input id="executor" value="TrafficStateExecutor"/></div>
             <div><label>evaluator</label><input id="evaluator" value="TrafficStateEvaluator"/></div>
+            <div class="span-all">
+              <label>多卡训练（DDP）</label>
+              <div style="display:flex;align-items:center;gap:var(--spacing-sm)">
+                <select id="num_gpus" style="width:auto" onchange="onNumGpusChange()">
+                  <option value="1" selected>1 卡（单卡）</option>
+                  <option value="2">2 卡</option>
+                  <option value="4">4 卡</option>
+                  <option value="8">8 卡</option>
+                </select>
+                <span class="small" id="gpu_ids_display" style="color:var(--text-sidebar)">gpu_ids: [0]</span>
+              </div>
+              <div id="gpu_checkboxes" class="gpu-checkboxes" style="display:none;margin-top:6px;gap:6px">
+                <label class="gpu-chip"><input type="checkbox" value="0" checked onchange="onGpuCheckboxChange()"> GPU 0</label>
+                <label class="gpu-chip"><input type="checkbox" value="1" onchange="onGpuCheckboxChange()"> GPU 1</label>
+                <label class="gpu-chip"><input type="checkbox" value="2" onchange="onGpuCheckboxChange()"> GPU 2</label>
+                <label class="gpu-chip"><input type="checkbox" value="3" onchange="onGpuCheckboxChange()"> GPU 3</label>
+                <label class="gpu-chip"><input type="checkbox" value="4" onchange="onGpuCheckboxChange()"> GPU 4</label>
+                <label class="gpu-chip"><input type="checkbox" value="5" onchange="onGpuCheckboxChange()"> GPU 5</label>
+                <label class="gpu-chip"><input type="checkbox" value="6" onchange="onGpuCheckboxChange()"> GPU 6</label>
+                <label class="gpu-chip"><input type="checkbox" value="7" onchange="onGpuCheckboxChange()"> GPU 7</label>
+              </div>
+            </div>
             <div class="span-all"><label>extra_args</label><input id="extra_args" placeholder="--log_level INFO"/></div>
           </div>
         </div>

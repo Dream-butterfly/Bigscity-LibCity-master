@@ -18,6 +18,7 @@ const CLI_FIELDS = [
   'config_file', 'exp_id', 'seed', 'gpu', 'gpu_id',
   'train_rate', 'eval_rate', 'batch_size', 'learning_rate',
   'max_epoch', 'dataset_class', 'executor', 'evaluator',
+  'num_gpus', 'gpu_ids',
 ];
 
 /* ── Module-level state ── */
@@ -532,6 +533,60 @@ function getTrainContextMeta() {
   return null;
 }
 
+/* ── GPU multi-select ── */
+function onNumGpusChange() {
+  const numGpus = parseInt(document.getElementById('num_gpus')?.value || '1', 10);
+  const checkboxesDiv = document.getElementById('gpu_checkboxes');
+  const display = document.getElementById('gpu_ids_display');
+  if (!checkboxesDiv || !display) return;
+
+  if (numGpus > 1) {
+    checkboxesDiv.style.display = 'flex';
+    // Auto-check first N GPUs
+    const cbs = checkboxesDiv.querySelectorAll('input[type="checkbox"]');
+    const currentChecked = new Set(getCheckedGpuIds());
+    let need = numGpus - currentChecked.size;
+    if (need > 0) {
+      for (const cb of cbs) {
+        if (need <= 0) break;
+        if (!cb.checked) { cb.checked = true; need--; }
+      }
+    } else if (need < 0) {
+      // Uncheck from the end
+      for (let i = cbs.length - 1; i >= 0 && need < 0; i--) {
+        if (cbs[i].checked) { cbs[i].checked = false; need++; }
+      }
+    }
+  } else {
+    checkboxesDiv.style.display = 'none';
+  }
+  updateGpuDisplay();
+}
+
+function onGpuCheckboxChange() {
+  updateGpuDisplay();
+}
+
+function getCheckedGpuIds() {
+  const checkboxes = document.querySelectorAll('#gpu_checkboxes input[type="checkbox"]:checked');
+  return Array.from(checkboxes).map(cb => parseInt(cb.value, 10)).sort((a,b)=>a-b);
+}
+
+function updateGpuDisplay() {
+  const display = document.getElementById('gpu_ids_display');
+  if (!display) return;
+  const ids = getCheckedGpuIds();
+  display.textContent = ids.length > 0 ? `gpu_ids: [${ids.join(', ')}]` : 'gpu_ids: [0]';
+}
+
+function collectGpuOptions() {
+  const numGpusEl = document.getElementById('num_gpus');
+  const numGpus = parseInt(numGpusEl?.value || '1', 10);
+  if (numGpus <= 1) return {num_gpus: '1', gpu_ids: ''};
+  const ids = getCheckedGpuIds();
+  return {num_gpus: String(numGpus), gpu_ids: ids.join(',')};
+}
+
 function applyTrainDataVersionSelection() {
   const vid = document.getElementById('train_data_version')?.value || '';
   const v = (_state.dataVersions || []).find(x => x.version_id === vid);
@@ -852,6 +907,7 @@ async function startTrain() {
   const savedModel = document.getElementById('saved_model')?.value || 'true';
   const train = document.getElementById('train')?.value || 'true';
   const extraArgs = document.getElementById('extra_args')?.value || '';
+  const gpuOpts = collectGpuOptions();
 
   try {
     await apiPost('/api/start', {
@@ -861,6 +917,8 @@ async function startTrain() {
       extra_args: extraArgs,
       cli_options: cliOptions,
       config: config,
+      num_gpus: gpuOpts.num_gpus,
+      gpu_ids: gpuOpts.gpu_ids,
     });
     clearLogBuffer();
     trainLogIndex = 0;

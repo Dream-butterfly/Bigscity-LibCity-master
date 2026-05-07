@@ -88,6 +88,8 @@ CLI_OPTION_KEYS = [
     "dataset_class",
     "executor",
     "evaluator",
+    "num_gpus",
+    "gpu_ids",
 ]
 CLI_OPTION_TYPE = {
     "config_file": "str",
@@ -103,6 +105,8 @@ CLI_OPTION_TYPE = {
     "dataset_class": "str",
     "executor": "str",
     "evaluator": "str",
+    "num_gpus": "int",
+    "gpu_ids": "str",
 }
 DATA_LOCKED_CONFIG_KEYS = {
     "dataset",
@@ -1463,7 +1467,21 @@ def _run_training_background(
                 },
             )
         return
-    cmd = ["uv", "run", entry_script]
+    # 多卡 DDP 支持
+    num_gpus = int(cli_options.get("num_gpus", 1))
+    gpu_ids_raw = str(cli_options.get("gpu_ids", "")).strip()
+    if num_gpus > 1:
+        if gpu_ids_raw:
+            gpu_ids_list = [x.strip() for x in gpu_ids_raw.split(",") if x.strip()]
+        else:
+            gpu_ids_list = [str(i) for i in range(num_gpus)]
+        env = os.environ.copy()
+        env["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_ids_list)
+        cmd = ["torchrun", f"--nproc_per_node={num_gpus}"]
+    else:
+        env = None
+        cmd = ["uv", "run"]
+    cmd.append(entry_script)
     if include_task_model_dataset:
         cmd.extend(
             [
@@ -1480,8 +1498,12 @@ def _run_training_background(
         cmd.extend(["--train", str(train).lower()])
     if script_args:
         cmd.extend(script_args)
+    # 多卡模式下跳过的 CLI 参数（由 torchrun + CUDA_VISIBLE_DEVICES 接管）
+    ddp_skip_keys = {"gpu_id", "gpu", "num_gpus", "gpu_ids"} if num_gpus > 1 else {"num_gpus", "gpu_ids"}
     for key in CLI_OPTION_KEYS:
         if key == "config_file":
+            continue
+        if key in ddp_skip_keys:
             continue
         value = cli_options.get(key, None)
         if value is None:
@@ -1531,6 +1553,7 @@ def _run_training_background(
             errors="replace",
             bufsize=1,
             creationflags=creationflags,
+            env=env,
         )
     except Exception as exc:
         _remove_runtime_config(runtime_config_path)
