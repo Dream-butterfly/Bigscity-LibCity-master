@@ -26,7 +26,12 @@ class TrafficStateExecutor(AbstractExecutor):
         self.device = self.config.get('device', torch.device('cpu'))
         if not isinstance(self.device, torch.device):
             self.device = torch.device(self.device)
-        self.model = model.to(self.device)
+        self.is_distributed = self.config.get('is_distributed', False)
+        # 模型设备迁移: 单卡时在此执行，DDP 时由外部 pipeline 完成
+        if not self.is_distributed:
+            self.model = model.to(self.device)
+        else:
+            self.model = model  # 已在 pipeline 中 DDP 包装并移到设备
         self.exp_id = self.config.get('exp_id', None)
 
         self.run_dir = get_run_dir(self.exp_id)
@@ -36,12 +41,13 @@ class TrafficStateExecutor(AbstractExecutor):
         self._writer = _NoopSummaryWriter()
         self._logger = getLogger()
         self._scaler = self.data_feature.get('scaler')
-        self._logger.info(self.model)
-        for name, param in self.model.named_parameters():
-            self._logger.info(str(name) + '\t' + str(param.shape) + '\t' +
-                              str(param.device) + '\t' + str(param.requires_grad))
-        total_num = sum([param.nelement() for param in self.model.parameters()])
-        self._logger.info('Total parameter numbers: {}'.format(total_num))
+        if self._is_rank0():
+            self._logger.info(self.model)
+            for name, param in self.model.named_parameters():
+                self._logger.info(str(name) + '\t' + str(param.shape) + '\t' +
+                                  str(param.device) + '\t' + str(param.requires_grad))
+            total_num = sum([param.nelement() for param in self.model.parameters()])
+            self._logger.info('Total parameter numbers: {}'.format(total_num))
 
         self.epochs = self.config.get('max_epoch', 100)
         self.train_loss = self.config.get('train_loss', 'none')
@@ -93,7 +99,7 @@ class TrafficStateExecutor(AbstractExecutor):
         if self.use_amp and self.device.type != 'cuda':
             self._logger.warning('AMP is only enabled on CUDA devices, disable AMP on device `%s`.', self.device)
         self.amp_enabled = self.use_amp and self.device.type == 'cuda'
-        self.grad_scaler = torch.amp.GradScaler('cuda', enabled=self.amp_enabled and self.amp_dtype == 'float16')
+        self.grad_scaler = torch.amp.GradScaler(self.device.type, enabled=self.amp_enabled and self.amp_dtype == 'float16')
         if self.amp_enabled:
             self._logger.info('Enable AMP training (dtype=%s).', self.amp_dtype)
         self.optimizer = self._build_optimizer()
@@ -102,6 +108,25 @@ class TrafficStateExecutor(AbstractExecutor):
         if self._epoch_num > 0:
             self.load_model_with_epoch(self._epoch_num)
         self.loss_func = self._build_train_loss()
+
+    def _unwrap_model(self):
+        """获取原始模型（DDP 包装下取 .module）"""
+        if self.is_distributed:
+            return self.model.module
+        return self.model
+
+    def _is_rank0(self):
+        """当前进程是否为主进程（rank 0）"""
+        if not self.is_distributed:
+            return True
+        import torch.distributed as dist
+        return not dist.is_initialized() or dist.get_rank() == 0
+
+    def _barrier(self):
+        """所有进程同步点"""
+        if self.is_distributed:
+            import torch.distributed as dist
+            dist.barrier()
 
     def save_model(self, cache_name):
         """
@@ -112,7 +137,8 @@ class TrafficStateExecutor(AbstractExecutor):
         """
         ensure_dir(self.cache_dir)
         self._logger.info("Saved model at " + cache_name)
-        torch.save((self.model.state_dict(), self.optimizer.state_dict()), cache_name)
+        model = self._unwrap_model()
+        torch.save((model.state_dict(), self.optimizer.state_dict()), cache_name)
 
     def load_model(self, cache_name):
         """
@@ -123,7 +149,8 @@ class TrafficStateExecutor(AbstractExecutor):
         """
         self._logger.info("Loaded model at " + cache_name)
         model_state, optimizer_state = torch.load(cache_name, map_location=self.device)
-        self.model.load_state_dict(model_state)
+        model = self._unwrap_model()
+        model.load_state_dict(model_state)
         self.optimizer.load_state_dict(optimizer_state)
 
     def save_model_with_epoch(self, epoch):
@@ -135,7 +162,8 @@ class TrafficStateExecutor(AbstractExecutor):
         """
         ensure_dir(self.cache_dir)
         config = dict()
-        config['model_state_dict'] = self.model.state_dict()
+        model = self._unwrap_model()
+        config['model_state_dict'] = model.state_dict()
         config['optimizer_state_dict'] = self.optimizer.state_dict()
         config['grad_scaler_state_dict'] = self.grad_scaler.state_dict()
         config['epoch'] = epoch
@@ -153,9 +181,9 @@ class TrafficStateExecutor(AbstractExecutor):
         """
         model_path = self.cache_dir + '/' + self.config['model'] + '_' + self.config['dataset'] + '_epoch%d.tar' % epoch
         assert os.path.exists(model_path), 'Weights at epoch %d not found' % epoch
-        load_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        checkpoint = torch.load(model_path, map_location=load_device)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
+        checkpoint = torch.load(model_path, map_location=self.device)
+        model = self._unwrap_model()
+        model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         if 'grad_scaler_state_dict' in checkpoint:
             self.grad_scaler.load_state_dict(checkpoint['grad_scaler_state_dict'])
@@ -190,7 +218,7 @@ class TrafficStateExecutor(AbstractExecutor):
 
     def _autocast_context(self):
         if self.amp_enabled:
-            return torch.autocast(device_type='cuda', dtype=self.amp_torch_dtype)
+            return torch.autocast(device_type=self.device.type, dtype=self.amp_torch_dtype)
         return nullcontext()
 
     def _build_lr_scheduler(self):
@@ -357,7 +385,7 @@ class TrafficStateExecutor(AbstractExecutor):
                     format(epoch_idx, self.epochs, np.mean(losses), val_loss, log_lr, (end_time - start_time))
                 self._logger.info(message)
 
-            if self.hyper_tune:
+            if self.hyper_tune and self._is_rank0():
                 # use ray tune to checkpoint
                 with tune.checkpoint_dir(step=epoch_idx) as checkpoint_dir:
                     path = os.path.join(checkpoint_dir, "checkpoint")

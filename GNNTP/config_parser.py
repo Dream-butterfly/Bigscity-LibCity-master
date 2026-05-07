@@ -119,20 +119,60 @@ class ConfigParser(object):
 
         logger = logging.getLogger()
 
-        use_gpu = self.config.get('gpu', True)
-        gpu_id = self.config.get('gpu_id', 0)
+        # 检测 DDP 环境（torchrun 自动设置 LOCAL_RANK）
+        local_rank_env = os.environ.get('LOCAL_RANK', None)
+        is_distributed = local_rank_env is not None
 
-        if use_gpu and torch.cuda.is_available():
-            if gpu_id >= torch.cuda.device_count():
-                raise ValueError(
-                    f"gpu_id {gpu_id} is invalid, only {torch.cuda.device_count()} GPUs available"
-                )
-            device = torch.device(f"cuda:{gpu_id}")
-            logger.info(f"Using GPU {gpu_id}")
+        if is_distributed:
+            # ── DDP 模式 ──
+            local_rank = int(local_rank_env)
+            world_size = int(os.environ.get('WORLD_SIZE', '1'))
+            rank = int(os.environ.get('RANK', '0'))
+            dist_backend = self.config.get('dist_backend', 'nccl')
+
+            if not torch.cuda.is_available():
+                raise RuntimeError("DDP requires CUDA but CUDA is not available")
+
+            torch.cuda.set_device(local_rank)
+            device = torch.device(f"cuda:{local_rank}")
+
+            self.config['local_rank'] = local_rank
+            self.config['world_size'] = world_size
+            self.config['rank'] = rank
+            self.config['dist_backend'] = dist_backend
+            self.config['is_distributed'] = True
+
+            logger.info(
+                "DDP mode: rank=%d/%d, local_rank=%d, device=%s",
+                rank, world_size, local_rank, device,
+            )
+
+            # 线性缩放学习率
+            if self.config.get('scale_lr', True) and 'learning_rate' in self.config:
+                orig_lr = self.config['learning_rate']
+                scaled_lr = orig_lr * world_size
+                self.config['learning_rate'] = scaled_lr
+                logger.info("LR scaled: %s → %s (world_size=%d)", orig_lr, scaled_lr, world_size)
         else:
-            if use_gpu:
-                logger.warning("GPU requested but not available, using CPU instead.")
-            device = torch.device("cpu")
+            # ── 单卡 / CPU 模式（向后兼容）──
+            self.config['is_distributed'] = False
+            self.config['world_size'] = 1
+            self.config['rank'] = 0
+
+            use_gpu = self.config.get('gpu', True)
+            gpu_id = self.config.get('gpu_id', 0)
+
+            if use_gpu and torch.cuda.is_available():
+                if gpu_id >= torch.cuda.device_count():
+                    raise ValueError(
+                        f"gpu_id {gpu_id} is invalid, only {torch.cuda.device_count()} GPUs available"
+                    )
+                device = torch.device(f"cuda:{gpu_id}")
+                logger.info(f"Using GPU {gpu_id}")
+            else:
+                if use_gpu:
+                    logger.warning("GPU requested but not available, using CPU instead.")
+                device = torch.device("cpu")
 
         self.config['device'] = device
 

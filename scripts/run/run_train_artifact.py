@@ -7,6 +7,7 @@ import os
 import sys
 from pathlib import Path
 
+import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -29,6 +30,29 @@ from GNNTP.utils import (
 )
 
 
+def _maybe_wrap_ddp(config, model):
+    """DDP 初始化 + 模型包装。非 DDP 时原样返回模型"""
+    is_distributed = config.get('is_distributed', False)
+    if not is_distributed:
+        return model
+
+    import torch.distributed as dist
+    if not dist.is_initialized():
+        dist.init_process_group(
+            backend=config.get('dist_backend', 'nccl'),
+            init_method='env://'
+        )
+    local_rank = config.get('local_rank', 0)
+    model = model.cuda(local_rank)
+    model = torch.nn.parallel.DistributedDataParallel(
+        model,
+        device_ids=[local_rank],
+        output_device=local_rank,
+        find_unused_parameters=False,
+    )
+    return model
+
+
 def run_train_artifact(
     task=None,
     model_name=None,
@@ -46,15 +70,18 @@ def run_train_artifact(
     resolved_model = str(config.get("model", model_name))
     resolved_dataset = str(config.get("dataset", dataset_name))
     exp_id = ensure_run_id(config)
+    is_distributed = config.get("is_distributed", False)
+    rank = config.get("rank", 0)
     logger = get_logger(config)
-    logger.info(
-        "Begin artifact training pipeline, task=%s, model_name=%s, dataset_name=%s, exp_id=%s",
-        resolved_task,
-        resolved_model,
-        resolved_dataset,
-        str(exp_id),
-    )
-    logger.info(config.config)
+    if rank == 0:
+        logger.info(
+            "Begin artifact training pipeline, task=%s, model_name=%s, dataset_name=%s, exp_id=%s",
+            resolved_task,
+            resolved_model,
+            resolved_dataset,
+            str(exp_id),
+        )
+        logger.info(config.config)
 
     seed = config.get("seed", 0)
     set_random_seed(seed)
@@ -71,6 +98,7 @@ def run_train_artifact(
         logger.warning("[FORCE_REUSE] %s", msg)
 
     model = get_model(config, runtime.data_feature)
+    model = _maybe_wrap_ddp(config, model)
     executor = get_executor(config, model, runtime.data_feature)
     model_cache_file = os.path.join(
         get_run_subdir(exp_id, "model_cache"),
@@ -78,25 +106,36 @@ def run_train_artifact(
     )
     if train or not os.path.exists(model_cache_file):
         executor.train(runtime.train_loader, runtime.valid_loader)
-        if saved_model:
+        if saved_model and rank == 0:
             executor.save_model(model_cache_file)
     else:
         executor.load_model(model_cache_file)
-    test_result = executor.evaluate(runtime.test_loader)
 
-    write_run_meta(
-        exp_id,
-        {
-            "task": resolved_task,
-            "model": resolved_model,
-            "dataset": resolved_dataset,
-            "artifact_id": str(runtime.artifact_meta.get("artifact_id", "") or ""),
-            "artifact_dir": str(runtime.artifact_dir or ""),
-            "data_signature": str(runtime.artifact_meta.get("data_signature", "") or ""),
-            "force_reuse": bool(force_reuse),
-            "source": "run_train_artifact",
-        },
-    )
+    test_result = {}
+    if rank == 0 or not is_distributed:
+        test_result = executor.evaluate(runtime.test_loader)
+
+    if rank == 0 or not is_distributed:
+        write_run_meta(
+            exp_id,
+            {
+                "task": resolved_task,
+                "model": resolved_model,
+                "dataset": resolved_dataset,
+                "artifact_id": str(runtime.artifact_meta.get("artifact_id", "") or ""),
+                "artifact_dir": str(runtime.artifact_dir or ""),
+                "data_signature": str(runtime.artifact_meta.get("data_signature", "") or ""),
+                "force_reuse": bool(force_reuse),
+                "source": "run_train_artifact",
+            },
+        )
+
+    if is_distributed:
+        import torch.distributed as dist
+        dist.barrier()
+        if rank == 0:
+            dist.destroy_process_group()
+
     return test_result
 
 

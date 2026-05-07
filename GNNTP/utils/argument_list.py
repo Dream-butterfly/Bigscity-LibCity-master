@@ -69,6 +69,26 @@ general_arguments = {
         "default": None,
         "help": "whether enable gradient checkpointing in model blocks"
     },
+    "local_rank": {
+        "type": "int",
+        "default": None,
+        "help": "local rank for DDP (set by torchrun automatically)"
+    },
+    "world_size": {
+        "type": "int",
+        "default": None,
+        "help": "total number of GPUs for DDP"
+    },
+    "dist_backend": {
+        "type": "str",
+        "default": None,
+        "help": "DDP backend (nccl/gloo)"
+    },
+    "scale_lr": {
+        "type": "bool",
+        "default": None,
+        "help": "linearly scale LR by world_size in DDP mode"
+    },
 }
 
 hyper_arguments = {

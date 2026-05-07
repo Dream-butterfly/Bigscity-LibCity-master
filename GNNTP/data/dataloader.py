@@ -29,7 +29,8 @@ def _build_dataset(data):
 
 def generate_dataloader(train_data, eval_data, test_data, feature_name,
                         batch_size, num_workers, shuffle=True,
-                        pad_with_last_sample=False):
+                        pad_with_last_sample=False,
+                        train_sampler=None, eval_sampler=None, test_sampler=None):
     """
     create dataloader(train/test/eval)
 
@@ -40,8 +41,11 @@ def generate_dataloader(train_data, eval_data, test_data, feature_name,
         feature_name(dict): 描述上面 input 每个元素对应的特征名, 应保证len(feature_name) = len(input)
         batch_size(int): batch_size
         num_workers(int): num_workers
-        shuffle(bool): shuffle
+        shuffle(bool): shuffle（仅当 sampler 为 None 时生效）
         pad_with_last_sample(bool): 对于若最后一个 batch 不满足 batch_size的情况，是否进行补齐（使用最后一个元素反复填充补齐）。
+        train_sampler(torch.utils.data.Sampler | None): 训练集自定义采样器（DDP DistributedSampler）
+        eval_sampler(torch.utils.data.Sampler | None): 验证集自定义采样器
+        test_sampler(torch.utils.data.Sampler | None): 测试集自定义采样器
 
     Returns:
         tuple: tuple contains:
@@ -64,21 +68,29 @@ def generate_dataloader(train_data, eval_data, test_data, feature_name,
             batch.append(item)
         return batch
 
+    # sampler 与 shuffle 互斥：有 sampler 时必须 shuffle=False
     train_dataloader = DataLoader(dataset=train_dataset, batch_size=batch_size,
                                   num_workers=num_workers, collate_fn=collator,
-                                  shuffle=shuffle)
+                                  shuffle=(shuffle if train_sampler is None else False),
+                                  sampler=train_sampler,
+                                  pin_memory=True)
     eval_dataloader = DataLoader(dataset=eval_dataset, batch_size=batch_size,
                                  num_workers=num_workers, collate_fn=collator,
-                                 shuffle=shuffle)
+                                 shuffle=(shuffle if eval_sampler is None else False),
+                                 sampler=eval_sampler,
+                                 pin_memory=True)
     test_dataloader = DataLoader(dataset=test_dataset, batch_size=batch_size,
                                  num_workers=num_workers, collate_fn=collator,
-                                 shuffle=False)
+                                 shuffle=False,
+                                 sampler=test_sampler,
+                                 pin_memory=True)
     return train_dataloader, eval_dataloader, test_dataloader
 
 
 def generate_dataloader_pad(train_data, eval_data, test_data, feature_name,
                             batch_size, num_workers, pad_item=None,
-                            pad_max_len=None, shuffle=True):
+                            pad_max_len=None, shuffle=True,
+                            train_sampler=None, eval_sampler=None, test_sampler=None):
     """
     create dataloader(train/test/eval)
 
@@ -91,7 +103,10 @@ def generate_dataloader_pad(train_data, eval_data, test_data, feature_name,
         num_workers(int): num_workers
         pad_item(dict): 用于将不定长的特征补齐到一样的长度，每个特征名作为 key，若某特征名不在该 dict 内则不进行补齐。
         pad_max_len(dict): 用于截取不定长的特征，对于过长的特征进行剪切
-        shuffle(bool): shuffle
+        shuffle(bool): shuffle（仅当 sampler 为 None 时生效）
+        train_sampler(torch.utils.data.Sampler | None): 训练集自定义采样器
+        eval_sampler(torch.utils.data.Sampler | None): 验证集自定义采样器
+        test_sampler(torch.utils.data.Sampler | None): 测试集自定义采样器
 
     Returns:
         tuple: tuple contains:
@@ -112,11 +127,17 @@ def generate_dataloader_pad(train_data, eval_data, test_data, feature_name,
 
     train_dataloader = DataLoader(dataset=train_dataset, batch_size=batch_size,
                                   num_workers=num_workers, collate_fn=collator,
-                                  shuffle=shuffle)
+                                  shuffle=(shuffle if train_sampler is None else False),
+                                  sampler=train_sampler,
+                                  pin_memory=True)
     eval_dataloader = DataLoader(dataset=eval_dataset, batch_size=batch_size,
                                  num_workers=num_workers, collate_fn=collator,
-                                 shuffle=shuffle)
+                                 shuffle=False,
+                                 sampler=eval_sampler,
+                                 pin_memory=True)
     test_dataloader = DataLoader(dataset=test_dataset, batch_size=batch_size,
                                  num_workers=num_workers, collate_fn=collator,
-                                 shuffle=shuffle)
+                                 shuffle=False,
+                                 sampler=test_sampler,
+                                 pin_memory=True)
     return train_dataloader, eval_dataloader, test_dataloader

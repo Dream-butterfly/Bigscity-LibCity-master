@@ -331,6 +331,16 @@ class TrafficStatePipelineMixin:
         train_data = (x_train, y_train)
         eval_data = (x_val, y_val)
         test_data = (x_test, y_test)
+
+        # DDP 分布式采样器
+        train_sampler = eval_sampler = test_sampler = None
+        if self.config.get('is_distributed', False):
+            from GNNTP.data.runtime import _make_ddp_samplers
+            train_sampler, eval_sampler, test_sampler = _make_ddp_samplers(
+                train_data, eval_data, test_data,
+                self.config['world_size'], self.config['rank'],
+            )
+
         # 转Dataloader
         self.train_dataloader, self.eval_dataloader, self.test_dataloader = generate_dataloader(
             train_data,
@@ -339,7 +349,12 @@ class TrafficStatePipelineMixin:
             self.feature_name,
             self.batch_size,
             self.num_workers,
-            pad_with_last_sample=self.pad_with_last_sample,
+            pad_with_last_sample=(
+                False if self.config.get('is_distributed', False) else self.pad_with_last_sample
+            ),
+            train_sampler=train_sampler,
+            eval_sampler=eval_sampler,
+            test_sampler=test_sampler,
         )
         self.num_batches = len(self.train_dataloader)
         return self.train_dataloader, self.eval_dataloader, self.test_dataloader

@@ -137,9 +137,8 @@ class STransformer(nn.Module):
     def __init__(self, adj_mx, embed_dim=64, num_heads=2,
                  forward_expansion=4, dropout_rate=0, device=torch.device('cpu')):
         super().__init__()
-        self.device = device
-        self.adj_mx = torch.FloatTensor(adj_mx).to(device)
-        self.D_S = nn.Parameter(torch.FloatTensor(adj_mx).to(device))
+        self.register_buffer('adj_mx', torch.FloatTensor(adj_mx))
+        self.D_S = nn.Parameter(torch.FloatTensor(adj_mx))
         self.embed_linear = nn.Linear(adj_mx.shape[0], embed_dim)
 
         self.attention = SSelfAttention(embed_dim, num_heads)
@@ -165,13 +164,13 @@ class STransformer(nn.Module):
         D_S = D_S.expand(batch_size, input_windows, num_nodes, embed_dim)
         D_S = D_S.permute(0, 2, 1, 3)
 
-        X_G = torch.Tensor(query.shape[0], query.shape[1], 0, query.shape[3]).to(self.device)
-        self.adj_mx = self.adj_mx.unsqueeze(0).unsqueeze(0)
-        self.adj_mx = self.norm_adj(self.adj_mx)
-        self.adj_mx = self.adj_mx.squeeze(0).squeeze(0)
+        X_G = torch.Tensor(query.shape[0], query.shape[1], 0, query.shape[3]).to(query.device)
+        adj_mx_norm = self.adj_mx.unsqueeze(0).unsqueeze(0)
+        adj_mx_norm = self.norm_adj(adj_mx_norm)
+        adj_mx_norm = adj_mx_norm.squeeze(0).squeeze(0)
 
         for t in range(query.shape[2]):
-            o = self.gcn(query[:, :, t, :], self.adj_mx)
+            o = self.gcn(query[:, :, t, :], adj_mx_norm)
             o = o.unsqueeze(2)
             X_G = torch.cat((X_G, o), dim=2)
 
