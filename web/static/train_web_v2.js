@@ -846,7 +846,8 @@ function escapeHtml(s) {
 
 /* ═══════════════════════ LOG FILTERING ═══════════════════════ */
 function trainLogLevel(line) {
-  const m = (line.message || '').match(/\b(INFO|WARNING|ERROR|DEBUG)\b/);
+  const text = typeof line === 'string' ? line : (line.message || '');
+  const m = text.match(/\b(INFO|WARNING|ERROR|DEBUG)\b/);
   return m ? m[1].toLowerCase() : 'info';
 }
 
@@ -856,17 +857,18 @@ function renderFilteredLogs(containerId, linesArray) {
   const levelFilter = (document.getElementById('log_level_filter')?.value || 'all').toLowerCase();
   const keyword = (document.getElementById('log_keyword_filter')?.value || '').trim().toLowerCase();
   const filtered = (linesArray || []).filter(line => {
+    const text = typeof line === 'string' ? line : (line.message || '');
     if (levelFilter !== 'all' && trainLogLevel(line) !== levelFilter) return false;
-    if (keyword && !(line.message || '').toLowerCase().includes(keyword)) return false;
+    if (keyword && !text.toLowerCase().includes(keyword)) return false;
     return true;
   });
-  // Rebuild with innerHTML for clean re-filtering
   const html = filtered.map((line, i) => {
+    const text = typeof line === 'string' ? line : (line.message || '');
     const lvl = trainLogLevel(line);
     return `<div class="log-line">
       <span class="log-index">${i + 1}</span>
-      <span class="log-level log-level-${lvl}">${(line.level || 'INFO').toUpperCase()}</span>
-      <span class="log-message">${escapeHtml(line.message || '')}</span>
+      <span class="log-level log-level-${lvl}">${lvl.toUpperCase()}</span>
+      <span class="log-message">${escapeHtml(text)}</span>
     </div>`;
   }).join('') || '<div class="log-empty" style="color:var(--text-muted);padding:1em">无匹配日志</div>';
   container.innerHTML = html;
@@ -948,16 +950,19 @@ async function clearState() {
 async function pollTrainLogs() {
   try {
     const data = await apiGet(`/api/status?since=${trainLogIndex}`);
-    if (data.lines && data.lines.length) {
-      _trainLogLines.push(...data.lines);
-      trainLogIndex = data.next_index || trainLogIndex;
+    const rawLines = data.logs_tail || [];
+    if (rawLines.length > trainLogIndex) {
+      const newLines = rawLines.slice(trainLogIndex);
+      _trainLogLines.push(...newLines);
+      trainLogIndex = rawLines.length;
       renderFilteredLogs('logs', _trainLogLines);
     }
     // 更新 status badge
     const badge = document.getElementById('status');
     if (badge) {
-      badge.className = `badge badge-${data.status || 'idle'}`;
-      badge.textContent = data.status || 'idle';
+      const s = data.running ? 'running' : (data.error ? 'error' : (data.return_code === 0 ? 'done' : 'idle'));
+      badge.className = `badge badge-${s}`;
+      badge.textContent = s;
     }
     // 更新模型参数量图
     if (data.model_plot || data.model_plot_option_pie || data.model_plot_option_bar) {
@@ -1141,15 +1146,18 @@ async function startResumeTrain() {
 async function pollResumeLogs() {
   try {
     const data = await apiGet(`/api/status?since=${resumeLogIndex}`);
-    if (data.lines && data.lines.length) {
-      _resumeLogLines.push(...data.lines);
-      resumeLogIndex = data.next_index || resumeLogIndex;
+    const rawLines = data.logs_tail || [];
+    if (rawLines.length > resumeLogIndex) {
+      const newLines = rawLines.slice(resumeLogIndex);
+      _resumeLogLines.push(...newLines);
+      resumeLogIndex = rawLines.length;
       renderFilteredLogs('resume_logs', _resumeLogLines);
     }
     const badge = document.getElementById('resume_status');
     if (badge) {
-      badge.className = `badge badge-${data.status || 'idle'}`;
-      badge.textContent = data.status || 'idle';
+      const s = data.running ? 'running' : (data.error ? 'error' : (data.return_code === 0 ? 'done' : 'idle'));
+      badge.className = `badge badge-${s}`;
+      badge.textContent = s;
     }
     if (data.running) {
       setTimeout(pollResumeLogs, 1000);
