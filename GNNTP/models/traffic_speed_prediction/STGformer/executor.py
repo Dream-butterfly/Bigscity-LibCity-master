@@ -111,7 +111,7 @@ class STGformerExecutor(TrafficStateExecutor):
 
     def _train_epoch(self, train_dataloader, epoch_idx, loss_func=None):
         self.model.train()
-        loss_func = loss_func if loss_func is not None else self.model.calculate_loss
+        loss_func = loss_func if loss_func is not None else self._unwrap_model().calculate_loss
         losses = []
         for batch in train_dataloader:
             self.optimizer.zero_grad()
@@ -138,7 +138,7 @@ class STGformerExecutor(TrafficStateExecutor):
             for batch in eval_dataloader:
                 batch.to_tensor(self.device)
                 y_true = batch["y"][..., : self.output_dim]
-                y_predicted = self.model.predict(batch)[..., : self.output_dim]
+                y_predicted = self._unwrap_model().predict(batch)[..., : self.output_dim]
                 y_true = self._scaler.inverse_transform(y_true)
                 y_predicted = self._scaler.inverse_transform(y_predicted)
                 loss = masked_mae_loss(y_predicted, y_true)
