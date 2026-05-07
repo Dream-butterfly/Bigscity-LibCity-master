@@ -140,7 +140,7 @@ class TemporalConvLayer(nn.Module):
 class SpatioConvLayer(nn.Module):
     def __init__(self, ks, c_in, c_out, lk, device):
         super(SpatioConvLayer, self).__init__()
-        self.Lk = lk
+        self.register_buffer('Lk', lk)
         self.theta = nn.Parameter(torch.FloatTensor(c_in, c_out, ks).to(device))  # kernel: C_in*C_out*ks
         self.b = nn.Parameter(torch.FloatTensor(1, c_out, 1, 1).to(device))
         self.align = Align(c_in, c_out)
