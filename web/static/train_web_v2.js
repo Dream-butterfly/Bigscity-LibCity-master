@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════
    GNNTP Web Console — v2 Main Script
    基于 main.js 迁移，保留核心功能，适配 sidebar 新布局
-   v=20260507d — DDP log fix
+   v=20260507e — DDP log fix
    ═══════════════════════════════════════════════════════ */
-console.log('[train_web_v2] loaded v=20260507d');
+console.log('[train_web_v2] loaded v=20260507e');
 
 "use strict";
 

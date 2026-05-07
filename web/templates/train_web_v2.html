@@ -6,7 +6,7 @@
 <title data-i18n="app_title">GNNTP Console v2</title>
 <script src="https://assets.pyecharts.org/assets/v5/echarts.min.js"></script>
 <link rel="stylesheet" href="/static/design-tokens.css"/>
-<link rel="stylesheet" href="/static/train_web_v2.css?v=20260507d"/>
+<link rel="stylesheet" href="/static/train_web_v2.css?v=20260507e"/>
 </head>
 <body>
 
@@ -287,8 +287,7 @@
       <div class="chart-container" id="chartLoss"></div>
     </div>
 
-    <div class="pane pane-2">
-      <div class="card">
+    <div class="card">
         <div class="card-header"><strong>评估指标</strong></div>
         <div class="table-wrap table-wrap-200"><table id="metrics"></table></div>
       </div>
@@ -303,7 +302,6 @@
         </div>
         <div class="chart-container" id="chartPred"></div>
       </div>
-    </div>
   </div>
 
   <!-- ═══════ TAB: 继续训练 ═══════ -->
@@ -349,8 +347,7 @@
         <div><label>模型 C（可选）</label><select id="compare_run_c"></select></div>
       </div>
     </div>
-    <div class="pane pane-2">
-      <div class="card">
+    <div class="card">
         <div class="card-header"><strong>指标对比</strong></div>
         <div class="table-wrap table-wrap-200"><table id="compare_metrics"></table></div>
       </div>
@@ -358,7 +355,6 @@
         <div class="card-header"><strong>预测曲线对比</strong></div>
         <div class="chart-container" id="chartCompare"></div>
       </div>
-    </div>
   </div>
 
   <!-- ═══════ TAB: 运行历史 ═══════ -->
@@ -416,6 +412,6 @@
   </div>
 </div>
 
-<script src="/static/train_web_v2.js?v=20260507d"></script>
+<script src="/static/train_web_v2.js?v=20260507e"></script>
 </body>
 </html>
