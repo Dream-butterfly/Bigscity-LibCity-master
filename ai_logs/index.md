@@ -4,7 +4,8 @@
 
 ## 更改（change）
 
-1. `更改 17` | 2026-05-07 12:31:14 +08:00 | 新增功能/结构重构 | [多卡训练 DDP 支持（18文件，含 Web 控制台适配）](change/2026-05/2026-05-07_1231_ddp-support.md)
+1. `更改 18` | 2026-05-07 | 修复问题/实验流程变更 | [new_diffusion_fuzzy 训练修复 — 配置变更（4项）](change/2026-05/2026-05-07_new-diffusion-fuzzy-training-fix.md)
+2. `更改 17` | 2026-05-07 12:31:14 +08:00 | 新增功能/结构重构 | [多卡训练 DDP 支持（18文件，含 Web 控制台适配）](change/2026-05/2026-05-07_1231_ddp-support.md)
 2. `更改 16` | 2026-05-07 10:58:01 +08:00 | 修复问题 | [train_web_v2 基础任务选项修复](change/2026-04/2026-04-23_0058_train-web-v2-task-options-fix.md)
 3. `更改 15` | 2026-05-07 10:53:07 +08:00 | 修复问题 | [train_web_v2 静态资源缓存规避](change/2026-04/2026-04-23_0053_train-web-v2-cache-busting.md)
 4. `更改 14` | 2026-05-07 10:47:08 +08:00 | 修复问题/结构重构 | [train_web_v2 迁移缺陷修复](change/2026-04/2026-04-23_0000_train-web-v2-migration-fixes.md)
@@ -24,7 +25,8 @@
 
 ## 分析（analysis）
 
-1. `分析 10` | 2026-05-07 09:52:00 +08:00 | 方案设计/决策建议 | [Web 前端深度迁移计划](analysis/2026-05/2026-05-07_web-frontend-migration-plan.md)
+1. `分析 11` | 2026-05-07 | 问题定位/根因分析 | [new_diffusion_fuzzy 训练无效 & 预测散乱诊断](analysis/2026-05/2026-05-07_new-diffusion-fuzzy-training-debug.md)
+2. `分析 10` | 2026-05-07 09:52:00 +08:00 | 方案设计/决策建议 | [Web 前端深度迁移计划](analysis/2026-05/2026-05-07_web-frontend-migration-plan.md)
 2. `分析 9` | 2026-04-22 11:58:52 +08:00 | 方案设计/决策建议 | [数据-训练解耦方案与口径确认](analysis/2026-04/2026-04-22_1158_data-training-decoupling-design-and-decisions.md)
 2. `分析 8` | 2026-04-21 01:30:00 +08:00 | 方案设计/决策建议 | [不改核心结构下的稳训与降耗方案](analysis/2026-04/2026-04-21_0130_stability-and-efficiency-without-architecture-change.md)
 3. `分析 7` | 2026-04-20 16:14:15 +08:00 | 问题定位/事实结论 | [项目结构审计（冗余/缺失/错位）](analysis/2026-04/2026-04-20_1614_project-structure-audit.md)
