@@ -1659,6 +1659,12 @@ async def index(request: Request):
     return templates.TemplateResponse(request=request, name="train_web_fastapi.html")
 
 
+@app.get("/v2", response_class=HTMLResponse)
+async def index_v2(request: Request):
+    """GNNTP Console v2 — sidebar 布局新版本"""
+    return templates.TemplateResponse(request=request, name="train_web_v2.html")
+
+
 @app.get("/api/meta")
 def api_meta():
     return {

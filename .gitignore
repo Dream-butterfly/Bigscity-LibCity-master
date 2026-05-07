@@ -24,3 +24,4 @@ outputs/
 
 # Dependency lock file kept local in this repository
 uv.lock
+/paper/

@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GNNTP Console v2</title>
+<script src="https://assets.pyecharts.org/assets/v5/echarts.min.js"></script>
+<link rel="stylesheet" href="/static/design-tokens.css"/>
+<link rel="stylesheet" href="/static/train_web_v2.css"/>
+</head>
+<body>
+
+<!-- ═══════════════════════ SIDEBAR ═══════════════════════ -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <div class="sidebar-brand-icon">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M19.07 4.93l-2.83 2.83m-8.48 8.48-2.83 2.83"/></svg>
+    </div>
+    <span class="sidebar-brand-text">GNNTP Console</span>
+  </div>
+  <nav class="sidebar-nav">
+    <button class="sidebar-nav-item active" data-tab="data">
+      <svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>
+      <span>数据处理</span>
+    </button>
+    <button class="sidebar-nav-item" data-tab="train">
+      <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      <span>训练</span>
+    </button>
+    <button class="sidebar-nav-item" data-tab="resume">
+      <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      <span>继续训练</span>
+    </button>
+    <button class="sidebar-nav-item" data-tab="compare">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span>模型对比</span>
+    </button>
+    <button class="sidebar-nav-item" data-tab="history">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span>运行历史</span>
+    </button>
+  </nav>
+  <div class="sidebar-footer">
+    <button class="sidebar-footer-item" id="themeToggleSidebar">
+      <svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      <span>切换主题</span>
+    </button>
+    <span style="font-size:.7rem;color:var(--text-sidebar);padding:4px var(--spacing-md);opacity:.5">GNNTP v2.0</span>
+  </div>
+</aside>
+
+<!-- ═══════════════════════ MAIN ═══════════════════════ -->
+<main class="content">
+
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1 id="tabTitle">数据处理</h1>
+      <div class="sub">数据工件生成 · 版本管理 · 数据集预览</div>
+    </div>
+    <div class="card-controls">
+      <span class="badge badge-idle" id="globalStatus">idle</span>
+    </div>
+  </div>
+
+  <!-- ═══════ TAB: 数据处理 ═══════ -->
+  <div class="tab-content active" id="tab-data">
+
+    <!-- 数据预处理 -->
+    <div class="card">
+      <div class="card-header"><strong>数据预处理</strong></div>
+      <div class="param-groups">
+        <div class="param-group"><div class="param-group-title">任务配置</div>
+          <div class="group-grid">
+            <div><label>task</label><select id="data_task"></select></div>
+            <div><label>model</label><select id="data_model"></select></div>
+            <div><label>dataset</label><select id="data_dataset"></select></div>
+            <div><label>seed</label><input id="data_seed" value="42"/></div>
+          </div>
+        </div>
+        <div class="param-group"><div class="param-group-title">数据划分</div>
+          <div class="group-grid">
+            <div><label>train rate</label><input id="data_train_rate" value="0.6"/></div>
+            <div><label>eval rate</label><input id="data_eval_rate" value="0.2"/></div>
+            <div><label>test rate</label><input id="data_test_rate" value="0.2" disabled/></div>
+            <div><label>batch_size</label><input id="data_batch_size" value="64"/></div>
+            <div><label>dataset_class</label><input id="data_dataset_class" value="TrafficStatePointDataset"/></div>
+            <div class="span-all">
+              <div class="split-preset-row">
+                <label class="small">预设</label>
+                <select id="data_split_preset" style="width:auto;">
+                  <option value="">自定义</option>
+                  <option value="0.6,0.2,0.2" selected>0.6 / 0.2 / 0.2</option>
+                  <option value="0.7,0.1,0.2">0.7 / 0.1 / 0.2</option>
+                  <option value="0.7,0.2,0.1">0.7 / 0.2 / 0.1</option>
+                  <option value="0.8,0.1,0.1">0.8 / 0.1 / 0.1</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" onclick="applySplitPreset()">应用</button>
+              </div>
+              <div id="data_split_ratio_hint" class="small" style="margin-top:6px">train/eval/test = 0.600 / 0.200 / 0.200</div>
+            </div>
+            <div class="span-all"><label>extra_args</label><input id="data_extra_args" placeholder="--log_level INFO"/></div>
+          </div>
+        </div>
+      </div>
+      <div class="train-actions">
+        <button class="btn btn-primary" onclick="startDataPrep()">开始处理数据</button>
+        <button class="btn btn-ghost" onclick="loadDataVersions()">刷新版本</button>
+      </div>
+    </div>
+
+    <!-- 数据版本 -->
+    <div class="card">
+      <div class="card-header">
+        <strong>数据版本</strong>
+        <div class="card-controls">
+          <select id="data_versions_dataset_filter" style="width:auto;"><option value="">全部数据集</option></select>
+          <span class="chip" id="dataVersionCount">0 versions</span>
+          <button class="btn btn-secondary btn-sm" onclick="loadDataVersions()">刷新</button>
+          <button class="btn btn-secondary btn-sm" onclick="applySelectedDataVersionToTrain()" id="btnSyncToTrain">同步到训练</button>
+        </div>
+      </div>
+      <div class="table-wrap table-wrap-200">
+        <table>
+          <thead><tr><th>Version ID</th><th>Status</th><th>Task</th><th>Model</th><th>Dataset</th><th>Split</th><th>Updated</th></tr></thead>
+          <tbody id="data_version_tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 数据集预览 + 日志 (并排) -->
+    <div class="pane pane-2">
+      <div class="card">
+        <div class="card-header">
+          <strong>数据集预览</strong>
+          <div class="card-controls">
+            <select id="data_preview_file_type" style="width:auto"><option>dyna</option><option>geo</option><option>rel</option></select>
+            <input id="data_preview_entity_id" placeholder="entity_id" style="width:100px"/>
+            <input id="data_preview_time_start" placeholder="time>=" style="width:140px"/>
+            <input id="data_preview_time_end" placeholder="time<=" style="width:140px"/>
+            <input id="data_preview_columns" placeholder="columns: c1,c2" style="width:140px"/>
+            <input id="data_preview_rows" value="20" style="width:70px"/>
+            <button class="btn btn-secondary btn-sm" onclick="loadDataPreview()">预览</button>
+          </div>
+        </div>
+        <div id="data_preview_meta" class="small"></div>
+        <div class="table-wrap table-wrap-200">
+          <table id="data_preview_table"></table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><strong>处理日志</strong></div>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span>
+            <span class="terminal-title">data_prep.log</span>
+          </div>
+          <div id="data_logs" class="terminal-body"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TAB: 训练 ═══════ -->
+  <div class="tab-content" id="tab-train">
+    <div class="card">
+      <div class="card-header"><strong>训练配置</strong></div>
+      <div class="param-groups">
+        <div class="param-group"><div class="param-group-title">基础任务</div>
+          <div class="group-grid">
+            <div class="span-all"><label>data_version_id</label><div style="display:flex;gap:8px"><select id="train_data_version" style="flex:1"></select><button class="btn btn-secondary btn-sm" onclick="loadDataVersions()">刷新</button></div></div>
+          </div>
+        </div>
+        <div class="param-group"><div class="param-group-title">训练控制</div>
+          <div class="group-grid">
+            <div><label>max_epoch</label><input id="max_epoch" value="100"/></div>
+            <div><label>batch_size</label><input id="batch_size" value="64"/></div>
+            <div><label>learning_rate</label><input id="learning_rate" value="0.001"/></div>
+            <div><label>saved_model</label><select id="saved_model"><option value="true">true</option><option value="false">false</option></select></div>
+            <div><label>train</label><select id="train"><option value="true" selected>true</option><option value="false">false</option></select></div>
+          </div>
+        </div>
+        <div class="param-group"><div class="param-group-title">运行环境</div>
+          <div class="group-grid">
+            <div><label>exp_id</label><input id="exp_id" placeholder="可选"/></div>
+            <div><label>gpu</label><select id="gpu"><option value=""></option><option value="true">true</option><option value="false">false</option></select></div>
+            <div><label>gpu_id</label><input id="gpu_id" placeholder="0"/></div>
+            <div><label>executor</label><input id="executor" value="TrafficStateExecutor"/></div>
+            <div><label>evaluator</label><input id="evaluator" value="TrafficStateEvaluator"/></div>
+            <div class="span-all"><label>extra_args</label><input id="extra_args" placeholder="--log_level INFO"/></div>
+          </div>
+        </div>
+      </div>
+      <div class="train-actions">
+        <button class="btn btn-primary" onclick="startTrain()">开始训练</button>
+        <button class="btn btn-danger" onclick="stopTrain()">停止训练</button>
+        <button class="btn btn-ghost" onclick="clearState()">清空状态</button>
+        <span class="badge badge-idle" id="status">idle</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <strong>全部参数</strong>
+        <div class="card-controls">
+          <input id="param_filter" class="filter-input" placeholder="筛选参数名..." style="width:160px"/>
+          <span class="small">共 <span id="param_count">0</span> 项</span>
+          <button class="btn btn-secondary btn-sm" onclick="populateTrainParams()">加载默认值</button>
+        </div>
+      </div>
+      <div class="param-split">
+        <div>
+          <div class="small section-caption">config（<span id="param_count_config">0</span>）</div>
+          <div class="table-wrap param-table-wrap">
+            <table><thead><tr><th>中文名</th><th>原参数名</th><th>类型</th><th>值</th></tr></thead><tbody id="param_tbody_config"></tbody></table>
+          </div>
+        </div>
+        <div>
+          <div class="small section-caption">executor（<span id="param_count_executor">0</span>）</div>
+          <div class="table-wrap param-table-wrap">
+            <table><thead><tr><th>中文名</th><th>原参数名</th><th>类型</th><th>值</th></tr></thead><tbody id="param_tbody_executor"></tbody></table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane pane-2-1">
+      <div class="card">
+        <div class="card-header">
+          <strong>训练日志</strong>
+          <div class="card-controls">
+            <span class="chip">实时</span>
+            <select id="log_level_filter" style="width:auto"><option value="all">全部</option><option>INFO</option><option>WARNING</option><option>ERROR</option><option>DEBUG</option></select>
+            <input id="log_keyword_filter" placeholder="关键字..." style="width:140px"/>
+          </div>
+        </div>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span>
+            <span class="terminal-title">train.log</span>
+          </div>
+          <div id="logs" class="terminal-body"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <strong>模型参数量</strong>
+          <div class="card-controls">
+            <select id="model_plot_type" style="width:auto"><option value="pie">饼图</option><option value="bar">柱状图</option></select>
+          </div>
+        </div>
+        <div id="model_param_summary" class="small mb-6"></div>
+        <div class="chart-container chart-container-sm" id="chartModelParams"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><strong>Loss 曲线</strong><span id="loss_summary" class="small"></span></div>
+      <div class="chart-container" id="chartLoss"></div>
+    </div>
+
+    <div class="pane pane-2">
+      <div class="card">
+        <div class="card-header"><strong>评估指标</strong></div>
+        <div class="table-wrap table-wrap-200"><table id="metrics"></table></div>
+      </div>
+      <div class="card">
+        <div class="card-header prediction-toolbar">
+          <strong>预测效果演示</strong>
+          <div class="prediction-controls">
+            <label>horizon</label><select id="pred_horizon" class="btn-auto"></select>
+            <label>node</label><select id="pred_node" class="btn-auto"></select>
+            <label>feature</label><select id="pred_feature" class="btn-auto"></select>
+          </div>
+        </div>
+        <div class="chart-container" id="chartPred"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TAB: 继续训练 ═══════ -->
+  <div class="tab-content" id="tab-resume">
+    <div class="card">
+      <div class="card-header"><strong>继续训练</strong></div>
+      <div class="group-grid">
+        <div class="span-all"><label>选择历史运行</label><select id="resume_run_id"></select></div>
+        <div class="span-all"><label>data_version_id</label><select id="resume_data_version"></select></div>
+        <div><label>续训起始 epoch</label><select id="resume_epoch"></select></div>
+        <div><label>目标 max_epoch</label><input id="resume_max_epoch" type="number" value="20"/></div>
+        <div><label>保存模型</label><select id="resume_saved_model"><option value="true">true</option><option value="false">false</option></select></div>
+        <div class="span-all"><label>额外参数</label><input id="resume_extra_args" placeholder="--log_level INFO"/></div>
+      </div>
+      <div class="train-actions">
+        <button class="btn btn-primary" onclick="startResumeTrain()">开始继续训练</button>
+        <span class="badge badge-idle" id="resume_status">idle</span>
+      </div>
+      <div id="resume_hint" class="train-hint"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><strong>训练日志</strong></div>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span>
+          <span class="terminal-title">train.log</span>
+        </div>
+        <div id="resume_logs" class="terminal-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TAB: 模型对比 ═══════ -->
+  <div class="tab-content" id="tab-compare">
+    <div class="card">
+      <div class="card-header">
+        <strong>模型对比（outputs）</strong>
+        <div class="card-controls"><button class="btn btn-secondary btn-sm" onclick="loadCompareRuns()">刷新模型列表</button><button class="btn btn-primary btn-sm" onclick="loadComparison()">开始对比</button></div>
+      </div>
+      <div class="group-grid">
+        <div><label>模型 A</label><select id="compare_run_a"></select></div>
+        <div><label>模型 B</label><select id="compare_run_b"></select></div>
+        <div><label>模型 C（可选）</label><select id="compare_run_c"></select></div>
+      </div>
+    </div>
+    <div class="pane pane-2">
+      <div class="card">
+        <div class="card-header"><strong>指标对比</strong></div>
+        <div class="table-wrap table-wrap-200"><table id="compare_metrics"></table></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><strong>预测曲线对比</strong></div>
+        <div class="chart-container" id="chartCompare"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TAB: 运行历史 ═══════ -->
+  <div class="tab-content" id="tab-history">
+    <div class="card">
+      <div class="card-header">
+        <strong>运行历史</strong>
+        <div class="card-controls">
+          <label class="small" style="margin:0">最近 N 次</label>
+          <input id="history_limit" class="topk-input" type="number" value="20" min="1" max="200"/>
+          <button class="btn btn-secondary btn-sm" onclick="loadHistory()">刷新</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="history_table"></table>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ═══════════════════════ TWEAKS ═══════════════════════ -->
+<button class="tweaks-toggle" id="tweaksToggle" title="Tweaks">T</button>
+<div class="tweaks-panel" id="tweaksPanel">
+  <div class="tweaks-title">Tweaks</div>
+  <div class="tweaks-row">
+    <label>主题</label>
+    <select id="tweaksTheme">
+      <option value="dark" selected>Dark</option>
+      <option value="light">Light</option>
+    </select>
+  </div>
+  <div class="tweaks-row">
+    <label>间距</label>
+    <select id="tweaksSpacing">
+      <option value="compact">Compact</option>
+      <option value="default" selected>Default</option>
+      <option value="relaxed">Relaxed</option>
+    </select>
+  </div>
+  <div class="tweaks-row">
+    <label>圆角</label>
+    <select id="tweaksRadius">
+      <option value="sharp">Sharp</option>
+      <option value="default" selected>Default</option>
+      <option value="round">Round</option>
+    </select>
+  </div>
+  <div class="tweaks-row">
+    <label>内容密度</label>
+    <select id="tweaksDensity">
+      <option value="default" selected>Default</option>
+      <option value="dense">Dense</option>
+    </select>
+  </div>
+</div>
+
+<script src="/static/train_web_v2.js"></script>
+</body>
+</html>

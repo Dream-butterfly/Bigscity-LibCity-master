@@ -20,7 +20,8 @@
 
 ## 分析（analysis）
 
-1. `分析 9` | 2026-04-22 11:58:52 +08:00 | 方案设计/决策建议 | [数据-训练解耦方案与口径确认](analysis/2026-04/2026-04-22_1158_data-training-decoupling-design-and-decisions.md)
+1. `分析 10` | 2026-05-07 09:52:00 +08:00 | 方案设计/决策建议 | [Web 前端深度迁移计划](analysis/2026-05/2026-05-07_web-frontend-migration-plan.md)
+2. `分析 9` | 2026-04-22 11:58:52 +08:00 | 方案设计/决策建议 | [数据-训练解耦方案与口径确认](analysis/2026-04/2026-04-22_1158_data-training-decoupling-design-and-decisions.md)
 2. `分析 8` | 2026-04-21 01:30:00 +08:00 | 方案设计/决策建议 | [不改核心结构下的稳训与降耗方案](analysis/2026-04/2026-04-21_0130_stability-and-efficiency-without-architecture-change.md)
 3. `分析 7` | 2026-04-20 16:14:15 +08:00 | 问题定位/事实结论 | [项目结构审计（冗余/缺失/错位）](analysis/2026-04/2026-04-20_1614_project-structure-audit.md)
 4. `分析 6` | 2026-03-24 17:00:00 +08:00 | 调研/理解/对比/验证 | [traffic_state_pred 与 speed/flow 关系总结](analysis/2026-03/2026-03-24_1700_task-relation-summary.md)

@@ -1,0 +1,129 @@
+/* ═══════════════════════════════════════════════════════
+   GNNTP Web Console — Design Tokens (v2)
+   来源: style-v1.html 新设计 + 旧版 CSS 变量合并
+   使用方式: <link rel="stylesheet" href="/static/design-tokens.css"/>
+   旧版兼容: 保留 --card, --text, --muted, --line, --primary
+   作为新版变量的别名
+   ═══════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Typography ── */
+  --font-sans: system-ui, -apple-system, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "Fira Code", "Consolas", monospace;
+
+  /* ── Border Radius ── */
+  --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 20px;
+
+  /* ── Spacing ── */
+  --spacing-xs: 4px; --spacing-sm: 8px; --spacing-md: 12px;
+  --spacing-lg: 16px; --spacing-xl: 20px; --spacing-2xl: 24px;
+  --spacing-3xl: 32px; --spacing-4xl: 40px;
+
+  /* ── Shadows ── */
+  --shadow-1: 0 1px 3px rgba(0,0,0,.06);
+  --shadow-2: 0 4px 12px rgba(0,0,0,.08);
+  --shadow-3: 0 8px 24px rgba(0,0,0,.12);
+
+  /* ── Easing ── */
+  --ease-micro: 180ms ease-out;
+  --ease-layout: 280ms cubic-bezier(.4,0,.2,1);
+  --ease-spring: 400ms cubic-bezier(.34,1.56,.64,1);
+
+  /* ── Layout ── */
+  --sidebar-w: 220px;
+  --sidebar-collapsed-w: 60px;
+
+  /* ── Chart Heights (旧版兼容) ── */
+  --chart-height-pred: 330px;
+  --chart-height-compare: 360px;
+  --chart-height-model: 300px;
+  --chart-height-loss: 390px;
+}
+
+/* ═══ Light Theme ═══ */
+:root, [data-theme="light"] {
+  --bg-base: #f0f2f5;
+  --bg-elevated: rgba(255,255,255,.72);
+  --bg-overlay: rgba(255,255,255,.88);
+  --bg-input: #f7f8fa;
+  --bg-sidebar: #121620;
+  --bg-terminal: #0a0e14;
+  --bg-log: #0b1220;
+
+  --border: #e2e5ea;
+  --border-light: #edf0f4;
+  --border-focus: #2e6bf7;
+
+  --text-primary: #1a1d23;
+  --text-secondary: #4a4f5a;
+  --text-muted: #697386;
+  --text-sidebar: #aeb7c7;
+  --text-sidebar-active: #ffffff;
+
+  --accent: #2e6bf7;
+  --accent-hover: #1d55d6;
+  --accent-subtle: rgba(46,107,247,.08);
+
+  --danger: #e54545;
+  --danger-hover: #c93333;
+  --danger-subtle: rgba(229,69,69,.08);
+
+  --success: #16a34a;
+  --warning: #ea8c00;
+  --info: #0894a1;
+
+  --chart-bg: #fafbfc;
+  --chart-border: #e8ecf1;
+
+  /* ── 旧版别名兼容 ── */
+  --card: #fff;
+  --text: #1f2937;
+  --line: #e5e7eb;
+  --primary: #2563eb;
+  --primary2: #1d4ed8;
+  --shadow: 0 8px 24px rgba(17, 24, 39, .09);
+}
+
+/* ═══ Dark Theme ═══ */
+[data-theme="dark"] {
+  --bg-base: #090c12;
+  --bg-elevated: rgba(18,22,30,.78);
+  --bg-overlay: rgba(14,18,26,.92);
+  --bg-input: #151921;
+  --bg-sidebar: #0b0e16;
+  --bg-terminal: #05080d;
+  --bg-log: #020617;
+
+  --border: #252b36;
+  --border-light: #1e2430;
+  --border-focus: #4d84fa;
+
+  --text-primary: #e2e6ed;
+  --text-secondary: #9ba3b0;
+  --text-muted: #7c8599;
+  --text-sidebar: #7c8599;
+  --text-sidebar-active: #ffffff;
+
+  --accent: #4d84fa;
+  --accent-hover: #669aff;
+  --accent-subtle: rgba(77,132,250,.10);
+
+  --danger: #f25c5c;
+  --danger-hover: #f07272;
+  --danger-subtle: rgba(242,92,92,.10);
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --info: #22d3ee;
+
+  --chart-bg: #0f131b;
+  --chart-border: #1e2530;
+
+  /* ── 旧版别名兼容 ── */
+  --card: #111827;
+  --text: #e5e7eb;
+  --line: #334155;
+  --primary: #3b82f6;
+  --primary2: #2563eb;
+  --shadow: 0 8px 24px rgba(2, 6, 23, .55);
+}
