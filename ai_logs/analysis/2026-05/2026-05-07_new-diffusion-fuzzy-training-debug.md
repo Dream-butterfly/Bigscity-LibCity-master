@@ -1,7 +1,7 @@
 # new_diffusion_fuzzy 训练无效 & 预测散乱 — 诊断报告
 
 **日期**: 2026-05-07
-**状态**: 分析完成，待执行修复
+**状态**: 第 1 轮修复已执行（config 4项），效果不佳 → 发现根本架构缺陷，待执行第 2 轮修复
 **涉及文件**:
 - `GNNTP/models/new/new_diffusion_fuzzy/model.py`（871行）
 - `GNNTP/models/new/new_diffusion_fuzzy/config.json`
@@ -25,6 +25,78 @@
 ---
 
 ## 根因分析
+
+---
+
+### ⚠️⚠️⚠️ 🔴🔴 Critical 0（第 2 轮发现 — 根本架构缺陷）⚠️⚠️⚠️
+
+### 交叉注意力在噪声查询上失效 → 模型学习的是边缘分布 p(Y) 而非条件分布 p(Y|X)
+
+**位置**: `model.py` `DenoiserBlock.forward` L362-L365 + `AttentionDenoiser.forward` L455-L479
+
+**现象**：第 1 轮 config 修复（开时间特征 + bfloat16 + DDIM + 关守恒loss）后，预测仍在数据均值附近波动。
+
+**根因推导**：
+
+当前架构中，条件（历史编码）**仅在交叉注意力中注入**：
+
+```
+noisy_future [B,T_out,N,1]          condition [B,T_in,N,D]
+     │                                     │
+     ▼                                     │
+input_projection                            │
+     │                                     │
+temporal self-attn ◄── 纯噪声上做自注意力    │
+graph conv ◄────────── 纯噪声上做图卷积      │
+     │                                     │
+     └─────► cross_attn(Q=noise, K/V=cond) │  ◄── 🔴 问题点
+```
+
+交叉注意力权重 = `softmax(noisy_query @ condition_key^T / sqrt(d))`
+
+| 时间步 t | alpha_bar_t | 噪声占比 | Q @ K^T 结果 | softmax 输出 |
+|----------|------------|---------|-------------|-------------|
+| t=0      | ~1.0       | ~0%     | 有意义的匹配 | 聚焦权重 |
+| t=50     | ~0.78      | ~22%    | 弱信号+噪声 | 半模糊 |
+| t=100    | ~0.37      | ~63%    | 噪声主导 | 接近均匀 |
+| t=150    | ~0.22      | ~78%    | 纯噪声 | **均匀分布** |
+| t=199    | ~0.13      | ~87%    | 纯噪声 | **均匀分布** |
+
+**当 t 较大时**：`noisy_query ≈ N(0,σ²I)`，点积结果 ≈ 随机数，softmax 退化为均匀权重。交叉注意力输出 ≈ condition 的时间平均。
+
+**训练时 t 在 [0,199] 均匀采样** → **至少一半训练样本条件注入无效**。
+
+**理论后果**：扩散模型最大似然训练等价于学习 score function ∇log p(Y|X)。但条件信号在大量训练步中不可用，模型实际学习的梯度是：
+```
+∇log p(Y) + 衰减后的 ∇log p(X|Y)
+```
+即模型偏向学习**无条件边缘分布** p(Y) 而非**条件分布** p(Y|X)。
+
+**验证**：
+- p(Y)（交通速度的边缘分布）≈ 以数据均值为中心的正态状分布
+- 从 p(Y) 采样 → 预测在均值附近波动 ✓ 与用户观察完全吻合
+- 无论输入 X 如何变化，输出几乎相同 ✓ 进一步验证
+
+**为什么交叉注意力在 Stable Diffusion 中可行但此处不行**：
+- SD 用 U-Net，交叉注意力在**多分辨率**下进行，低分辨率时有更大的感受野
+- SD 的条件（文本嵌入）是**密集语义向量**，与像素特征在语义空间中对齐
+- 本模型：条件（时间序列编码）与噪声未来在特征空间中**未经对齐训练**，直接点积
+
+**结论**：配置修复（时间特征、bfloat16、DDIM）处理了次要问题，但**不解决这个根本架构缺陷**。条件必须在噪声处理之前注入。
+
+对比成功案例：
+
+| 模型 | 条件注入方式 | 何时注入 |
+|------|------------|---------|
+| **本模型** | 仅交叉注意力 | attention/graph conv 之后 ❌ |
+| CSDI | 拼接（observed mask + noisy） | 输入层直接拼接 ✅ |
+| DiffWave | FiLM（scale + shift） | 每个 residual block 开头 ✅ |
+| Grad-TTS | 编码器输出拼接 | U-Net 输入层 ✅ |
+| Stable Diffusion | 交叉注意力 | 每层注入，但 U-Net 多分辨率 ✅ |
+
+**本模型的注入时序是所有成功案例中最弱的**。
+
+---
 
 ### 🔴 Critical 1：DDPM 采样使用非连续时间步 — 数学错误
 
@@ -191,3 +263,55 @@ bfloat16 动态范围与 float32 相同（指数位宽相同），不会溢出�
 ```
 
 预期效果：训练 loss 从 ~1.0 开始下降，预测不再呈无意义正态分布。
+
+---
+
+## 第 2 轮修复方案：条件前置融合（解决 Critical 0）
+
+### 核心思路
+
+在 `AttentionDenoiser.forward` 中，**在进入 DenoiserBlock 之前**，将条件特征直接拼接到去噪输入中：
+
+```
+noisy_future                     condition [B,T_in,N,D]
+     │                                │
+     ▼                                │
+input_projection + pos + time         │
+     │                                ▼
+     │                     mean_pool(dim=1) → [B,1,N,D]
+     │                     expand(T_out)   → [B,T_out,N,D]
+     │                                │
+     └──────► concat ──► condition_fusion(Linear) ──► [B,T_out,N,D]
+                         │
+                         ▼
+              DenoiserBlock × N
+              (cross_attn 保留为辅助通路)
+```
+
+### 具体改动
+
+**文件**: `model.py`，仅涉及 `AttentionDenoiser`
+
+**改动 1** — `__init__` 新增融合层（L423 之后）：
+```python
+self.condition_fusion = nn.Linear(hidden_dim * 2, hidden_dim)
+```
+
+**改动 2** — `forward` 在 L466 之后插入条件融合：
+```python
+# Pool condition over time, fuse directly into denoiser input
+# BEFORE any attention/graph ops — ensures condition signal at all noise levels
+condition_pooled = condition_features.mean(dim=1, keepdim=True)  # [B, 1, N, D]
+condition_pooled = condition_pooled.expand(-1, denoiser_input.size(1), -1, -1)
+denoiser_input = self.condition_fusion(
+    torch.cat([denoiser_input, condition_pooled], dim=-1)
+)
+```
+
+### 设计理由
+
+- `mean(dim=1)` 保留空间精度（每节点独立上下文），牺牲时间细节（交叉注意力可补充）
+- `expand` 到 T_out 使每个未来步都获得同一全局上下文 + 各自位置编码
+- `nn.Linear(2D, D)` 可学习融合比例，模型自行决定噪声信号和条件信号的使用权重
+- `DenoiserBlock` 不变，交叉注意力保留作为时序细粒度条件补充
+- 总增加参数量：`hidden_dim * 2 * hidden_dim + hidden_dim ≈ 18K`（可忽略）

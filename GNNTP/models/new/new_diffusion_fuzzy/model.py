@@ -421,6 +421,9 @@ class AttentionDenoiser(nn.Module):
             nn.SiLU(),
             nn.Linear(hidden_dim, hidden_dim),
         )
+        # Direct condition fusion: concat time-pooled condition to denoiser input
+        # before any attention/graph ops, so condition signal survives at high noise levels
+        self.condition_fusion = nn.Linear(hidden_dim * 2, hidden_dim)
         self.blocks = nn.ModuleList(
             [
                 DenoiserBlock(
@@ -464,6 +467,12 @@ class AttentionDenoiser(nn.Module):
             denoiser_input = denoiser_input + self.future_position_embedding[:, :future_steps]
         timestep_features = self.time_projection(self.time_embedding(timesteps)).to(dtype=denoiser_input.dtype)
         denoiser_input = denoiser_input + timestep_features.unsqueeze(1).unsqueeze(2)
+
+        # Fuse condition directly into denoiser input BEFORE blocks.
+        # Cross-attention inside blocks is retained as secondary temporal pathway.
+        condition_pooled = condition_features.mean(dim=1, keepdim=True)
+        condition_pooled = condition_pooled.expand(-1, denoiser_input.size(1), -1, -1)
+        denoiser_input = self.condition_fusion(torch.cat([denoiser_input, condition_pooled], dim=-1))
 
         current_adjacency = adjacency_matrix
         for block in self.blocks:
