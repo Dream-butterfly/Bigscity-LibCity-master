@@ -71,5 +71,11 @@ class DiffusionTrafficStateExecutor(TrafficStateExecutor):
                 self._logger.debug(loss.item())
                 losses.append(loss.item())
             mean_loss = np.mean(losses)
+            # DDP: all_reduce 求全局平均损失
+            if self.is_distributed:
+                import torch.distributed as dist
+                loss_tensor = torch.tensor([mean_loss], device=self.device)
+                dist.all_reduce(loss_tensor, op=dist.ReduceOp.AVG)
+                mean_loss = loss_tensor.item()
             self._writer.add_scalar('eval loss', mean_loss, epoch_idx)
             return mean_loss

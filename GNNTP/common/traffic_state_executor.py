@@ -319,7 +319,6 @@ class TrafficStateExecutor(AbstractExecutor):
         self._logger.info('Start evaluating ...')
         with torch.no_grad():
             self.model.eval()
-            # self.evaluator.clear()
             y_truths = []
             y_preds = []
             for batch in test_dataloader:
@@ -330,11 +329,37 @@ class TrafficStateExecutor(AbstractExecutor):
                 y_pred = self._scaler.inverse_transform(output[..., :self.output_dim])
                 y_truths.append(y_true.cpu().numpy())
                 y_preds.append(y_pred.cpu().numpy())
-                # evaluate_input = {'y_true': y_true, 'y_pred': y_pred}
-                # self.evaluator.collect(evaluate_input)
-            # self.evaluator.save_result(self.evaluate_res_dir)
             y_preds = np.concatenate(y_preds, axis=0)
-            y_truths = np.concatenate(y_truths, axis=0)  # concatenate on batch
+            y_truths = np.concatenate(y_truths, axis=0)
+
+            # DDP: 各 rank 只推理自己的数据分片，需 all_gather 汇总
+            if self.is_distributed:
+                import torch.distributed as dist
+                world_size = dist.get_world_size()
+                y_preds_t = torch.from_numpy(y_preds).to(self.device)
+                y_truths_t = torch.from_numpy(y_truths).to(self.device)
+                # 收集各 rank 样本数
+                local_size = torch.tensor([y_preds.shape[0]], dtype=torch.long, device=self.device)
+                all_sizes = [torch.zeros(1, dtype=torch.long, device=self.device) for _ in range(world_size)]
+                dist.all_gather(all_sizes, local_size)
+                sizes = [int(s.item()) for s in all_sizes]
+                max_size = max(sizes)
+                # 填充到统一大小后 all_gather
+                B, T, N, F = y_preds.shape
+                pad_pred = torch.zeros(max_size, T, N, F, device=self.device)
+                pad_truth = torch.zeros(max_size, T, N, F, device=self.device)
+                pad_pred[:B] = y_preds_t
+                pad_truth[:B] = y_truths_t
+                gathered_preds = [torch.zeros_like(pad_pred) for _ in range(world_size)]
+                gathered_truths = [torch.zeros_like(pad_truth) for _ in range(world_size)]
+                dist.all_gather(gathered_preds, pad_pred)
+                dist.all_gather(gathered_truths, pad_truth)
+                y_preds = torch.cat([g[:sizes[i]] for i, g in enumerate(gathered_preds)], dim=0).cpu().numpy()
+                y_truths = torch.cat([g[:sizes[i]] for i, g in enumerate(gathered_truths)], dim=0).cpu().numpy()
+                # 仅 rank 0 写文件
+                if not self._is_rank0():
+                    return {}
+
             outputs = {'prediction': y_preds, 'truth': y_truths}
             filename = \
                 time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime(time.time())) + '_' \
