@@ -422,20 +422,14 @@ class AttentionDenoiser(nn.Module):
             nn.SiLU(),
             nn.Linear(hidden_dim, hidden_dim),
         )
-        # Direct condition fusion: learnable temporal weighted pooling + FiLM modulation.
-        # Condition generates scale (γ) and shift (β) that modulate denoiser features
-        # before any attention/graph ops, replacing simple concat+linear with gating.
+        # Direct condition fusion: learnable temporal weighted pooling over all history
+        # steps, then concat with denoiser input and project back to hidden_dim.
+        # (FiLM was tried but zero-init starved condition signal early in training,
+        # causing OOD collapse during DDIM sampling. Reverted to proven concat+linear.)
         if input_window is None or input_window < 1:
             raise ValueError("input_window must be >= 1 for condition temporal weighting.")
         self.condition_temporal_weight = nn.Parameter(torch.zeros(input_window))
-        self.condition_film_proj = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.SiLU(),
-            nn.Linear(hidden_dim, hidden_dim * 2),
-        )
-        # Initialize to identity (scale≈0, shift≈0) so FiLM starts as no-op
-        nn.init.zeros_(self.condition_film_proj[-1].weight)
-        nn.init.zeros_(self.condition_film_proj[-1].bias)
+        self.condition_fusion = nn.Linear(hidden_dim * 2, hidden_dim)
         self.blocks = nn.ModuleList(
             [
                 DenoiserBlock(
@@ -480,15 +474,12 @@ class AttentionDenoiser(nn.Module):
         timestep_features = self.time_projection(self.time_embedding(timesteps)).to(dtype=denoiser_input.dtype)
         denoiser_input = denoiser_input + timestep_features.unsqueeze(1).unsqueeze(2)
 
-        # Fuse all history steps into condition anchor via learnable temporal weights
-        # + FiLM (Feature-wise Linear Modulation): condition generates scale γ and shift β
-        # that modulate denoiser features per-timestep-per-node.
+        # Fuse all history steps into condition anchor via learnable temporal weights.
+        # Concat+linear injects condition signal directly into denoiser from step 1.
         temporal_weights = F.softmax(self.condition_temporal_weight, dim=0)  # [T_in]
         condition_pooled = (condition_features * temporal_weights[None, :, None, None]).sum(dim=1, keepdim=True)
         condition_pooled = condition_pooled.expand(-1, denoiser_input.size(1), -1, -1)
-        film_params = self.condition_film_proj(condition_pooled)  # [B,T,N,2D]
-        scale, shift = film_params.chunk(2, dim=-1)
-        denoiser_input = denoiser_input * (1.0 + scale) + shift
+        denoiser_input = self.condition_fusion(torch.cat([denoiser_input, condition_pooled], dim=-1))
 
         current_adjacency = adjacency_matrix
         for block in self.blocks:
