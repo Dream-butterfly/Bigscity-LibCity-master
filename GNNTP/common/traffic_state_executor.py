@@ -363,6 +363,8 @@ class TrafficStateExecutor(AbstractExecutor):
         self._logger.info("num_batches:{}".format(num_batches))
 
         for epoch_idx in range(self._epoch_num, self.epochs):
+            if hasattr(train_dataloader, 'sampler') and hasattr(train_dataloader.sampler, 'set_epoch'):
+                train_dataloader.sampler.set_epoch(epoch_idx)
             start_time = time.time()
             losses = self._train_epoch(train_dataloader, epoch_idx, self.loss_func)
             t1 = time.time()
@@ -431,13 +433,15 @@ class TrafficStateExecutor(AbstractExecutor):
             list: 每个batch的损失的数组
         """
         self.model.train()
-        loss_func = loss_func if loss_func is not None else self._unwrap_model().calculate_loss
         losses = []
         for batch in train_dataloader:
             self.optimizer.zero_grad()
             batch.to_tensor(self.device)
             with self._autocast_context():
-                loss = loss_func(batch)
+                if loss_func is not None:
+                    loss = loss_func(batch)
+                else:
+                    loss = self.model(batch)  # DDP forward hook 同步梯度
             self._logger.debug(loss.item())
             losses.append(loss.item())
             if self.grad_scaler.is_enabled():
@@ -468,12 +472,14 @@ class TrafficStateExecutor(AbstractExecutor):
         """
         with torch.no_grad():
             self.model.eval()
-            loss_func = loss_func if loss_func is not None else self._unwrap_model().calculate_loss
             losses = []
             for batch in eval_dataloader:
                 batch.to_tensor(self.device)
                 with self._autocast_context():
-                    loss = loss_func(batch)
+                    if loss_func is not None:
+                        loss = loss_func(batch)
+                    else:
+                        loss = self.model(batch)
                 self._logger.debug(loss.item())
                 losses.append(loss.item())
             mean_loss = np.mean(losses)

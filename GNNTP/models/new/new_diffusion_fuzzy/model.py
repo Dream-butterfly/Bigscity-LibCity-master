@@ -747,7 +747,9 @@ class NewDiffusion(AbstractTrafficStateModel):
         return self.condition_encoder(history_sequence, adjacency_matrix)
 
     def forward(self, batch):
-        """Forward inference entry, delegates to diffusion sampling."""
+        """Forward entry. Training → returns loss (DDP-synced). Inference → predicts."""
+        if self.training:
+            return self.calculate_loss(batch)
         return self.predict(batch)
 
     def calculate_loss(self, batch):

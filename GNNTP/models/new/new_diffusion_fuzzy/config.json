@@ -42,6 +42,7 @@
   "add_time_in_day": true,
   "add_day_in_week": true,
   "max_epoch": 100,
+  "scale_lr": false,
   "learner": "adamw",
   "learning_rate": 0.001,
   "lr_decay": true,
