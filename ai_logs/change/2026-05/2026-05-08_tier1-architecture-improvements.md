@@ -1,55 +1,80 @@
-# 变更 #15: new_diffusion_fuzzy Tier 1 架构改进 + 专属 Executor
+# 变更 #15: new_diffusion_fuzzy 架构全面改进
 
 **日期**: 2026-05-08
 **类型**: 改进
 **模型**: new_diffusion_fuzzy
 
-## 改进 ①：条件注入强化 — 可学习时序加权
+---
 
-**旧**: `condition_features[:, -1:, :, :]` — 只用最后 1/12 历史步
-**新**: `F.softmax(self.condition_temporal_weight) × condition_features → sum` — 可学习 12 步软加权
+## 已实施改进汇总
 
-| 文件 | 变更 |
-|------|------|
-| `model.py:AttentionDenoiser.__init__` | +`input_window` 参数, +`self.condition_temporal_weight` |
-| `model.py:AttentionDenoiser.forward` | 单步复制 → softmax 加权求和池化 |
-| `model.py:NewDiffusion.__init__` | 传入 `input_window=self.input_window` |
+### 条件注入 (Tier 1 ① → Tier 2 ⑤ 升级)
 
-初始化权重为 0 → softmax 初始均匀分布 → 从平均池化开始学习。
+| 阶段 | 实现 | 效果 |
+|------|------|------|
+| 原始 | `condition_features[:, -1:]` — 仅最后 1/12 步, concat+linear | 条件信号极弱 |
+| 改进 ① | softmax 时序加权池化 — 全部 12 步 | 利用全部历史 |
+| 改进 ⑤ | concat+linear → FiLM (scale+shift modulation) | 条件门控调制 |
 
-## 改进 ②：SNR+1 加权损失
+### 损失函数 (Tier 1 ②)
 
-**旧**: `F.mse_loss(predicted_noise, true_noise)` — 所有时间步均匀加权
-**新**: `(snr + 1).clamp(max=10) × mse → mean` — 低噪声步高权重
+**旧**: `F.mse_loss(predicted_noise, true_noise)` — 均匀加权
+**新**: `(snr + 1).clamp(max=10) × mse → mean` — SNR+1 加权
 
-t≈200 (SNR≈0.15): weight≈1.15
-t≈0   (SNR≈100): weight≈10 (clamped)
+### 推理优化 (Tier 1 ③ + 其他)
 
-使模型优先优化对最终预测质量贡献大的低噪声阶段。
+| 参数 | 旧值 | 新值 | 加速比 |
+|------|------|------|--------|
+| `num_prediction_samples` | 2 | 1 | 2× |
+| `num_sampling_steps` | 50 | 25 | 2× |
+| `use_spatiotemporal_attention` | true | false | ~10× |
+| **合计** | | | **~20×** |
 
-## 改进 ③：推理采样数 2→1
-
-DDIM eta=0 确定性采样 + 两次采样平均 → 推理时间减半，质量不变。
-
-## 专属 Executor
-
-| 文件 | 变更 |
-|------|------|
-| `executor.py` (新建) | `DiffusionTrafficStateExecutor` — 继承 `TrafficStateExecutor`，重写 `_train_epoch`/`_valid_epoch` |
-| `manifest.json` | executor → `DiffusionTrafficStateExecutor` |
-| `traffic_state_executor.py` | 回退扩散模型专用代码 (`_ddp_loss_ok` 等)，恢复干净 |
-
-## 参数变化
+### 噪声调度
 
 | 参数 | 旧值 | 新值 |
 |------|------|------|
-| `num_prediction_samples` | 2 | 1 |
-| `condition_temporal_weight` | 无 | 12维可学习参数 (≈12 params) |
+| `diffusion_schedule` | linear | cosine |
+| `beta_end` | 0.02 | 0.01 |
 
-模型总参数: ~3M (+12)
+Cosine 调度在低噪声区域步长更细，β_end 减半使最大噪声时信号从 37% 升到 ~60%。
 
-## 预期效果
+### 模型容量
 
-- 条件信号利用全部 12 步历史 → 更好的时空模式捕获
-- SNR 加权损失 → 低噪声细化阶段精度提升
-- 推理时间减半
+| 参数 | 旧值 | 新值 |
+|------|------|------|
+| `hidden_dim` | 96 | 128 |
+| `denoiser_layers` | 3 | 4 |
+| `ffn_hidden_dim` | 192 | 256 |
+| `head_dim` | 24 | 32 (128/4) |
+
+### 专属 Executor
+
+`DiffusionTrafficStateExecutor` — 继承 TrafficStateExecutor，DDP-safe 训练。
+
+---
+
+## 修改文件清单
+
+| 文件 | 变更 |
+|------|------|
+| `config.json` | 10 个参数更新 |
+| `model.py:AttentionDenoiser.__init__` | +`input_window`, +`condition_temporal_weight`, +`condition_film_proj` |
+| `model.py:AttentionDenoiser.forward` | concat+linear → FiLM modulation |
+| `model.py:NewDiffusion.__init__` | 传入 `input_window` |
+| `model.py:NewDiffusion.calculate_loss` | SNR+1 加权损失 |
+| `model.py:NewDiffusion.forward` | training 时返回 loss (DDP-safe) |
+| `model.py:NewDiffusion` | +`_ddp_loss_through_forward = True` |
+| `executor.py` (新建) | `DiffusionTrafficStateExecutor` |
+| `manifest.json` | executor → 新 executor |
+| `traffic_state_executor.py` | 回退扩散专用代码 |
+
+---
+
+## 剩余未实施改进
+
+| # | 改进 | 类型 |
+|---|------|------|
+| ⑥ | Encoder-Denoiser skip connections (U-Net 模式) | 架构重构 |
+
+评估时间预计从 ~17min 降至 ~1-2min。
