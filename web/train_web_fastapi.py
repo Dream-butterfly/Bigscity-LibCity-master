@@ -1044,8 +1044,8 @@ class TrainState:
         line = line.rstrip("\n")
         with self.lock:
             self.logs.append(line)
-            if len(self.logs) > 4000:
-                self.logs = self.logs[-4000:]
+            if len(self.logs) > 50000:
+                self.logs = self.logs[-50000:]
         self._extract_model_log(line)
 
     def _append_model_log(self, line: str) -> None:
@@ -1196,8 +1196,8 @@ class DataPrepState:
         line = line.rstrip("\n")
         with self.lock:
             self.logs.append(line)
-            if len(self.logs) > 3000:
-                self.logs = self.logs[-3000:]
+            if len(self.logs) > 30000:
+                self.logs = self.logs[-30000:]
 
     def finish(self, return_code: int, error: str | None) -> None:
         with self.lock:
@@ -1762,15 +1762,18 @@ def api_data_stop():
 
 
 @app.get("/api/data/status")
-def api_data_status():
+def api_data_status(since: int = Query(default=0, ge=0)):
     with DATA_STATE.lock:
+        log_count = len(DATA_STATE.logs)
+        since_safe = max(0, min(since, log_count))
         return {
             "running": DATA_STATE.running,
             "command": DATA_STATE.command,
             "version_id": DATA_STATE.version_id,
             "return_code": DATA_STATE.return_code,
             "error": DATA_STATE.error,
-            "logs_tail": DATA_STATE.logs[-400:],
+            "logs_tail": DATA_STATE.logs[since_safe:],
+            "log_count": log_count,
             "started_at": DATA_STATE.started_at,
             "ended_at": DATA_STATE.ended_at,
         }
@@ -2165,7 +2168,7 @@ def api_clear():
 
 
 @app.get("/api/status")
-def api_status():
+def api_status(since: int = Query(default=0, ge=0)):
     with STATE.lock:
         pie_topk = max(1, min(100, int(STATE.model_plot_topk_pie)))
         bar_topk = max(1, min(100, int(STATE.model_plot_topk_bar)))
@@ -2203,6 +2206,9 @@ def api_status():
         except Exception as exc:
             loss_plot_option = {}
             option_errors.append(f"loss_plot_option: {exc}")
+        # 按 since 返回增量日志，发送全部（不做尾部截断）
+        log_count = len(STATE.logs)
+        since_safe = max(0, min(since, log_count))
         return {
             "running": STATE.running,
             "command": STATE.command,
@@ -2210,7 +2216,8 @@ def api_status():
             "return_code": STATE.return_code,
             "error": STATE.error,
             "result_ready": STATE.result is not None,
-            "logs_tail": STATE.logs[-400:],
+            "logs_tail": STATE.logs[since_safe:],
+            "log_count": log_count,
             "model_logs_tail": STATE.model_logs[-300:],
             "model_plot": model_plot,
             "model_plot_option_pie": model_plot_option_pie,

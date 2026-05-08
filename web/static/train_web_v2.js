@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════
    GNNTP Web Console — v2 Main Script
    基于 main.js 迁移，保留核心功能，适配 sidebar 新布局
-   v=20260507e — DDP log fix
+   v=20260508a — full log display (no tail truncation)
    ═══════════════════════════════════════════════════════ */
-console.log('[train_web_v2] loaded v=20260507e');
+console.log('[train_web_v2] loaded v=20260508a');
 
 "use strict";
 
@@ -809,14 +809,15 @@ async function pollDataLogs() {
   const el = document.getElementById('data_logs');
   if (!el) return;
   try {
-    const data = await apiGet('/api/data/status');
+    const data = await apiGet(`/api/data/status?since=${dataLogPrevLen}`);
     const tail = Array.isArray(data.logs_tail) ? data.logs_tail : [];
-    // 只追加新行（增量更新）
-    if (tail.length > dataLogPrevLen) {
-      for (let i = dataLogPrevLen; i < tail.length; i++) {
-        appendDataLogLine(el, tail[i], i + 1);
+    const logCount = data.log_count || 0;
+    // 只追加新行（增量更新，用后端绝对行数追踪）
+    if (tail.length > 0) {
+      for (let i = 0; i < tail.length; i++) {
+        appendDataLogLine(el, tail[i], dataLogPrevLen + i + 1);
       }
-      dataLogPrevLen = tail.length;
+      dataLogPrevLen = logCount;
     }
     if (data.running) {
       setTimeout(pollDataLogs, 1000);
@@ -953,10 +954,10 @@ async function pollTrainLogs() {
   try {
     const data = await apiGet(`/api/status?since=${trainLogIndex}`);
     const rawLines = data.logs_tail || [];
-    if (rawLines.length > trainLogIndex) {
-      const newLines = rawLines.slice(trainLogIndex);
-      _trainLogLines.push(...newLines);
-      trainLogIndex = rawLines.length;
+    const logCount = data.log_count || 0;
+    if (rawLines.length > 0) {
+      _trainLogLines.push(...rawLines);
+      trainLogIndex = logCount;  // 用后端绝对行数追踪，避免尾部截断导致的停滞
       renderFilteredLogs('logs', _trainLogLines);
     }
     // 更新 status badge
@@ -1150,10 +1151,10 @@ async function pollResumeLogs() {
   try {
     const data = await apiGet(`/api/status?since=${resumeLogIndex}`);
     const rawLines = data.logs_tail || [];
-    if (rawLines.length > resumeLogIndex) {
-      const newLines = rawLines.slice(resumeLogIndex);
-      _resumeLogLines.push(...newLines);
-      resumeLogIndex = rawLines.length;
+    const logCount = data.log_count || 0;
+    if (rawLines.length > 0) {
+      _resumeLogLines.push(...rawLines);
+      resumeLogIndex = logCount;
       renderFilteredLogs('resume_logs', _resumeLogLines);
     }
     const badge = document.getElementById('resume_status');
