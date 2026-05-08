@@ -108,6 +108,7 @@ class TrafficStateExecutor(AbstractExecutor):
         if self._epoch_num > 0:
             self.load_model_with_epoch(self._epoch_num)
         self.loss_func = self._build_train_loss()
+        self._ddp_loss_ok = getattr(self._unwrap_model(), '_ddp_loss_through_forward', False)
 
     def _unwrap_model(self):
         """获取原始模型（DDP 包装下取 .module）"""
@@ -440,8 +441,10 @@ class TrafficStateExecutor(AbstractExecutor):
             with self._autocast_context():
                 if loss_func is not None:
                     loss = loss_func(batch)
-                else:
+                elif self._ddp_loss_ok:
                     loss = self.model(batch)  # DDP forward hook 同步梯度
+                else:
+                    loss = self._unwrap_model().calculate_loss(batch)
             self._logger.debug(loss.item())
             losses.append(loss.item())
             if self.grad_scaler.is_enabled():

@@ -606,6 +606,7 @@ class DiffusionScheduler(nn.Module):
 
 class NewDiffusion(AbstractTrafficStateModel):
     """Graph + Attention + Conditional Diffusion with adaptive graph and conservation prior."""
+    _ddp_loss_through_forward = True  # forward() returns loss when self.training
 
     def __init__(self, config, data_feature):
         super().__init__(config, data_feature)
