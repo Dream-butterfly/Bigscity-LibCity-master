@@ -1,0 +1,18 @@
+2026-05-08 13:14:43,042 - INFO - Log directory: D:\a_code\A_Agent\projects\LibCity\outputs\20260508_131443__traffic_state_pred__new_diffusion_fuzzy__PEMSD4\logs
+2026-05-08 13:14:43,042 - INFO - Begin data artifact pipeline, task=traffic_state_pred, model_name=new_diffusion_fuzzy, dataset_name=PEMSD4, exp_id=20260508_131443__traffic_state_pred__new_diffusion_fuzzy__PEMSD4
+2026-05-08 13:14:43,044 - INFO - Loaded file PEMSD4.geo, num_nodes=307
+2026-05-08 13:14:43,045 - INFO - set_weight_link_or_dist: dist
+2026-05-08 13:14:43,045 - INFO - init_weight_inf_or_zero: inf
+2026-05-08 13:14:43,046 - INFO - Loaded file PEMSD4.rel, shape=(307, 307)
+2026-05-08 13:14:43,046 - INFO - Start Calculate the weight by Gauss kernel!
+2026-05-08 13:14:43,046 - INFO - Loading file PEMSD4.dyna
+2026-05-08 13:14:45,478 - INFO - Loaded file PEMSD4.dyna, shape=(16992, 307, 1)
+2026-05-08 13:14:47,550 - INFO - Dataset created
+2026-05-08 13:14:47,550 - INFO - x shape: (16969, 12, 307, 9), y shape: (16969, 12, 307, 9)
+2026-05-08 13:14:47,563 - INFO - train	x: (11878, 12, 307, 9), y: (11878, 12, 307, 9)
+2026-05-08 13:14:47,563 - INFO - eval	x: (1697, 12, 307, 9), y: (1697, 12, 307, 9)
+2026-05-08 13:14:47,563 - INFO - test	x: (3394, 12, 307, 9), y: (3394, 12, 307, 9)
+2026-05-08 13:16:20,082 - INFO - Saved at D:\a_code\A_Agent\projects\LibCity\cache\dataset_cache\point_based_PEMSD4_12_12_0.7_0.1_standard_32_False_True_True_False.npz
+2026-05-08 13:16:25,595 - INFO - StandardScaler mean: 63.43941037628485, std: 8.246058275039324
+2026-05-08 13:16:25,595 - INFO - NoneScaler
+2026-05-08 13:17:32,502 - INFO - Data artifact ready: D:\a_code\A_Agent\projects\LibCity\cache\data_artifacts\da_20260508_131627__PEMSD4__TrafficStatePointDataset__44f9874b

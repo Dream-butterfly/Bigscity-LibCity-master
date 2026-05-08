@@ -451,6 +451,8 @@ class AttentionDenoiser(nn.Module):
         )
         self.final_norm = nn.LayerNorm(hidden_dim)
         self.output_projection = nn.Linear(hidden_dim, output_dim)
+        nn.init.zeros_(self.output_projection.weight)
+        nn.init.zeros_(self.output_projection.bias)
         self.adaptive_graph_learner = None
         if adaptive_graph_enabled:
             if num_nodes is None or static_adjacency is None:

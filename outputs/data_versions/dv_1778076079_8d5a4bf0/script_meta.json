@@ -1,0 +1,22 @@
+{
+  "task": "traffic_state_pred",
+  "model": "new_diffusion_fuzzy",
+  "dataset": "PEMSD4",
+  "exp_id": "20260506_220121__traffic_state_pred__new_diffusion_fuzzy__PEMSD4",
+  "artifact_id": "da_20260506_220144__PEMSD4__TrafficStatePointDataset__6ce8b698",
+  "artifact_dir": "D:\\a_code\\A_Agent\\projects\\LibCity\\cache\\data_artifacts\\da_20260506_220144__PEMSD4__TrafficStatePointDataset__6ce8b698",
+  "data_signature": "6ce8b698e8eebea62a4e0e877ae2041d403d29bc",
+  "train_batches": 160,
+  "valid_batches": 54,
+  "test_batches": 54,
+  "cache_file_name": "D:\\a_code\\A_Agent\\projects\\LibCity\\cache\\dataset_cache\\point_based_PEMSD4_12_12_0.6_0.2_none_64_False_False_False_False.npz",
+  "data_feature_keys": [
+    "adj_mx",
+    "ext_dim",
+    "feature_dim",
+    "num_batches",
+    "num_nodes",
+    "output_dim",
+    "scaler"
+  ]
+}

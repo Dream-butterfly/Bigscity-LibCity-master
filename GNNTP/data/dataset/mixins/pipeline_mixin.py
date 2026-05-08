@@ -105,9 +105,9 @@ class TrafficStatePipelineMixin:
             # 1. 加载主数据
             df = self._load_dyna(filename)
 
-            # 2. 融合外部数据（避免重复判断）
-            if ext_data is not None:
-                df = self._add_external_information(df, ext_data)
+            # 2. 融合时间特征(tod/dow)与外部数据
+            # _add_external_information 内部已处理 ext_data=None 的情况
+            df = self._add_external_information(df, ext_data)
 
             # 3. 滑窗生成
             x, y = self._generate_input_data(df)
