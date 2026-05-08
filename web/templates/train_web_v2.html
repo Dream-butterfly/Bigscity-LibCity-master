@@ -6,7 +6,7 @@
 <title data-i18n="app_title">GNNTP Console v2</title>
 <script src="https://assets.pyecharts.org/assets/v5/echarts.min.js"></script>
 <link rel="stylesheet" href="/static/design-tokens.css"/>
-<link rel="stylesheet" href="/static/train_web_v2.css?v=20260508a"/>
+<link rel="stylesheet" href="/static/train_web_v2.css?v=20260508b"/>
 </head>
 <body>
 
@@ -34,6 +34,10 @@
     <button class="sidebar-nav-item" data-tab="compare">
       <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
       <span data-i18n="sidebar_compare">模型对比</span>
+    </button>
+    <button class="sidebar-nav-item" data-tab="eval">
+      <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      <span data-i18n="sidebar_eval">模型评估</span>
     </button>
     <button class="sidebar-nav-item" data-tab="history">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -334,6 +338,54 @@
     </div>
   </div>
 
+  <!-- ═══════ TAB: 模型评估 ═══════ -->
+  <div class="tab-content" id="tab-eval">
+    <div class="card">
+      <div class="card-header"><strong>评估配置</strong></div>
+      <div class="group-grid">
+        <div class="span-all"><label>选择历史运行</label><select id="eval_run_id"></select></div>
+        <div class="span-all"><label>data_version_id</label><div style="display:flex;gap:8px"><select id="eval_data_version" style="flex:1"></select><button class="btn btn-secondary btn-sm" onclick="loadDataVersions()">刷新</button></div></div>
+        <div><label>评估 epoch</label><select id="eval_epoch"></select></div>
+        <div class="span-all"><label>extra_args</label><input id="eval_extra_args" placeholder="--log_level INFO"/></div>
+      </div>
+      <div class="train-actions">
+        <button class="btn btn-primary" onclick="startEval()">开始评估</button>
+        <button class="btn btn-danger" onclick="stopEval()">停止</button>
+        <button class="btn btn-ghost" onclick="clearEvalState()">清空</button>
+        <span class="badge badge-idle" id="eval_status">idle</span>
+      </div>
+      <div id="eval_hint" class="train-hint"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><strong>评估日志</strong></div>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span>
+          <span class="terminal-title">eval.log</span>
+        </div>
+        <div id="eval_logs" class="terminal-body"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><strong>评估指标</strong></div>
+      <div class="table-wrap table-wrap-200"><table id="eval_metrics"></table></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header prediction-toolbar">
+        <strong>预测效果演示</strong>
+        <div class="prediction-controls">
+          <label>horizon</label><select id="eval_pred_horizon" class="btn-auto"></select>
+          <label>node</label><select id="eval_pred_node" class="btn-auto"></select>
+          <label>feature</label><select id="eval_pred_feature" class="btn-auto"></select>
+        </div>
+      </div>
+      <div class="chart-container" id="chartEval"></div>
+    </div>
+  </div>
+
   <!-- ═══════ TAB: 模型对比 ═══════ -->
   <div class="tab-content" id="tab-compare">
     <div class="card">
@@ -412,6 +464,6 @@
   </div>
 </div>
 
-<script src="/static/train_web_v2.js?v=20260508a"></script>
+<script src="/static/train_web_v2.js?v=20260508b"></script>
 </body>
 </html>

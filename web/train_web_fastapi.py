@@ -58,6 +58,7 @@ OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 RUN_SCRIPTS_DIR = PROJECT_ROOT / "scripts" / "run"
 RUN_TRAIN_ARTIFACT_ENTRY = str(RUN_SCRIPTS_DIR / "run_train_artifact.py")
 RUN_RESUME_ARTIFACT_ENTRY = str(RUN_SCRIPTS_DIR / "run_resume_artifact.py")
+RUN_EVAL_CHECKPOINT_ENTRY = str(RUN_SCRIPTS_DIR / "run_eval_checkpoint.py")
 RUN_DATA_PREP_ENTRY = str(RUN_SCRIPTS_DIR / "run_data_artifact.py")
 DATA_VERSIONS_DIR = OUTPUTS_DIR / "data_versions"
 ACTIVE_DATA_VERSION_FILE = DATA_VERSIONS_DIR / "active_version.json"
@@ -1163,6 +1164,7 @@ class TrainState:
 
 
 STATE = TrainState()
+EVAL_STATE = TrainState()  # 独立的 eval 状态，与训练并行运行
 
 
 @dataclass
@@ -2305,6 +2307,388 @@ async def api_compare(request: Request):
         return JSONResponse(status_code=400, content={"error": "No run_ids provided."})
     try:
         return _build_compare_payload(run_ids)
+    except Exception as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+
+
+# ═══════════════════════ EVAL FROM CHECKPOINT ═══════════════════════
+
+
+def _run_eval_background(
+    task: str,
+    model: str,
+    dataset: str,
+    config_payload: dict[str, Any],
+    cli_options: dict[str, Any],
+    extra_args: str,
+    history_record_id: str | None,
+    script_args: list[str],
+    run_id: str,
+) -> None:
+    """后台运行 checkpoint 评估子进程。"""
+    history_id = str(history_record_id or "").strip()
+    resolved_run_id = str(run_id or "").strip()
+    runtime_config_path: Path | None = None
+    try:
+        effective_config = {}
+        base_name = str(cli_options.get("config_file", "")).strip()
+        if base_name:
+            effective_config.update(_load_base_config(base_name))
+        effective_config.update(config_payload)
+    except Exception as exc:
+        EVAL_STATE.reset([])
+        EVAL_STATE.finish(return_code=-1, error=f"Config preparation failed: {exc}", result=None)
+        if history_id:
+            _upsert_train_history_item(
+                history_id,
+                {
+                    "task": task, "model": model, "dataset": dataset,
+                    "status": "failed", "run_id": resolved_run_id,
+                    "ended_at": time.time(), "duration_sec": None,
+                    "major_metrics": {}, "output_dir": "",
+                    "error": f"Config preparation failed: {exc}",
+                },
+            )
+        return
+
+    try:
+        config_file, runtime_config_path = _write_runtime_config(effective_config)
+    except Exception as exc:
+        EVAL_STATE.reset([])
+        EVAL_STATE.finish(return_code=-1, error=f"Config write failed: {exc}", result=None)
+        if history_id:
+            _upsert_train_history_item(
+                history_id,
+                {
+                    "task": task, "model": model, "dataset": dataset,
+                    "status": "failed", "run_id": resolved_run_id,
+                    "ended_at": time.time(), "duration_sec": None,
+                    "major_metrics": {}, "output_dir": "",
+                    "error": f"Config write failed: {exc}",
+                },
+            )
+        return
+
+    cmd = ["uv", "run", RUN_EVAL_CHECKPOINT_ENTRY]
+    cmd.extend(["--task", task, "--model", model, "--dataset", dataset])
+    cmd.extend(["--config_file", config_file])
+    cmd.extend(script_args)
+    for key in CLI_OPTION_KEYS:
+        if key in {"config_file", "gpu", "num_gpus", "gpu_ids"}:
+            continue
+        value = cli_options.get(key, None)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text == "":
+            continue
+        cmd.extend([f"--{key}", text])
+    if extra_args.strip():
+        cmd.extend(shlex.split(extra_args, posix=False))
+
+    EVAL_STATE.reset(cmd)
+    with EVAL_STATE.lock:
+        EVAL_STATE.run_id = resolved_run_id
+    EVAL_STATE.append_log("$ " + " ".join(cmd))
+    if history_id:
+        _upsert_train_history_item(
+            history_id,
+            {
+                "task": task, "model": model, "dataset": dataset,
+                "status": "running", "run_id": resolved_run_id,
+                "started_at": EVAL_STATE.started_at,
+                "ended_at": None, "duration_sec": None,
+                "major_metrics": {}, "output_dir": "",
+                "error": None,
+            },
+        )
+    try:
+        creationflags = 0
+        if os.name == "nt":
+            creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(PROJECT_ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            creationflags=creationflags,
+        )
+    except Exception as exc:
+        _remove_runtime_config(runtime_config_path)
+        EVAL_STATE.finish(return_code=-1, error=f"Failed to start eval process: {exc}", result=None)
+        if history_id:
+            with EVAL_STATE.lock:
+                started_at = EVAL_STATE.started_at
+            ended_at = time.time()
+            duration_sec = max(0.0, ended_at - started_at) if started_at is not None else None
+            _upsert_train_history_item(
+                history_id,
+                {
+                    "status": "failed", "ended_at": ended_at,
+                    "duration_sec": duration_sec,
+                    "error": f"Failed to start eval process: {exc}",
+                },
+            )
+        return
+
+    with EVAL_STATE.lock:
+        EVAL_STATE.process = proc
+
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        EVAL_STATE.append_log(line)
+        m = RUN_ID_RE.search(line)
+        if m:
+            with EVAL_STATE.lock:
+                EVAL_STATE.run_id = m.group(1)
+
+    code = proc.wait()
+    try:
+        if code != 0:
+            with EVAL_STATE.lock:
+                stopped = EVAL_STATE.stop_requested
+                started_at = EVAL_STATE.started_at
+            if stopped:
+                EVAL_STATE.finish(code, "Evaluation stopped by user.", None)
+                status, error = "stopped", "Evaluation stopped by user."
+            else:
+                EVAL_STATE.finish(code, f"Evaluation failed with return code {code}.", None)
+                status, error = "failed", f"Evaluation failed with return code {code}."
+            if history_id:
+                ended_at = time.time()
+                duration_sec = max(0.0, ended_at - started_at) if started_at is not None else None
+                _upsert_train_history_item(
+                    history_id,
+                    {"status": status, "ended_at": ended_at, "duration_sec": duration_sec, "error": error},
+                )
+            return
+        with EVAL_STATE.lock:
+            started_at = EVAL_STATE.started_at
+        run_dir = _find_run_dir(task, model, dataset, resolved_run_id)
+        if run_dir is None:
+            EVAL_STATE.finish(code, "Evaluation finished but output run directory was not found.", None)
+            if history_id:
+                ended_at = time.time()
+                duration_sec = max(0.0, ended_at - started_at) if started_at is not None else None
+                _upsert_train_history_item(
+                    history_id,
+                    {
+                        "status": "failed", "ended_at": ended_at,
+                        "duration_sec": duration_sec,
+                        "error": "Evaluation finished but output run directory was not found.",
+                    },
+                )
+            return
+        result = _load_result_payload(run_dir)
+        EVAL_STATE.finish(code, None, result)
+        if history_id:
+            ended_at = time.time()
+            duration_sec = max(0.0, ended_at - started_at) if started_at is not None else None
+            _upsert_train_history_item(
+                history_id,
+                {
+                    "run_id": run_dir.name, "status": "finished",
+                    "ended_at": ended_at, "duration_sec": duration_sec,
+                    "major_metrics": _build_major_metrics_from_summary(result.get("metrics_summary", {}), limit=3),
+                    "output_dir": str(run_dir), "error": None,
+                },
+            )
+    except Exception as exc:
+        EVAL_STATE.finish(code, f"Result parse error: {exc}", None)
+        if history_id:
+            with EVAL_STATE.lock:
+                started_at = EVAL_STATE.started_at
+            ended_at = time.time()
+            duration_sec = max(0.0, ended_at - started_at) if started_at is not None else None
+            _upsert_train_history_item(
+                history_id,
+                {
+                    "status": "failed", "ended_at": ended_at,
+                    "duration_sec": duration_sec,
+                    "error": f"Result parse error: {exc}",
+                },
+            )
+    finally:
+        _remove_runtime_config(runtime_config_path)
+
+
+@app.get("/api/eval/checkpoint_runs")
+def api_eval_checkpoint_runs():
+    """列出有 checkpoint 文件的运行目录，供评估页选择。"""
+    runs = _collect_resume_runs(limit=300)
+    return {"runs": runs}
+
+
+@app.post("/api/eval/start")
+async def api_eval_start(request: Request):
+    """启动 checkpoint 评估。"""
+    with EVAL_STATE.lock:
+        if EVAL_STATE.running:
+            return JSONResponse(status_code=409, content={"error": "An eval task is already running."})
+
+    body = await request.json()
+    data_version_id = str(body.get("data_version_id", "")).strip()
+    run_id_raw = str(body.get("run_id", "")).strip()
+    epoch_raw = body.get("epoch")
+
+    if not run_id_raw:
+        return JSONResponse(status_code=400, content={"error": "run_id is required."})
+    try:
+        epoch = int(epoch_raw)
+        if epoch < 0:
+            raise ValueError("epoch must be >= 0")
+    except (TypeError, ValueError):
+        return JSONResponse(status_code=400, content={"error": "epoch must be a valid non-negative integer."})
+
+    # Resolve run info
+    run_meta = _collect_resume_runs(limit=500)
+    run_info = next((r for r in run_meta if r["run_id"] == run_id_raw), None)
+    if run_info is None:
+        return JSONResponse(status_code=400, content={"error": f"Run not found or has no checkpoints: {run_id_raw}"})
+    task = run_info["task"]
+    model = run_info["model"]
+    dataset = run_info["dataset"]
+
+    if not task or not model or not dataset:
+        return JSONResponse(status_code=400, content={"error": "Run directory missing task/model/dataset info."})
+
+    # Resolve artifact_id from data version
+    try:
+        data_meta, resolved_version_id = _resolve_data_version(data_version_id)
+    except Exception as exc:
+        return JSONResponse(status_code=400, content={"error": f"Invalid data_version_id: {exc}"})
+    try:
+        artifact_meta = _get_data_version_artifact_meta(data_meta)
+    except Exception as exc:
+        return JSONResponse(status_code=400, content={"error": f"Invalid prepared data binding: {exc}"})
+
+    # Build config
+    user_config_payload = body.get("config", {})
+    if not isinstance(user_config_payload, dict):
+        user_config_payload = {}
+    config_payload = dict(user_config_payload)
+    config_payload["data_version_id"] = resolved_version_id
+
+    cli_options_raw = body.get("cli_options", {})
+    if not isinstance(cli_options_raw, dict):
+        cli_options_raw = {}
+    try:
+        cli_options = _normalize_cli_options(cli_options_raw, allow_config_file=True)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+
+    extra_args = str(body.get("extra_args", ""))
+
+    history_record_id = f"ev_{int(time.time())}_{uuid.uuid4().hex[:10]}"
+    _upsert_train_history_item(
+        history_record_id,
+        {
+            "task": task, "model": model, "dataset": dataset,
+            "status": "running", "run_id": run_id_raw,
+            "started_at": time.time(), "ended_at": None,
+            "duration_sec": None, "major_metrics": {},
+            "output_dir": "", "error": None,
+        },
+    )
+
+    script_args = [
+        "--run_id", run_id_raw,
+        "--epoch", str(epoch),
+        "--artifact_id", artifact_meta["artifact_id"],
+    ]
+
+    t = threading.Thread(
+        target=_run_eval_background,
+        args=(
+            task, model, dataset, config_payload, cli_options,
+            extra_args, history_record_id, script_args, run_id_raw,
+        ),
+        daemon=True,
+    )
+    with EVAL_STATE.lock:
+        EVAL_STATE.running = True
+    t.start()
+    return {"message": "Evaluation started.", "record_id": history_record_id}
+
+
+@app.post("/api/eval/stop")
+def api_eval_stop():
+    with EVAL_STATE.lock:
+        proc = EVAL_STATE.process
+        running = EVAL_STATE.running
+        EVAL_STATE.stop_requested = True
+    if not running or proc is None:
+        return JSONResponse(status_code=409, content={"error": "No running eval task."})
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        else:
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+            except Exception:
+                proc.terminate()
+        return {"message": "Stop signal sent to eval process."}
+    except Exception as exc:
+        return JSONResponse(status_code=500, content={"error": f"Failed to stop eval process: {exc}"})
+
+
+@app.post("/api/eval/clear")
+def api_eval_clear():
+    with EVAL_STATE.lock:
+        if EVAL_STATE.running:
+            return JSONResponse(status_code=409, content={"error": "Eval is running. Stop it before clearing."})
+    EVAL_STATE.clear()
+    return {"message": "Eval state cleared."}
+
+
+@app.get("/api/eval/status")
+def api_eval_status(since: int = Query(default=0, ge=0)):
+    with EVAL_STATE.lock:
+        log_count = len(EVAL_STATE.logs)
+        since_safe = max(0, min(since, log_count))
+        return {
+            "running": EVAL_STATE.running,
+            "command": EVAL_STATE.command,
+            "run_id": EVAL_STATE.run_id,
+            "return_code": EVAL_STATE.return_code,
+            "error": EVAL_STATE.error,
+            "result_ready": EVAL_STATE.result is not None,
+            "logs_tail": EVAL_STATE.logs[since_safe:],
+            "log_count": log_count,
+            "started_at": EVAL_STATE.started_at,
+            "ended_at": EVAL_STATE.ended_at,
+        }
+
+
+@app.get("/api/eval/result")
+def api_eval_result():
+    with EVAL_STATE.lock:
+        if EVAL_STATE.result is None:
+            return JSONResponse(status_code=404, content={"error": "Result not ready."})
+        return EVAL_STATE.result
+
+
+@app.get("/api/eval/result_series")
+def api_eval_result_series(
+    horizon: int = Query(default=1, ge=1),
+    node: int = Query(default=1, ge=1),
+    feature: int = Query(default=1, ge=1),
+):
+    with EVAL_STATE.lock:
+        if EVAL_STATE.result is None:
+            return JSONResponse(status_code=404, content={"error": "Result not ready."})
+        npz_path = EVAL_STATE.result.get("predictions_npz")
+    if not npz_path:
+        return JSONResponse(status_code=404, content={"error": "Prediction npz path is missing."})
+    try:
+        return _extract_prediction_series(Path(str(npz_path)), horizon=horizon, node=node, feature=feature)
     except Exception as exc:
         return JSONResponse(status_code=400, content={"error": str(exc)})
 

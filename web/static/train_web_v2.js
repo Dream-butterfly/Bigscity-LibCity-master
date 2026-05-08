@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════
    GNNTP Web Console — v2 Main Script
    基于 main.js 迁移，保留核心功能，适配 sidebar 新布局
-   v=20260508a — full log display (no tail truncation)
+   v=20260508b — eval tab for checkpoint evaluation
    ═══════════════════════════════════════════════════════ */
-console.log('[train_web_v2] loaded v=20260508a');
+console.log('[train_web_v2] loaded v=20260508b');
 
 "use strict";
 
@@ -37,17 +37,21 @@ let _state = {
   predictionSelection: {horizon: 1, node: 1, feature: 1},
 };
 let _resumeRuns = [];
+let _evalRuns = [];
 let _compareRuns = [];
 let _charts = {};
 let _trainLogLines = [];
 let _resumeLogLines = [];
+let _evalLogLines = [];
 let trainLogIndex = 0;
 let resumeLogIndex = 0;
+let evalLogIndex = 0;
 
 const TAB_MAP = {
   data:    { title: '数据处理',    sub: '数据工件生成 · 版本管理 · 数据集预览',      id: 'tab-data' },
   train:   { title: '训练',        sub: '参数配置 · 实时日志 · Loss/指标可视化',     id: 'tab-train' },
   resume:  { title: '继续训练',    sub: 'Checkpoint续训 · 历史运行恢复',             id: 'tab-resume' },
+  eval:    { title: '模型评估',    sub: 'Checkpoint加载评估 · 指标/预测可视化',      id: 'tab-eval' },
   compare: { title: '模型对比',    sub: '多模型指标对比 · 预测曲线叠加',             id: 'tab-compare' },
   history: { title: '运行历史',    sub: '训练记录查询 · 指标追踪',                   id: 'tab-history' },
 };
@@ -56,6 +60,7 @@ const TAB_I18N_KEYS = {
   data:    { title: 'tab_data_title',    sub: 'tab_data_sub' },
   train:   { title: 'tab_train_title',   sub: 'tab_train_sub' },
   resume:  { title: 'tab_resume_title',  sub: 'tab_resume_sub' },
+  eval:    { title: 'tab_eval_title',    sub: 'tab_eval_sub' },
   compare: { title: 'tab_compare_title', sub: 'tab_compare_sub' },
   history: { title: 'tab_history_title', sub: 'tab_history_sub' },
 };
@@ -138,7 +143,7 @@ function updatePageHeaderI18n() {
 }
 
 /* ── ECharts 实例池 ── */
-const CHART_IDS = ['chartModelParams','chartLoss','chartPred','chartCompare'];
+const CHART_IDS = ['chartModelParams','chartLoss','chartPred','chartEval','chartCompare'];
 
 /* ═══════════════════════ TAB SWITCHING ═══════════════════════ */
 function switchTab(name) {
@@ -350,11 +355,16 @@ function setupModelDatasetSelects(models, datasets) {
 }
 
 function populateDataVersionSelects(versions) {
-  const selectedRunId = document.getElementById('resume_run_id')?.value || '';
-  const selectedRun = (_resumeRuns || []).find(x => x.run_id === selectedRunId);
+  const selectedResumeRunId = document.getElementById('resume_run_id')?.value || '';
+  const selectedEvalRunId = document.getElementById('eval_run_id')?.value || '';
+  const selectedResumeRun = (_resumeRuns || []).find(x => x.run_id === selectedResumeRunId);
+  const selectedEvalRun = (_evalRuns || []).find(x => x.run_id === selectedEvalRunId);
   const ready = versions.filter(v => String(v.status || '').toLowerCase() === 'ready');
-  const resumeReady = selectedRun
-    ? ready.filter(v => v.task === selectedRun.task && v.model === selectedRun.model && v.dataset === selectedRun.dataset)
+  const resumeReady = selectedResumeRun
+    ? ready.filter(v => v.task === selectedResumeRun.task && v.model === selectedResumeRun.model && v.dataset === selectedResumeRun.dataset)
+    : ready;
+  const evalReady = selectedEvalRun
+    ? ready.filter(v => v.task === selectedEvalRun.task && v.model === selectedEvalRun.model && v.dataset === selectedEvalRun.dataset)
     : ready;
   const renderSelect = (id, items) => {
     const sel = document.getElementById(id);
@@ -371,6 +381,7 @@ function populateDataVersionSelects(versions) {
   };
   renderSelect('train_data_version', ready);
   renderSelect('resume_data_version', resumeReady);
+  renderSelect('eval_data_version', evalReady);
 }
 
 /* ═══════════════════════ PARAM TABLE UTILITIES ═══════════════════════ */
@@ -886,6 +897,7 @@ function applyLogFilter() {
 function clearLogBuffer() {
   _trainLogLines = [];
   _resumeLogLines = [];
+  _evalLogLines = [];
 }
 
 /* ═══════════════════════ TRAINING ═══════════════════════ */
@@ -1170,6 +1182,275 @@ async function pollResumeLogs() {
     console.error('[pollResumeLogs] error:', e);
     setTimeout(pollResumeLogs, 2000);
   }
+}
+
+/* ═══════════════════════ EVAL FROM CHECKPOINT ═══════════════════════ */
+
+function formatEvalRunTag(run) {
+  const latest = Number(run?.latest_epoch);
+  const latestText = Number.isFinite(latest) ? `latest=${latest}` : 'latest=-';
+  return `${run.run_id} | ${run.model || '-'} | ${run.dataset || '-'} | ${latestText}`;
+}
+
+function renderEvalHint(run) {
+  const el = document.getElementById('eval_hint');
+  if (!el) return;
+  if (!run) {
+    el.textContent = t('eval_hint_empty', '请选择一个有 checkpoint 的运行目录');
+    return;
+  }
+  const epochs = Array.isArray(run.epochs) ? run.epochs : [];
+  const minEpoch = epochs.length ? epochs[0] : '-';
+  const maxEpoch = epochs.length ? epochs[epochs.length - 1] : '-';
+  el.textContent = `run=${run.run_id}, model=${run.model || '-'}, dataset=${run.dataset || '-'}, checkpoints=${minEpoch}..${maxEpoch} (${epochs.length} 个)`;
+}
+
+function renderEvalEpochOptions(run) {
+  const epochEl = document.getElementById('eval_epoch');
+  if (!epochEl) return;
+  const epochsRaw = Array.isArray(run?.epochs) ? run.epochs : [];
+  const epochs = epochsRaw
+    .map(x => Number(x))
+    .filter(x => Number.isFinite(x) && x >= 0)
+    .map(x => Math.floor(x))
+    .sort((a, b) => a - b);
+  if (!epochs.length) {
+    epochEl.innerHTML = '<option value=""></option>';
+    epochEl.value = '';
+    epochEl.disabled = true;
+    return;
+  }
+  let selected = Math.floor(Number(epochEl.value));
+  if (!epochs.includes(selected)) {
+    selected = Math.floor(Number(run?.latest_epoch));
+  }
+  if (!epochs.includes(selected)) {
+    selected = epochs[epochs.length - 1];
+  }
+  epochEl.innerHTML = epochs
+    .map(epoch => `<option value="${epoch}" ${epoch === selected ? 'selected' : ''}>${epoch}</option>`)
+    .join('');
+  epochEl.value = String(selected);
+  epochEl.disabled = false;
+}
+
+function populateEvalDataVersionOptions() {
+  const runId = document.getElementById('eval_run_id')?.value || '';
+  const run = (_evalRuns || []).find(x => x.run_id === runId);
+  const versions = _state.dataVersions || [];
+  const ready = versions.filter(v => String(v.status || '').toLowerCase() === 'ready');
+  const filtered = run
+    ? ready.filter(v => v.task === run.task && v.model === run.model && v.dataset === run.dataset)
+    : ready;
+  const sel = document.getElementById('eval_data_version');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = filtered.map(v =>
+    `<option value="${escHtml(v.version_id)}">${escHtml(v.version_id)} (${escHtml(v.status || '-')} | ${escHtml(v.model || '-')}/${escHtml(v.dataset || '-')})</option>`
+  ).join('');
+  if (current && filtered.some(v => v.version_id === current)) {
+    sel.value = current;
+  } else if (filtered.length) {
+    sel.value = filtered[0].version_id;
+  }
+}
+
+function onEvalRunChanged() {
+  const runId = document.getElementById('eval_run_id')?.value || '';
+  const run = (_evalRuns || []).find(x => x.run_id === runId);
+  populateEvalDataVersionOptions();
+  renderEvalHint(run || null);
+  renderEvalEpochOptions(run || null);
+}
+
+async function loadEvalRuns() {
+  try {
+    const data = await apiGet('/api/eval/checkpoint_runs');
+    _evalRuns = Array.isArray(data.runs) ? data.runs : [];
+    renderEvalRunOptions();
+  } catch (e) {
+    console.error('loadEvalRuns failed:', e);
+  }
+}
+
+function renderEvalRunOptions() {
+  const el = document.getElementById('eval_run_id');
+  if (!el) return;
+  const selected = el.value;
+  const list = _evalRuns || [];
+  el.innerHTML = '<option value=""></option>' +
+    list.map(run => {
+      const sel = selected && selected === run.run_id ? 'selected' : '';
+      return `<option value="${escHtml(run.run_id)}" ${sel}>${escHtml(formatEvalRunTag(run))}</option>`;
+    }).join('');
+  if (!el.value && list.length) el.value = list[0].run_id;
+  onEvalRunChanged();
+}
+
+async function startEval() {
+  const runId = (document.getElementById('eval_run_id')?.value || '').trim();
+  if (!runId) {
+    alert(t('eval_select_run_first', '请先选择可评估的运行目录'));
+    return;
+  }
+  const run = (_evalRuns || []).find(x => x.run_id === runId);
+  if (!run) {
+    alert(t('eval_run_not_found', '未找到对应运行目录'));
+    return;
+  }
+  const dataVersionId = String(document.getElementById('eval_data_version')?.value || '').trim();
+  if (!dataVersionId) {
+    alert(t('eval_select_data_version', '请先选择 data_version_id'));
+    return;
+  }
+  const epoch = Math.floor(Number(document.getElementById('eval_epoch')?.value));
+  if (!Number.isFinite(epoch) || epoch < 0) {
+    alert(t('eval_invalid_epoch', '请选择有效的评估 epoch'));
+    return;
+  }
+  const extraArgs = document.getElementById('eval_extra_args')?.value || '';
+
+  try {
+    await apiPost('/api/eval/start', {
+      run_id: runId,
+      epoch: epoch,
+      data_version_id: dataVersionId,
+      extra_args: extraArgs,
+      config: {},
+      cli_options: {},
+    });
+    // Clear previous eval results
+    _evalLogLines = [];
+    evalLogIndex = 0;
+    document.getElementById('eval_logs').innerHTML = '';
+    document.getElementById('eval_metrics').innerHTML = '';
+    const chartEval = _charts.chartEval;
+    if (chartEval) chartEval.clear();
+    pollEvalLogs();
+  } catch (e) {
+    alert(`评估启动失败: ${e.message}`);
+  }
+}
+
+async function stopEval() {
+  try { await apiPost('/api/eval/stop', {}); } catch (e) { console.error(e); }
+}
+
+async function clearEvalState() {
+  try { await apiPost('/api/eval/clear', {}); } catch (e) { console.error(e); }
+  _evalLogLines = [];
+  evalLogIndex = 0;
+  const el = document.getElementById('eval_logs');
+  if (el) el.innerHTML = '';
+  document.getElementById('eval_metrics').innerHTML = '';
+  const chartEval = _charts.chartEval;
+  if (chartEval) chartEval.clear();
+  // Reset prediction selectors
+  ['eval_pred_horizon', 'eval_pred_node', 'eval_pred_feature'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (sel) { sel.innerHTML = '<option value="1">1</option>'; sel.value = '1'; sel.disabled = true; }
+  });
+  const badge = document.getElementById('eval_status');
+  if (badge) { badge.className = 'badge badge-idle'; badge.textContent = 'idle'; }
+}
+
+async function pollEvalLogs() {
+  try {
+    const data = await apiGet(`/api/eval/status?since=${evalLogIndex}`);
+    const rawLines = data.logs_tail || [];
+    const logCount = data.log_count || 0;
+    if (rawLines.length > 0) {
+      _evalLogLines.push(...rawLines);
+      evalLogIndex = logCount;
+      renderEvalLogs();
+    }
+    const badge = document.getElementById('eval_status');
+    if (badge) {
+      const s = data.running ? 'running' : (data.error ? 'error' : (data.return_code === 0 ? 'done' : 'idle'));
+      badge.className = `badge badge-${s}`;
+      badge.textContent = s;
+    }
+    if (data.result_ready) {
+      try {
+        const result = await apiGet('/api/eval/result');
+        renderEvalMetrics(result);
+        const shape = Array.isArray(result?.shapes?.prediction) ? result.shapes.prediction : [];
+        const ranges = result?.prediction_selector?.ranges || {};
+        if (shape.length >= 4 || ranges.horizon) {
+          applyEvalPredictionSelectorMeta(result);
+          refreshEvalPredictionSeries();
+        }
+      } catch (_) {}
+    }
+    if (data.running) {
+      setTimeout(pollEvalLogs, 1500);
+    }
+  } catch (e) {
+    console.error('[pollEvalLogs] error:', e);
+    setTimeout(pollEvalLogs, 2000);
+  }
+}
+
+function renderEvalLogs() {
+  const container = document.getElementById('eval_logs');
+  if (!container) return;
+  const html = _evalLogLines.map((line, i) => {
+    const text = typeof line === 'string' ? line : (line.message || '');
+    const levelMatch = text.match(/\b(INFO|WARNING|ERROR|DEBUG)\b/);
+    const lvl = levelMatch ? levelMatch[1].toLowerCase() : 'info';
+    return `<div class="log-line">
+      <span class="log-index">${i + 1}</span>
+      <span class="log-level log-level-${lvl}">${lvl.toUpperCase()}</span>
+      <span class="log-message">${escapeHtml(text)}</span>
+    </div>`;
+  }).join('');
+  container.innerHTML = html;
+  container.scrollTop = container.scrollHeight;
+}
+
+function renderEvalMetrics(result) {
+  const el = document.getElementById('eval_metrics');
+  if (el) {
+    el.innerHTML = result.metrics_table_html || '<div class="small">无数据</div>';
+  }
+}
+
+function applyEvalPredictionSelectorMeta(result) {
+  const shape = Array.isArray(result?.shapes?.prediction) ? result.shapes.prediction : [];
+  const ranges = result?.prediction_selector?.ranges || {};
+  const selection = result?.prediction_selector?.selection || {};
+  const toInt = v => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0; };
+  const horizonMax = toInt(ranges.horizon || shape[1] || 0);
+  const nodeMax = toInt(ranges.node || shape[2] || 0);
+  const featureMax = toInt(ranges.feature || shape[3] || 0);
+  const setOpts = (id, max, sel) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const upper = Math.max(0, Math.floor(max));
+    if (upper <= 0) { el.innerHTML = '<option value="1">1</option>'; el.value = '1'; el.disabled = true; return; }
+    const safe = Math.min(Math.max(1, Number(sel) || 1), upper);
+    const opts = [];
+    for (let i = 1; i <= upper; i += 1) opts.push(`<option value="${i}" ${i === safe ? 'selected' : ''}>${i}</option>`);
+    el.innerHTML = opts.join(''); el.value = String(safe); el.disabled = false;
+  };
+  setOpts('eval_pred_horizon', horizonMax, selection.horizon || 1);
+  setOpts('eval_pred_node', nodeMax, selection.node || 1);
+  setOpts('eval_pred_feature', featureMax, selection.feature || 1);
+}
+
+async function refreshEvalPredictionSeries() {
+  const horizonEl = document.getElementById('eval_pred_horizon');
+  const nodeEl = document.getElementById('eval_pred_node');
+  const featureEl = document.getElementById('eval_pred_feature');
+  if (!horizonEl || !nodeEl || !featureEl) return;
+  const horizon = Number(horizonEl.value || 1);
+  const node = Number(nodeEl.value || 1);
+  const feature = Number(featureEl.value || 1);
+  try {
+    const qs = new URLSearchParams({horizon: String(horizon), node: String(node), feature: String(feature)});
+    const data = await apiGet(`/api/eval/result_series?${qs.toString()}`);
+    renderEChart('chartEval', data.chart_option || {});
+  } catch (_) {}
 }
 
 /* ═══════════════════════ COMPARE ═══════════════════════ */
@@ -1546,6 +1827,11 @@ function initCharts() {
   document.getElementById('pred_node')?.addEventListener('change', refreshPredictionSeries);
   document.getElementById('pred_feature')?.addEventListener('change', refreshPredictionSeries);
 
+  // Eval predictor controls binding
+  document.getElementById('eval_pred_horizon')?.addEventListener('change', refreshEvalPredictionSeries);
+  document.getElementById('eval_pred_node')?.addEventListener('change', refreshEvalPredictionSeries);
+  document.getElementById('eval_pred_feature')?.addEventListener('change', refreshEvalPredictionSeries);
+
   // Model plot type switch
   document.getElementById('model_plot_type')?.addEventListener('change', e => {
     _state.modelPlotType = e.target.value === 'bar' ? 'bar' : 'pie';
@@ -1562,6 +1848,8 @@ function init() {
       switchTab(tab);
       if (tab === 'resume') {
         if (!_resumeRuns.length) await loadResumeRuns();
+      } else if (tab === 'eval') {
+        if (!_evalRuns.length) await loadEvalRuns();
       } else if (tab === 'compare') {
         if (!_compareRuns.length) await loadCompareRuns();
       } else if (tab === 'history') {
@@ -1604,6 +1892,9 @@ function init() {
 
   // 继续训练 — run 切换
   document.getElementById('resume_run_id')?.addEventListener('change', onResumeRunChanged);
+
+  // 模型评估 — run 切换
+  document.getElementById('eval_run_id')?.addEventListener('change', onEvalRunChanged);
 
   // 日志过滤
   document.getElementById('log_level_filter')?.addEventListener('change', applyLogFilter);
