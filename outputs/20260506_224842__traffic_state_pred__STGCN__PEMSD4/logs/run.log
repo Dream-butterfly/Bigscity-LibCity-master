@@ -1,0 +1,13 @@
+2026-05-06 22:48:42,098 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260506_224842__traffic_state_pred__STGCN__PEMSD4/logs
+2026-05-06 22:48:42,098 - INFO - Begin data artifact pipeline, task=traffic_state_pred, model_name=STGCN, dataset_name=PEMSD4, exp_id=20260506_224842__traffic_state_pred__STGCN__PEMSD4
+2026-05-06 22:48:42,101 - INFO - Loaded file PEMSD4.geo, num_nodes=307
+2026-05-06 22:48:42,102 - INFO - set_weight_link_or_dist: link
+2026-05-06 22:48:42,102 - INFO - init_weight_inf_or_zero: zero
+2026-05-06 22:48:42,103 - INFO - Loaded file PEMSD4.rel, shape=(307, 307)
+2026-05-06 22:48:42,103 - INFO - Loading /home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/dataset_cache/point_based_PEMSD4_12_12_0.6_0.2_none_64_False_False_False_False.npz
+2026-05-06 22:48:52,127 - INFO - train	x: (10181, 12, 307, 3), y: (10181, 12, 307, 3)
+2026-05-06 22:48:52,128 - INFO - eval	x: (3394, 12, 307, 3), y: (3394, 12, 307, 3)
+2026-05-06 22:48:52,128 - INFO - test	x: (3394, 12, 307, 3), y: (3394, 12, 307, 3)
+2026-05-06 22:48:53,883 - INFO - NoneScaler
+2026-05-06 22:48:53,883 - INFO - NoneScaler
+2026-05-06 22:50:59,845 - INFO - Data artifact ready: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/data_artifacts/da_20260506_224853__PEMSD4__TrafficStatePointDataset__478dc3bf

@@ -20,7 +20,8 @@ env/
 resource_data/
 visualized_data/
 cache/
-outputs/
+outputs/*/model_cache/
+outputs/*/evaluate_cache/
 
 # Dependency lock file kept local in this repository
 uv.lock

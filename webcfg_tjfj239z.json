@@ -1,0 +1,138 @@
+{
+  "add_day_in_week": false,
+  "add_time_in_day": false,
+  "base_lr": 0.001,
+  "batch_size": "64",
+  "cache_dataset": true,
+  "calculate_weight_adj": false,
+  "cheb_order": 3,
+  "d_model": 64,
+  "data_col": [
+    "traffic_flow",
+    "traffic_occupancy",
+    "traffic_speed"
+  ],
+  "data_files": [
+    "PEMSD4"
+  ],
+  "dataset": "PEMSD4",
+  "dataset_class": "TrafficStatePointDataset",
+  "disturb_rate": 0.5,
+  "dropout": 0.1,
+  "dyna": {
+    "including_types": [
+      "state"
+    ],
+    "state": {
+      "entity_id": "geo_id",
+      "traffic_flow": "num",
+      "traffic_occupancy": "num",
+      "traffic_speed": "num"
+    }
+  },
+  "embed_dim": 10,
+  "eval_batch_size": 32,
+  "eval_rate": "0.1",
+  "evaluator": "TrafficStateEvaluator",
+  "evaluator_mode": "single",
+  "executor": "TrafficStateExecutor",
+  "ext_scaler": "none",
+  "external_dim": 4,
+  "geo": {
+    "including_types": [
+      "Point"
+    ],
+    "Point": {}
+  },
+  "geo_file": "PEMSD4",
+  "init_weight_inf_or_zero": "zero",
+  "input_window": 12,
+  "load_external": false,
+  "metrics": [
+    "MAE",
+    "MAPE",
+    "MSE",
+    "RMSE",
+    "masked_MAE",
+    "masked_MAPE",
+    "masked_MSE",
+    "masked_RMSE",
+    "R2",
+    "EVAR"
+  ],
+  "model": "NEW_MODEL",
+  "noise_SD": [
+    10
+  ],
+  "noise_mean": [
+    5
+  ],
+  "noise_type": "gaussian",
+  "normal_external": false,
+  "num_heads": 4,
+  "num_layers": 2,
+  "num_workers": 0,
+  "output_attention": false,
+  "output_dim": 3,
+  "output_window": 12,
+  "pad_with_last_sample": true,
+  "rel": {
+    "including_types": [
+      "geo"
+    ],
+    "geo": {
+      "cost": "num"
+    }
+  },
+  "rel_file": "PEMSD4",
+  "robustness_test": false,
+  "save_mode": [
+    "csv"
+  ],
+  "scaler": "none",
+  "set_weight_link_or_dist": "link",
+  "support_len": 2,
+  "task": "traffic_state_pred",
+  "time_intervals": 300,
+  "train": true,
+  "train_rate": "0.7",
+  "weight_adj": "",
+  "weight_adj_epsilon": 0.1,
+  "weight_col": "cost",
+  "clip_grad_norm": false,
+  "epoch": 0,
+  "gpu": "true",
+  "gpu_id": "0",
+  "hyper_tune": false,
+  "learner": "adam",
+  "learning_rate": "0.01",
+  "load_best_epoch": true,
+  "log_every": 1,
+  "log_level": "INFO",
+  "lr_T_max": 30,
+  "lr_alpha": 0.99,
+  "lr_beta1": 0.9,
+  "lr_beta2": 0.999,
+  "lr_decay": false,
+  "lr_decay_ratio": 0.1,
+  "lr_epsilon": 1e-08,
+  "lr_eta_min": 0,
+  "lr_momentum": 0,
+  "lr_patience": 10,
+  "lr_scheduler": "multisteplr",
+  "lr_threshold": 0.0001,
+  "max_epoch": "100",
+  "max_grad_norm": 1,
+  "patience": 50,
+  "saved_model": true,
+  "step_size": 10,
+  "steps": [
+    5,
+    20,
+    40,
+    70
+  ],
+  "train_loss": "none",
+  "use_early_stop": false,
+  "weight_decay": 0
+}

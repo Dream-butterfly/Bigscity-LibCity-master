@@ -1,0 +1,49 @@
+2026-05-07 18:30:57,436 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260507_183057__traffic_state_pred__new_diffusion_fuzzy__PEMSD4/logs
+2026-05-07 18:31:08,003 - INFO - Enable AMP training (dtype=float16).
+2026-05-07 18:31:08,003 - INFO - You select `adamw` optimizer.
+2026-05-07 18:31:08,004 - WARNING - Received unrecognized optimizer, set default Adam optimizer
+2026-05-07 18:31:08,004 - INFO - You select `multisteplr` lr_scheduler.
+2026-05-07 18:31:08,004 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-07 18:31:08,004 - INFO - Start training ...
+2026-05-07 18:31:08,004 - INFO - num_batches:80
+2026-05-07 18:31:08,290 - INFO - Enable physics warmup: steps=3000 start_ratio=0.200 mode=linear.
+2026-05-07 18:31:40,182 - INFO - epoch complete!
+2026-05-07 18:31:40,182 - INFO - evaluating now!
+2026-05-07 18:31:42,657 - INFO - Epoch [0/10] train_loss: 0.7576, val_loss: 0.1254, lr: 0.002000, 34.65s
+2026-05-07 18:31:42,701 - INFO - Saved model at 0
+2026-05-07 18:31:42,701 - INFO - Val loss decrease from inf to 0.1254, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260507_183057__traffic_state_pred__new_diffusion_fuzzy__PEMSD4/model_cache/new_diffusion_fuzzy_PEMSD4_epoch0.tar
+2026-05-07 18:32:14,509 - INFO - epoch complete!
+2026-05-07 18:32:14,510 - INFO - evaluating now!
+2026-05-07 18:32:16,990 - INFO - Epoch [1/10] train_loss: 0.1475, val_loss: 0.1328, lr: 0.002000, 34.29s
+2026-05-07 18:32:48,685 - INFO - epoch complete!
+2026-05-07 18:32:48,685 - INFO - evaluating now!
+2026-05-07 18:32:51,165 - INFO - Epoch [2/10] train_loss: 0.1307, val_loss: 0.1375, lr: 0.002000, 34.17s
+2026-05-07 18:33:22,853 - INFO - epoch complete!
+2026-05-07 18:33:22,853 - INFO - evaluating now!
+2026-05-07 18:33:25,334 - INFO - Epoch [3/10] train_loss: 0.1181, val_loss: 0.1007, lr: 0.002000, 34.17s
+2026-05-07 18:33:25,376 - INFO - Saved model at 3
+2026-05-07 18:33:25,376 - INFO - Val loss decrease from 0.1254 to 0.1007, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260507_183057__traffic_state_pred__new_diffusion_fuzzy__PEMSD4/model_cache/new_diffusion_fuzzy_PEMSD4_epoch3.tar
+2026-05-07 18:33:57,060 - INFO - epoch complete!
+2026-05-07 18:33:57,060 - INFO - evaluating now!
+2026-05-07 18:33:59,537 - INFO - Epoch [4/10] train_loss: 0.1116, val_loss: 0.0985, lr: 0.002000, 34.16s
+2026-05-07 18:33:59,579 - INFO - Saved model at 4
+2026-05-07 18:33:59,579 - INFO - Val loss decrease from 0.1007 to 0.0985, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260507_183057__traffic_state_pred__new_diffusion_fuzzy__PEMSD4/model_cache/new_diffusion_fuzzy_PEMSD4_epoch4.tar
+2026-05-07 18:34:31,395 - INFO - epoch complete!
+2026-05-07 18:34:31,395 - INFO - evaluating now!
+2026-05-07 18:34:33,875 - INFO - Epoch [5/10] train_loss: 0.1097, val_loss: 0.1095, lr: 0.002000, 34.30s
+2026-05-07 18:35:05,566 - INFO - epoch complete!
+2026-05-07 18:35:05,567 - INFO - evaluating now!
+2026-05-07 18:35:08,046 - INFO - Epoch [6/10] train_loss: 0.1069, val_loss: 0.0986, lr: 0.002000, 34.17s
+2026-05-07 18:35:39,730 - INFO - epoch complete!
+2026-05-07 18:35:39,731 - INFO - evaluating now!
+2026-05-07 18:35:42,219 - INFO - Epoch [7/10] train_loss: 0.1021, val_loss: 0.1003, lr: 0.002000, 34.17s
+2026-05-07 18:36:13,905 - INFO - epoch complete!
+2026-05-07 18:36:13,905 - INFO - evaluating now!
+2026-05-07 18:36:16,384 - INFO - Epoch [8/10] train_loss: 0.1012, val_loss: 0.1197, lr: 0.002000, 34.17s
+2026-05-07 18:36:48,065 - INFO - epoch complete!
+2026-05-07 18:36:48,066 - INFO - evaluating now!
+2026-05-07 18:36:50,543 - INFO - Epoch [9/10] train_loss: 0.1011, val_loss: 0.0959, lr: 0.002000, 34.16s
+2026-05-07 18:36:50,586 - INFO - Saved model at 9
+2026-05-07 18:36:50,586 - INFO - Val loss decrease from 0.0985 to 0.0959, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260507_183057__traffic_state_pred__new_diffusion_fuzzy__PEMSD4/model_cache/new_diffusion_fuzzy_PEMSD4_epoch9.tar
+2026-05-07 18:36:50,586 - INFO - Trained totally 10 epochs, average train time is 31.761s, average eval time is 2.479s
+2026-05-07 18:36:50,690 - INFO - Loaded model at 9

@@ -1,0 +1,41 @@
+{
+  "status": "ready",
+  "task": "traffic_state_pred",
+  "model": "new_diffusion_fuzzy",
+  "dataset": "PEMSD4",
+  "seed": null,
+  "train_rate": 0.6,
+  "eval_rate": 0.2,
+  "test_rate": 0.2,
+  "cli_options": {
+    "train_rate": "0.6",
+    "eval_rate": "0.2"
+  },
+  "config_payload": {},
+  "created_at": 1778076280.064924,
+  "version_id": "dv_1778076280_a6fe2641",
+  "updated_at": 1778076540.425966,
+  "error": null,
+  "script_meta": {
+    "task": "traffic_state_pred",
+    "model": "new_diffusion_fuzzy",
+    "dataset": "PEMSD4",
+    "exp_id": "20260506_220442__traffic_state_pred__new_diffusion_fuzzy__PEMSD4",
+    "artifact_id": "da_20260506_220654__PEMSD4__TrafficStatePointDataset__478dc3bf",
+    "artifact_dir": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/data_artifacts/da_20260506_220654__PEMSD4__TrafficStatePointDataset__478dc3bf",
+    "data_signature": "478dc3bfe6b8dc9070d1ea28876f942f0caccfa2",
+    "train_batches": 160,
+    "valid_batches": 54,
+    "test_batches": 54,
+    "cache_file_name": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/dataset_cache/point_based_PEMSD4_12_12_0.6_0.2_none_64_False_False_False_False.npz",
+    "data_feature_keys": [
+      "adj_mx",
+      "ext_dim",
+      "feature_dim",
+      "num_batches",
+      "num_nodes",
+      "output_dim",
+      "scaler"
+    ]
+  }
+}

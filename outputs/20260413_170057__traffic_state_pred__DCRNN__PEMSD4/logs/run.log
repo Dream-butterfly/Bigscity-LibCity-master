@@ -1,0 +1,215 @@
+2026-04-13 17:00:57,798 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/logs
+2026-04-13 17:00:57,799 - INFO - Begin pipeline, task=traffic_state_pred, model_name=DCRNN, dataset_name=PEMSD4, exp_id=20260413_170057__traffic_state_pred__DCRNN__PEMSD4
+2026-04-13 17:00:57,799 - INFO - {'task': 'traffic_state_pred', 'model': 'DCRNN', 'dataset': 'PEMSD4', 'saved_model': True, 'train': True, 'seed': 0, 'gpu': True, 'gpu_id': 0, 'train_rate': 0.6, 'eval_rate': 0.2, 'batch_size': 64, 'learning_rate': 0.01, 'max_epoch': 100, 'dataset_class': 'TrafficStatePointDataset', 'executor': 'DCRNNExecutor', 'evaluator': 'TrafficStateEvaluator', 'add_day_in_week': False, 'add_time_in_day': False, 'bidir_adj_mx': False, 'cache_dataset': True, 'calculate_weight_adj': False, 'cl_decay_steps': 2000, 'data_col': ['traffic_flow', 'traffic_occupancy', 'traffic_speed'], 'data_files': ['PEMSD4'], 'disturb_rate': 0.5, 'dyna': {'including_types': ['state'], 'state': {'entity_id': 'geo_id', 'traffic_flow': 'num', 'traffic_occupancy': 'num', 'traffic_speed': 'num'}}, 'evaluator_mode': 'single', 'ext_scaler': 'none', 'filter_type': 'dual_random_walk', 'geo': {'including_types': ['Point'], 'Point': {}}, 'geo_file': 'PEMSD4', 'init_weight_inf_or_zero': 'zero', 'input_window': 12, 'load_external': False, 'max_diffusion_step': 2, 'metrics': ['MAE', 'MAPE', 'MSE', 'RMSE', 'masked_MAE', 'masked_MAPE', 'masked_MSE', 'masked_RMSE', 'R2', 'EVAR'], 'noise_SD': [10], 'noise_mean': [5], 'noise_type': 'gaussian', 'normal_external': False, 'num_rnn_layers': 2, 'num_workers': 0, 'output_dim': 3, 'output_window': 12, 'pad_with_last_sample': True, 'rel': {'including_types': ['geo'], 'geo': {'cost': 'num'}}, 'rel_file': 'PEMSD4', 'rnn_units': 64, 'robustness_test': False, 'save_mode': ['csv'], 'scaler': 'none', 'set_weight_link_or_dist': 'link', 'time_intervals': 300, 'use_curriculum_learning': True, 'weight_adj_epsilon': 0.1, 'weight_col': 'cost', 'clip_grad_norm': False, 'epoch': 0, 'hyper_tune': False, 'learner': 'adam', 'load_best_epoch': True, 'log_every': 1, 'log_level': 'INFO', 'lr_T_max': 30, 'lr_alpha': 0.99, 'lr_beta1': 0.9, 'lr_beta2': 0.999, 'lr_decay': False, 'lr_decay_ratio': 0.1, 'lr_epsilon': 1e-08, 'lr_eta_min': 0, 'lr_momentum': 0, 'lr_patience': 10, 'lr_scheduler': 'multisteplr', 'lr_threshold': 0.0001, 'max_grad_norm': 1, 'patience': 50, 'step_size': 10, 'steps': [5, 20, 40, 70], 'train_loss': 'none', 'use_early_stop': False, 'weight_decay': 0, 'device': device(type='cuda', index=0), 'exp_id': '20260413_170057__traffic_state_pred__DCRNN__PEMSD4'}
+2026-04-13 17:00:57,805 - INFO - Loaded file PEMSD4.geo, num_nodes=307
+2026-04-13 17:00:57,806 - INFO - set_weight_link_or_dist: link
+2026-04-13 17:00:57,807 - INFO - init_weight_inf_or_zero: zero
+2026-04-13 17:00:57,811 - INFO - Loaded file PEMSD4.rel, shape=(307, 307)
+2026-04-13 17:00:57,811 - INFO - Loading /home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/dataset_cache/point_based_PEMSD4_12_12_0.6_0.2_none_64_False_False_False_True.npz
+2026-04-13 17:01:13,508 - INFO - train	x: (10181, 12, 307, 3), y: (10181, 12, 307, 3)
+2026-04-13 17:01:13,509 - INFO - eval	x: (3394, 12, 307, 3), y: (3394, 12, 307, 3)
+2026-04-13 17:01:13,509 - INFO - test	x: (3394, 12, 307, 3), y: (3394, 12, 307, 3)
+2026-04-13 17:01:13,509 - INFO - NoneScaler
+2026-04-13 17:01:13,509 - INFO - NoneScaler
+2026-04-13 17:01:15,817 - INFO - DCRNN(
+  (encoder_model): EncoderModel(
+    (dcgru_layers): ModuleList(
+      (0-1): 2 x DCGRUCell(
+        (_fn): GCONV()
+        (_gconv): GCONV()
+      )
+    )
+  )
+  (decoder_model): DecoderModel(
+    (projection_layer): Linear(in_features=64, out_features=3, bias=True)
+    (dcgru_layers): ModuleList(
+      (0-1): 2 x DCGRUCell(
+        (_fn): GCONV()
+        (_gconv): GCONV()
+      )
+    )
+  )
+)
+2026-04-13 17:01:15,818 - INFO - encoder_model.dcgru_layers.0._fn.weight	torch.Size([335, 128])	cuda:0	True
+2026-04-13 17:01:15,818 - INFO - encoder_model.dcgru_layers.0._fn.biases	torch.Size([128])	cuda:0	True
+2026-04-13 17:01:15,818 - INFO - encoder_model.dcgru_layers.0._gconv.weight	torch.Size([335, 64])	cuda:0	True
+2026-04-13 17:01:15,818 - INFO - encoder_model.dcgru_layers.0._gconv.biases	torch.Size([64])	cuda:0	True
+2026-04-13 17:01:15,818 - INFO - encoder_model.dcgru_layers.1._fn.weight	torch.Size([640, 128])	cuda:0	True
+2026-04-13 17:01:15,819 - INFO - encoder_model.dcgru_layers.1._fn.biases	torch.Size([128])	cuda:0	True
+2026-04-13 17:01:15,819 - INFO - encoder_model.dcgru_layers.1._gconv.weight	torch.Size([640, 64])	cuda:0	True
+2026-04-13 17:01:15,819 - INFO - encoder_model.dcgru_layers.1._gconv.biases	torch.Size([64])	cuda:0	True
+2026-04-13 17:01:15,819 - INFO - decoder_model.projection_layer.weight	torch.Size([3, 64])	cuda:0	True
+2026-04-13 17:01:15,819 - INFO - decoder_model.projection_layer.bias	torch.Size([3])	cuda:0	True
+2026-04-13 17:01:15,819 - INFO - decoder_model.dcgru_layers.0._fn.weight	torch.Size([335, 128])	cuda:0	True
+2026-04-13 17:01:15,819 - INFO - decoder_model.dcgru_layers.0._fn.biases	torch.Size([128])	cuda:0	True
+2026-04-13 17:01:15,819 - INFO - decoder_model.dcgru_layers.0._gconv.weight	torch.Size([335, 64])	cuda:0	True
+2026-04-13 17:01:15,819 - INFO - decoder_model.dcgru_layers.0._gconv.biases	torch.Size([64])	cuda:0	True
+2026-04-13 17:01:15,820 - INFO - decoder_model.dcgru_layers.1._fn.weight	torch.Size([640, 128])	cuda:0	True
+2026-04-13 17:01:15,820 - INFO - decoder_model.dcgru_layers.1._fn.biases	torch.Size([128])	cuda:0	True
+2026-04-13 17:01:15,820 - INFO - decoder_model.dcgru_layers.1._gconv.weight	torch.Size([640, 64])	cuda:0	True
+2026-04-13 17:01:15,820 - INFO - decoder_model.dcgru_layers.1._gconv.biases	torch.Size([64])	cuda:0	True
+2026-04-13 17:01:15,820 - INFO - Total parameter numbers: 375363
+2026-04-13 17:01:15,820 - INFO - You select `adam` optimizer.
+2026-04-13 17:01:17,541 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-04-13 17:01:17,542 - INFO - Start training ...
+2026-04-13 17:01:17,542 - INFO - num_batches:161
+2026-04-13 17:01:18,064 - INFO - Total trainable parameters 375363
+2026-04-13 17:02:59,799 - INFO - epoch complete!
+2026-04-13 17:02:59,799 - INFO - evaluating now!
+2026-04-13 17:03:07,458 - INFO - Epoch [0/100] (161) train_loss: 63.8849, val_loss: 52.5209, lr: 0.010000, 109.92s
+2026-04-13 17:03:07,486 - INFO - Saved model at 0
+2026-04-13 17:03:07,486 - INFO - Val loss decrease from inf to 52.5209, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/model_cache/DCRNN_PEMSD4_epoch0.tar
+2026-04-13 17:04:41,873 - INFO - epoch complete!
+2026-04-13 17:04:41,874 - INFO - evaluating now!
+2026-04-13 17:04:49,509 - INFO - Epoch [1/100] (322) train_loss: 44.1002, val_loss: 45.3669, lr: 0.010000, 102.02s
+2026-04-13 17:04:49,531 - INFO - Saved model at 1
+2026-04-13 17:04:49,531 - INFO - Val loss decrease from 52.5209 to 45.3669, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/model_cache/DCRNN_PEMSD4_epoch1.tar
+2026-04-13 17:06:24,902 - INFO - epoch complete!
+2026-04-13 17:06:24,902 - INFO - evaluating now!
+2026-04-13 17:06:32,842 - INFO - Epoch [2/100] (483) train_loss: 28.3738, val_loss: 26.6314, lr: 0.010000, 103.31s
+2026-04-13 17:06:32,862 - INFO - Saved model at 2
+2026-04-13 17:06:32,862 - INFO - Val loss decrease from 45.3669 to 26.6314, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/model_cache/DCRNN_PEMSD4_epoch2.tar
+2026-04-13 17:08:14,902 - INFO - epoch complete!
+2026-04-13 17:08:14,902 - INFO - evaluating now!
+2026-04-13 17:08:22,875 - INFO - Epoch [3/100] (644) train_loss: 19.1543, val_loss: 21.5094, lr: 0.010000, 110.01s
+2026-04-13 17:08:22,897 - INFO - Saved model at 3
+2026-04-13 17:08:22,897 - INFO - Val loss decrease from 26.6314 to 21.5094, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/model_cache/DCRNN_PEMSD4_epoch3.tar
+2026-04-13 17:09:57,117 - INFO - epoch complete!
+2026-04-13 17:09:57,117 - INFO - evaluating now!
+2026-04-13 17:10:04,742 - INFO - Epoch [4/100] (805) train_loss: 14.6015, val_loss: 25.9448, lr: 0.010000, 101.85s
+2026-04-13 17:11:38,502 - INFO - epoch complete!
+2026-04-13 17:11:38,502 - INFO - evaluating now!
+2026-04-13 17:11:46,486 - INFO - Epoch [5/100] (966) train_loss: 11.9464, val_loss: 15.2509, lr: 0.010000, 101.74s
+2026-04-13 17:11:46,507 - INFO - Saved model at 5
+2026-04-13 17:11:46,507 - INFO - Val loss decrease from 21.5094 to 15.2509, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/model_cache/DCRNN_PEMSD4_epoch5.tar
+2026-04-13 17:13:19,262 - INFO - epoch complete!
+2026-04-13 17:13:19,263 - INFO - evaluating now!
+2026-04-13 17:13:27,090 - INFO - Epoch [6/100] (1127) train_loss: 10.3877, val_loss: 16.7378, lr: 0.010000, 100.58s
+2026-04-13 17:15:01,768 - INFO - epoch complete!
+2026-04-13 17:15:01,768 - INFO - evaluating now!
+2026-04-13 17:15:09,861 - INFO - Epoch [7/100] (1288) train_loss: 9.3980, val_loss: 16.6325, lr: 0.010000, 102.77s
+2026-04-13 17:16:43,552 - INFO - epoch complete!
+2026-04-13 17:16:43,552 - INFO - evaluating now!
+2026-04-13 17:16:51,202 - INFO - Epoch [8/100] (1449) train_loss: 8.8073, val_loss: 12.0967, lr: 0.010000, 101.34s
+2026-04-13 17:16:51,223 - INFO - Saved model at 8
+2026-04-13 17:16:51,223 - INFO - Val loss decrease from 15.2509 to 12.0967, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/model_cache/DCRNN_PEMSD4_epoch8.tar
+2026-04-13 17:18:24,112 - INFO - epoch complete!
+2026-04-13 17:18:24,113 - INFO - evaluating now!
+2026-04-13 17:18:31,841 - INFO - Epoch [9/100] (1610) train_loss: 8.3450, val_loss: 11.4411, lr: 0.010000, 100.62s
+2026-04-13 17:18:31,862 - INFO - Saved model at 9
+2026-04-13 17:18:31,862 - INFO - Val loss decrease from 12.0967 to 11.4411, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/model_cache/DCRNN_PEMSD4_epoch9.tar
+2026-04-13 17:20:04,554 - INFO - epoch complete!
+2026-04-13 17:20:04,554 - INFO - evaluating now!
+2026-04-13 17:20:12,243 - INFO - Epoch [10/100] (1771) train_loss: 8.0365, val_loss: 11.2768, lr: 0.010000, 100.38s
+2026-04-13 17:20:12,264 - INFO - Saved model at 10
+2026-04-13 17:20:12,264 - INFO - Val loss decrease from 11.4411 to 11.2768, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/model_cache/DCRNN_PEMSD4_epoch10.tar
+2026-04-13 17:21:44,915 - INFO - epoch complete!
+2026-04-13 17:21:44,915 - INFO - evaluating now!
+2026-04-13 17:21:52,539 - INFO - Epoch [11/100] (1932) train_loss: 7.7939, val_loss: 11.0952, lr: 0.010000, 100.27s
+2026-04-13 17:21:52,560 - INFO - Saved model at 11
+2026-04-13 17:21:52,560 - INFO - Val loss decrease from 11.2768 to 11.0952, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/model_cache/DCRNN_PEMSD4_epoch11.tar
+2026-04-13 17:23:26,175 - INFO - epoch complete!
+2026-04-13 17:23:26,176 - INFO - evaluating now!
+2026-04-13 17:23:34,194 - INFO - Epoch [12/100] (2093) train_loss: 7.5753, val_loss: 11.9509, lr: 0.010000, 101.63s
+2026-04-13 17:25:07,827 - INFO - epoch complete!
+2026-04-13 17:25:07,828 - INFO - evaluating now!
+2026-04-13 17:25:15,823 - INFO - Epoch [13/100] (2254) train_loss: 7.5183, val_loss: 10.4281, lr: 0.010000, 101.63s
+2026-04-13 17:25:15,844 - INFO - Saved model at 13
+2026-04-13 17:25:15,844 - INFO - Val loss decrease from 11.0952 to 10.4281, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/model_cache/DCRNN_PEMSD4_epoch13.tar
+2026-04-13 17:26:48,959 - INFO - epoch complete!
+2026-04-13 17:26:48,959 - INFO - evaluating now!
+2026-04-13 17:26:56,952 - INFO - Epoch [14/100] (2415) train_loss: 7.3441, val_loss: 11.2030, lr: 0.010000, 101.11s
+2026-04-13 17:28:29,567 - INFO - epoch complete!
+2026-04-13 17:28:29,568 - INFO - evaluating now!
+2026-04-13 17:28:37,189 - INFO - Epoch [15/100] (2576) train_loss: 7.2602, val_loss: 12.1540, lr: 0.010000, 100.24s
+2026-04-13 17:30:10,475 - INFO - epoch complete!
+2026-04-13 17:30:10,475 - INFO - evaluating now!
+2026-04-13 17:30:18,438 - INFO - Epoch [16/100] (2737) train_loss: 7.1977, val_loss: 12.2508, lr: 0.010000, 101.25s
+2026-04-13 17:31:51,711 - INFO - epoch complete!
+2026-04-13 17:31:51,712 - INFO - evaluating now!
+2026-04-13 17:31:59,409 - INFO - Epoch [17/100] (2898) train_loss: 7.0973, val_loss: 15.6297, lr: 0.010000, 100.97s
+2026-04-13 17:33:31,746 - INFO - epoch complete!
+2026-04-13 17:33:31,746 - INFO - evaluating now!
+2026-04-13 17:33:39,408 - INFO - Epoch [18/100] (3059) train_loss: 7.1069, val_loss: 11.4556, lr: 0.010000, 100.00s
+2026-04-13 17:35:12,027 - INFO - epoch complete!
+2026-04-13 17:35:12,027 - INFO - evaluating now!
+2026-04-13 17:35:20,058 - INFO - Epoch [19/100] (3220) train_loss: 7.0160, val_loss: 10.0039, lr: 0.010000, 100.65s
+2026-04-13 17:35:20,080 - INFO - Saved model at 19
+2026-04-13 17:35:20,080 - INFO - Val loss decrease from 10.4281 to 10.0039, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/model_cache/DCRNN_PEMSD4_epoch19.tar
+2026-04-13 17:36:53,529 - INFO - epoch complete!
+2026-04-13 17:36:53,529 - INFO - evaluating now!
+2026-04-13 17:37:01,251 - INFO - Epoch [20/100] (3381) train_loss: 6.9436, val_loss: 17.6272, lr: 0.010000, 101.17s
+2026-04-13 17:38:34,718 - INFO - epoch complete!
+2026-04-13 17:38:34,718 - INFO - evaluating now!
+2026-04-13 17:38:42,552 - INFO - Epoch [21/100] (3542) train_loss: 6.9136, val_loss: 9.9456, lr: 0.010000, 101.30s
+2026-04-13 17:38:42,573 - INFO - Saved model at 21
+2026-04-13 17:38:42,573 - INFO - Val loss decrease from 10.0039 to 9.9456, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/model_cache/DCRNN_PEMSD4_epoch21.tar
+2026-04-13 17:40:20,864 - INFO - epoch complete!
+2026-04-13 17:40:20,865 - INFO - evaluating now!
+2026-04-13 17:40:30,179 - INFO - Epoch [22/100] (3703) train_loss: 6.8562, val_loss: 10.1160, lr: 0.010000, 107.61s
+2026-04-13 17:42:04,788 - INFO - epoch complete!
+2026-04-13 17:42:04,788 - INFO - evaluating now!
+2026-04-13 17:42:12,760 - INFO - Epoch [23/100] (3864) train_loss: 6.8653, val_loss: 9.8682, lr: 0.010000, 102.58s
+2026-04-13 17:42:12,781 - INFO - Saved model at 23
+2026-04-13 17:42:12,781 - INFO - Val loss decrease from 9.9456 to 9.8682, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/model_cache/DCRNN_PEMSD4_epoch23.tar
+2026-04-13 17:43:45,413 - INFO - epoch complete!
+2026-04-13 17:43:45,413 - INFO - evaluating now!
+2026-04-13 17:43:53,005 - INFO - Epoch [24/100] (4025) train_loss: 6.8023, val_loss: 13.0317, lr: 0.010000, 100.22s
+2026-04-13 17:45:27,475 - INFO - epoch complete!
+2026-04-13 17:45:27,475 - INFO - evaluating now!
+2026-04-13 17:45:35,420 - INFO - Epoch [25/100] (4186) train_loss: 6.7954, val_loss: 9.7288, lr: 0.010000, 102.41s
+2026-04-13 17:45:35,442 - INFO - Saved model at 25
+2026-04-13 17:45:35,442 - INFO - Val loss decrease from 9.8682 to 9.7288, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/model_cache/DCRNN_PEMSD4_epoch25.tar
+2026-04-13 17:47:09,772 - INFO - epoch complete!
+2026-04-13 17:47:09,773 - INFO - evaluating now!
+2026-04-13 17:47:17,757 - INFO - Epoch [26/100] (4347) train_loss: 6.7663, val_loss: 10.1322, lr: 0.010000, 102.31s
+2026-04-13 17:48:56,995 - INFO - epoch complete!
+2026-04-13 17:48:56,995 - INFO - evaluating now!
+2026-04-13 17:49:06,292 - INFO - Epoch [27/100] (4508) train_loss: 6.7238, val_loss: 10.2487, lr: 0.010000, 108.53s
+2026-04-13 17:50:39,242 - INFO - epoch complete!
+2026-04-13 17:50:39,243 - INFO - evaluating now!
+2026-04-13 17:50:47,142 - INFO - Epoch [28/100] (4669) train_loss: 6.6924, val_loss: 16.9761, lr: 0.010000, 100.85s
+2026-04-13 17:52:24,283 - INFO - epoch complete!
+2026-04-13 17:52:24,284 - INFO - evaluating now!
+2026-04-13 17:52:31,924 - INFO - Epoch [29/100] (4830) train_loss: 6.7461, val_loss: 10.3772, lr: 0.010000, 104.78s
+2026-04-13 17:54:11,768 - INFO - epoch complete!
+2026-04-13 17:54:11,769 - INFO - evaluating now!
+2026-04-13 17:54:19,408 - INFO - Epoch [30/100] (4991) train_loss: 6.6655, val_loss: 10.8944, lr: 0.010000, 107.48s
+2026-04-13 17:55:52,124 - INFO - epoch complete!
+2026-04-13 17:55:52,125 - INFO - evaluating now!
+2026-04-13 17:55:59,783 - INFO - Epoch [31/100] (5152) train_loss: 6.6630, val_loss: 13.7266, lr: 0.010000, 100.37s
+2026-04-13 17:57:35,802 - INFO - epoch complete!
+2026-04-13 17:57:35,802 - INFO - evaluating now!
+2026-04-13 17:57:44,945 - INFO - Epoch [32/100] (5313) train_loss: 6.6756, val_loss: 9.6460, lr: 0.010000, 105.16s
+2026-04-13 17:57:44,968 - INFO - Saved model at 32
+2026-04-13 17:57:44,968 - INFO - Val loss decrease from 9.7288 to 9.6460, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260413_170057__traffic_state_pred__DCRNN__PEMSD4/model_cache/DCRNN_PEMSD4_epoch32.tar
+2026-04-13 17:59:25,072 - INFO - epoch complete!
+2026-04-13 17:59:25,073 - INFO - evaluating now!
+2026-04-13 17:59:34,388 - INFO - Epoch [33/100] (5474) train_loss: 6.6467, val_loss: 9.9557, lr: 0.010000, 109.42s
+2026-04-13 18:01:15,165 - INFO - epoch complete!
+2026-04-13 18:01:15,166 - INFO - evaluating now!
+2026-04-13 18:01:24,379 - INFO - Epoch [34/100] (5635) train_loss: 6.6520, val_loss: 9.7012, lr: 0.010000, 109.99s
+2026-04-13 18:03:05,122 - INFO - epoch complete!
+2026-04-13 18:03:05,123 - INFO - evaluating now!
+2026-04-13 18:03:12,828 - INFO - Epoch [35/100] (5796) train_loss: 6.6093, val_loss: 13.4459, lr: 0.010000, 108.45s
+2026-04-13 18:04:50,513 - INFO - epoch complete!
+2026-04-13 18:04:50,513 - INFO - evaluating now!
+2026-04-13 18:04:58,218 - INFO - Epoch [36/100] (5957) train_loss: 6.8209, val_loss: 12.9436, lr: 0.010000, 105.39s
+2026-04-13 18:06:31,594 - INFO - epoch complete!
+2026-04-13 18:06:31,594 - INFO - evaluating now!
+2026-04-13 18:06:39,623 - INFO - Epoch [37/100] (6118) train_loss: 6.6861, val_loss: 11.1292, lr: 0.010000, 101.40s
+2026-04-13 18:08:17,931 - INFO - epoch complete!
+2026-04-13 18:08:17,932 - INFO - evaluating now!
+2026-04-13 18:08:26,663 - INFO - Epoch [38/100] (6279) train_loss: 6.7304, val_loss: 9.7574, lr: 0.010000, 107.04s
+2026-04-13 18:10:04,864 - INFO - epoch complete!
+2026-04-13 18:10:04,864 - INFO - evaluating now!
+2026-04-13 18:10:12,560 - INFO - Epoch [39/100] (6440) train_loss: 6.6173, val_loss: 10.3525, lr: 0.010000, 105.90s
+2026-04-13 18:11:48,016 - INFO - epoch complete!
+2026-04-13 18:11:48,017 - INFO - evaluating now!
+2026-04-13 18:11:55,737 - INFO - Epoch [40/100] (6601) train_loss: 6.6345, val_loss: 9.6884, lr: 0.010000, 103.18s
+2026-04-13 18:13:28,860 - INFO - epoch complete!
+2026-04-13 18:13:28,861 - INFO - evaluating now!
+2026-04-13 18:13:36,848 - INFO - Epoch [41/100] (6762) train_loss: 6.6226, val_loss: 14.5446, lr: 0.010000, 101.11s
+2026-04-13 18:15:09,329 - INFO - epoch complete!
+2026-04-13 18:15:09,329 - INFO - evaluating now!
+2026-04-13 18:15:16,968 - INFO - Epoch [42/100] (6923) train_loss: 6.7603, val_loss: 9.7013, lr: 0.010000, 100.12s

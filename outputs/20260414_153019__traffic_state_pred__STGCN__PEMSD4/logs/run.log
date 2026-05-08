@@ -1,0 +1,7 @@
+2026-04-14 15:30:19,977 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260414_153019__traffic_state_pred__STGCN__PEMSD4/logs
+2026-04-14 15:30:19,978 - INFO - Begin data prep, task=traffic_state_pred, model_name=STGCN, dataset_name=PEMSD4, exp_id=20260414_153019__traffic_state_pred__STGCN__PEMSD4
+2026-04-14 15:30:19,988 - INFO - Loaded file PEMSD4.geo, num_nodes=307
+2026-04-14 15:30:19,990 - INFO - set_weight_link_or_dist: link
+2026-04-14 15:30:19,990 - INFO - init_weight_inf_or_zero: zero
+2026-04-14 15:30:19,995 - INFO - Loaded file PEMSD4.rel, shape=(307, 307)
+2026-04-14 15:30:19,995 - INFO - Loading /home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/dataset_cache/point_based_PEMSD4_12_12_0.6_0.2_standard_64_False_False_False_True.npz

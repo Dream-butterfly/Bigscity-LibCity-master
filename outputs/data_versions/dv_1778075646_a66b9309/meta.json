@@ -1,0 +1,19 @@
+{
+  "status": "failed",
+  "task": "traffic_state_pred",
+  "model": "new_diffusion_fuzzy",
+  "dataset": "PEMSD4",
+  "seed": null,
+  "train_rate": 0.6,
+  "eval_rate": 0.2,
+  "test_rate": 0.2,
+  "cli_options": {
+    "train_rate": "0.6",
+    "eval_rate": "0.2"
+  },
+  "config_payload": {},
+  "created_at": 1778075646.476708,
+  "version_id": "dv_1778075646_a66b9309",
+  "updated_at": 1778075649.3514485,
+  "error": "Data processing failed with return code 1."
+}

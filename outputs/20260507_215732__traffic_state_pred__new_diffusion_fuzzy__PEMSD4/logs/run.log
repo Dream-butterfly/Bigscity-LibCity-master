@@ -1,0 +1,18 @@
+2026-05-07 21:57:32,847 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260507_215732__traffic_state_pred__new_diffusion_fuzzy__PEMSD4/logs
+2026-05-07 21:57:32,848 - INFO - Overfitting test: dataset=PEMSD4 batches=400 epochs=50 lr=0.001 device=cuda:0
+2026-05-07 21:57:32,849 - INFO - Loaded file PEMSD4.geo, num_nodes=307
+2026-05-07 21:57:32,850 - INFO - set_weight_link_or_dist: link
+2026-05-07 21:57:32,850 - INFO - init_weight_inf_or_zero: zero
+2026-05-07 21:57:32,852 - INFO - Loaded file PEMSD4.rel, shape=(307, 307)
+2026-05-07 21:57:32,852 - INFO - Loading /home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/dataset_cache/point_based_PEMSD4_12_12_0.7_0.1_standard_32_False_True_True_True.npz
+2026-05-07 21:57:43,037 - INFO - train	x: (11878, 12, 307, 3), y: (11878, 12, 307, 3)
+2026-05-07 21:57:43,038 - INFO - eval	x: (1697, 12, 307, 3), y: (1697, 12, 307, 3)
+2026-05-07 21:57:43,038 - INFO - test	x: (3394, 12, 307, 3), y: (3394, 12, 307, 3)
+2026-05-07 21:57:45,419 - INFO - StandardScaler mean: 90.78135542073315, std: 126.14790771308698
+2026-05-07 21:57:45,419 - INFO - NoneScaler
+2026-05-07 21:57:47,578 - INFO - Full training set: 11908 samples
+2026-05-07 21:57:47,675 - INFO - Training on 11908 samples, 373 batches/epoch
+2026-05-07 21:57:47,834 - INFO - Model params: 796141
+2026-05-07 21:57:48,894 - INFO - Enable physics warmup: steps=3000 start_ratio=0.200 mode=linear.
+2026-05-07 22:00:19,332 - INFO - epoch    1 | loss=0.210179  best=0.210179  Δ=0.0%  |g|=0.26  step=373
+2026-05-07 22:02:49,854 - INFO - epoch    2 | loss=0.089580  best=0.089580  Δ=57.4%  |g|=0.39  step=746

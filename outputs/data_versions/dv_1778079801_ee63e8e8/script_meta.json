@@ -1,0 +1,22 @@
+{
+  "task": "traffic_state_pred",
+  "model": "new_diffusion_fuzzy",
+  "dataset": "PEMSD4",
+  "exp_id": "20260506_230323__traffic_state_pred__new_diffusion_fuzzy__PEMSD4",
+  "artifact_id": "da_20260506_230337__PEMSD4__TrafficStatePointDataset__d9726e21",
+  "artifact_dir": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/data_artifacts/da_20260506_230337__PEMSD4__TrafficStatePointDataset__d9726e21",
+  "data_signature": "d9726e212fd801b2c636f948ed8c6bcf8376968f",
+  "train_batches": 319,
+  "valid_batches": 107,
+  "test_batches": 107,
+  "cache_file_name": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/dataset_cache/point_based_PEMSD4_12_12_0.6_0.2_standard_32_False_False_False_False.npz",
+  "data_feature_keys": [
+    "adj_mx",
+    "ext_dim",
+    "feature_dim",
+    "num_batches",
+    "num_nodes",
+    "output_dim",
+    "scaler"
+  ]
+}
