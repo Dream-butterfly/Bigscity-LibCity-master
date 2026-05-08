@@ -58,18 +58,22 @@ def run_eval_checkpoint(
     if not text_run_id:
         raise ValueError("run_id is required.")
 
-    run_meta = load_run_meta(text_run_id)
+    # 尝试加载 run_meta.json。旧运行目录可能没有该文件，此时依赖显式传入的参数
+    try:
+        run_meta = load_run_meta(text_run_id)
+    except FileNotFoundError:
+        run_meta = {}
     resolved_task = str(task or run_meta.get("task") or "").strip()
     resolved_model = str(model_name or run_meta.get("model") or "").strip()
     resolved_dataset = str(dataset_name or run_meta.get("dataset") or "").strip()
 
     if not resolved_task or not resolved_model or not resolved_dataset:
         raise ValueError(
-            "Cannot determine task/model/dataset from run_meta.json; "
-            "please provide --task, --model, --dataset explicitly."
+            "Cannot determine task/model/dataset. "
+            "Provide --task, --model, --dataset explicitly, or ensure run_meta.json exists."
         )
 
-    # Resolve artifact_id
+    # Resolve artifact_id: 优先显式传入，其次 run_meta 绑定
     bound_artifact_id = str(run_meta.get("artifact_id", "")).strip()
     effective_artifact_id = str(artifact_id or "").strip() or bound_artifact_id
     if not effective_artifact_id:
