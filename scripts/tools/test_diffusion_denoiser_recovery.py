@@ -21,7 +21,7 @@ import torch.nn.functional as F
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from GNNTP.config_parser import ConfigParser
+from GNNTP.common import ConfigParser
 from GNNTP.data.runtime import build_artifact_runtime
 from GNNTP.models.locator import get_model_component
 from GNNTP.utils.paths import OUTPUT_ROOT
