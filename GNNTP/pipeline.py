@@ -70,7 +70,8 @@ def run_model(task=None, model_name=None, dataset_name=None, config_file=None,
             executor.save_model(model_cache_file)
     else:
         executor.load_model(model_cache_file)
-    if rank == 0 or not is_distributed:
+    # DDP 下所有 rank 必须参与 evaluate()，因为内部有 all_gather 需要全 rank 同步
+    if is_distributed or rank == 0:
         executor.evaluate(runtime.test_loader)
     if is_distributed:
         import torch.distributed as dist

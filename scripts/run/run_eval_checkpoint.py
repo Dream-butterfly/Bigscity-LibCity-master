@@ -112,7 +112,7 @@ def run_eval_checkpoint(
         task=resolved_task,
         model_name=resolved_model,
         artifact_id=effective_artifact_id,
-        force_reuse=force_reuse,
+        force_reuse=True,  # 纯评估无需校验 seed/train_rate/eval_rate 等签名字段
     )
 
     for msg in runtime.warnings:

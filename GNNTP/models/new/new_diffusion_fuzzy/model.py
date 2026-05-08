@@ -657,6 +657,11 @@ class NewDiffusion(AbstractTrafficStateModel):
         self.fuzzy_conservation_threshold = config.get("fuzzy_conservation_threshold", 0.6)
         self.fuzzy_conservation_temperature = config.get("fuzzy_conservation_temperature", 8.0)
         self.device = config.get("device", torch.device("cpu"))
+        # 预测值 clamp 边界（None=不clamp，用于 DDIM 采样防止发散和峰值低估）
+        _raw_min = config.get("prediction_clamp_min", None)
+        _raw_max = config.get("prediction_clamp_max", None)
+        self.prediction_clamp_min: float | None = float(_raw_min) if _raw_min is not None else None
+        self.prediction_clamp_max: float | None = float(_raw_max) if _raw_max is not None else None
 
         self.num_nodes = data_feature.get("num_nodes", 1)
         self.feature_dim = data_feature.get("feature_dim", 1)
@@ -871,6 +876,12 @@ class NewDiffusion(AbstractTrafficStateModel):
             else:
                 future_state = self.diffusion_scheduler.ddpm_step(
                     future_state, timestep, predicted_noise
+                )
+            # Clamp 防止 DDIM/DDPM 采样发散和峰值低估
+            if self.prediction_clamp_min is not None or self.prediction_clamp_max is not None:
+                future_state = future_state.clamp(
+                    min=-float('inf') if self.prediction_clamp_min is None else self.prediction_clamp_min,
+                    max=float('inf') if self.prediction_clamp_max is None else self.prediction_clamp_max,
                 )
         return future_state
 
