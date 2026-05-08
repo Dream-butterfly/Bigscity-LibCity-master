@@ -191,8 +191,7 @@ def ensure_dir(dir_path):
     Args:
         dir_path (str): directory path
     """
-    if not os.path.exists(dir_path):
-        os.makedirs(dir_path)
+    os.makedirs(dir_path, exist_ok=True)
 
 
 def trans_naming_rule(origin, origin_rule, target_rule):

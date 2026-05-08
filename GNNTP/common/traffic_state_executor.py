@@ -479,7 +479,7 @@ class TrafficStateExecutor(AbstractExecutor):
                     if loss_func is not None:
                         loss = loss_func(batch)
                     else:
-                        loss = self.model(batch)
+                        loss = self._unwrap_model().calculate_loss(batch)  # no_grad 下无需 DDP hook
                 self._logger.debug(loss.item())
                 losses.append(loss.item())
             mean_loss = np.mean(losses)
