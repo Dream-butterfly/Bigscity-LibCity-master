@@ -392,6 +392,7 @@ class AttentionDenoiser(nn.Module):
             use_spatiotemporal_attention=False,
             use_temporal_position_embedding=True,
             max_future_steps=None,
+            input_window=None,
             use_gradient_checkpointing=True,
             adaptive_graph_enabled=False,
             adaptive_graph_embed_dim=32,
@@ -421,8 +422,12 @@ class AttentionDenoiser(nn.Module):
             nn.SiLU(),
             nn.Linear(hidden_dim, hidden_dim),
         )
-        # Direct condition fusion: concat time-pooled condition to denoiser input
-        # before any attention/graph ops, so condition signal survives at high noise levels
+        # Direct condition fusion: learnable temporal weighted pooling of all history steps
+        # into denoiser input, before any attention/graph ops, so condition signal
+        # survives at high noise levels.
+        if input_window is None or input_window < 1:
+            raise ValueError("input_window must be >= 1 for condition temporal weighting.")
+        self.condition_temporal_weight = nn.Parameter(torch.zeros(input_window))
         self.condition_fusion = nn.Linear(hidden_dim * 2, hidden_dim)
         self.blocks = nn.ModuleList(
             [
@@ -468,11 +473,11 @@ class AttentionDenoiser(nn.Module):
         timestep_features = self.time_projection(self.time_embedding(timesteps)).to(dtype=denoiser_input.dtype)
         denoiser_input = denoiser_input + timestep_features.unsqueeze(1).unsqueeze(2)
 
-        # Fuse last history step as condition anchor BEFORE blocks.
-        # The last step carries the most recent spatial+trend signal and
-        # is far more informative than a time-average for short-term forecasting.
-        # Cross-attention inside blocks is retained as secondary temporal pathway.
-        condition_pooled = condition_features[:, -1:, :, :]
+        # Fuse all history steps into condition anchor via learnable temporal weights.
+        # Replaces single-step (-1:) with softmax-weighted pooling over all 12 steps,
+        # so the model can learn to emphasize recent steps while retaining trend info.
+        temporal_weights = F.softmax(self.condition_temporal_weight, dim=0)  # [T_in]
+        condition_pooled = (condition_features * temporal_weights[None, :, None, None]).sum(dim=1, keepdim=True)
         condition_pooled = condition_pooled.expand(-1, denoiser_input.size(1), -1, -1)
         denoiser_input = self.condition_fusion(torch.cat([denoiser_input, condition_pooled], dim=-1))
 
@@ -707,6 +712,7 @@ class NewDiffusion(AbstractTrafficStateModel):
             use_spatiotemporal_attention=self.use_spatiotemporal_attention,
             use_temporal_position_embedding=self.use_temporal_position_embedding,
             max_future_steps=self.output_window,
+            input_window=self.input_window,
             use_gradient_checkpointing=self.use_gradient_checkpointing,
             adaptive_graph_enabled=self.use_adaptive_graph,
             adaptive_graph_embed_dim=self.adaptive_graph_embed_dim,
@@ -788,7 +794,16 @@ class NewDiffusion(AbstractTrafficStateModel):
             predicted_noise = self.noise_predictor(
                 noisy_future, timesteps, condition_features, adjacency_matrix, return_last_adjacency=False
             )
-        diffusion_loss = F.mse_loss(predicted_noise, true_noise)
+        loss_per_element = F.mse_loss(predicted_noise, true_noise, reduction='none')
+        alpha_bar_t = self.diffusion_scheduler._extract(
+            self.diffusion_scheduler.alphas_cumprod, timesteps, true_noise.shape
+        )
+        snr = alpha_bar_t / (1.0 - alpha_bar_t).clamp_min(1e-8)
+        # SNR+1 weighting (Improved DDPM): up-weight low-noise timesteps
+        # that contribute more to final sample quality. Clamp to avoid
+        # extreme weights at t≈0.
+        loss_weight = (snr + 1.0).clamp(max=10.0)
+        diffusion_loss = (loss_weight * loss_per_element).mean()
         if not need_physics:
             return diffusion_loss
 
