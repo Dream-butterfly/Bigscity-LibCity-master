@@ -3,17 +3,77 @@
     "task": "traffic_state_pred",
     "model": "new_diffusion_fuzzy",
     "dataset": "PEMSD4",
-    "status": "running",
-    "run_id": "20260508_125529__traffic_state_pred__new_diffusion_fuzzy__PEMSD4",
-    "started_at": 1778216127.5793264,
-    "ended_at": null,
-    "duration_sec": null,
+    "status": "finished",
+    "run_id": "20260508_133045__traffic_state_pred__new_diffusion_fuzzy__PEMSD4",
+    "started_at": 1778218241.4423614,
+    "ended_at": 1778218365.0351217,
+    "duration_sec": 123.59276032447815,
+    "major_metrics": {
+      "MAE": 56145.205078125,
+      "RMSE": 77619.349609375,
+      "MAPE": 66284324.0
+    },
+    "output_dir": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260508_133045__traffic_state_pred__new_diffusion_fuzzy__PEMSD4",
+    "error": null,
+    "record_id": "tr_1778218241_7f64338dec",
+    "created_at": 1778218241.438073,
+    "updated_at": 1778218365.035714
+  },
+  {
+    "task": "traffic_state_pred",
+    "model": "new_diffusion_fuzzy",
+    "dataset": "PEMSD4",
+    "status": "finished",
+    "run_id": "20260508_132230__traffic_state_pred__new_diffusion_fuzzy__PEMSD4",
+    "started_at": 1778217746.2690413,
+    "ended_at": 1778218016.3671694,
+    "duration_sec": 270.09812808036804,
+    "major_metrics": {
+      "MAE": 61806.8671875,
+      "RMSE": 83066.17447916667,
+      "MAPE": 74029194.66666667
+    },
+    "output_dir": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260508_132230__traffic_state_pred__new_diffusion_fuzzy__PEMSD4",
+    "error": null,
+    "record_id": "tr_1778217746_dc914e5ba1",
+    "created_at": 1778217746.2651427,
+    "updated_at": 1778218016.3675447
+  },
+  {
+    "task": "traffic_state_pred",
+    "model": "new_diffusion_fuzzy",
+    "dataset": "PEMSD4",
+    "status": "failed",
+    "run_id": "20260508_132130__traffic_state_pred__new_diffusion_fuzzy__PEMSD4",
+    "started_at": 1778217686.6433704,
+    "ended_at": 1778217702.6035564,
+    "duration_sec": 15.960186004638672,
     "major_metrics": {},
     "output_dir": "",
+    "error": "Training failed with return code 1.",
+    "record_id": "tr_1778217686_be2b0ca91e",
+    "created_at": 1778217686.6383252,
+    "updated_at": 1778217702.6048503
+  },
+  {
+    "task": "traffic_state_pred",
+    "model": "new_diffusion_fuzzy",
+    "dataset": "PEMSD4",
+    "status": "finished",
+    "run_id": "20260508_125529__traffic_state_pred__new_diffusion_fuzzy__PEMSD4",
+    "started_at": 1778216127.5793264,
+    "ended_at": 1778216738.0323195,
+    "duration_sec": 610.4529931545258,
+    "major_metrics": {
+      "MAE": 43650.769856770836,
+      "RMSE": 55382.90234375,
+      "MAPE": 36243786.333333336
+    },
+    "output_dir": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260508_125529__traffic_state_pred__new_diffusion_fuzzy__PEMSD4",
     "error": null,
     "record_id": "tr_1778216127_3dc2d5ff9f",
     "created_at": 1778216127.57649,
-    "updated_at": 1778216129.808663
+    "updated_at": 1778216738.032689
   },
   {
     "task": "traffic_state_pred",
