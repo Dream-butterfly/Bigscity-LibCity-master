@@ -4,6 +4,26 @@
     "model": "new_diffusion_fuzzy",
     "dataset": "PEMSD4",
     "status": "finished",
+    "run_id": "20260508_135120__traffic_state_pred__new_diffusion_fuzzy__PEMSD4",
+    "started_at": 1778219475.9621198,
+    "ended_at": 1778219599.3589246,
+    "duration_sec": 123.39680480957031,
+    "major_metrics": {
+      "MAE": 71009.13411458333,
+      "RMSE": 94664.66861979167,
+      "MAPE": 98099020.66666667
+    },
+    "output_dir": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260508_135120__traffic_state_pred__new_diffusion_fuzzy__PEMSD4",
+    "error": null,
+    "record_id": "tr_1778219475_6fa075b59b",
+    "created_at": 1778219475.9539487,
+    "updated_at": 1778219599.359333
+  },
+  {
+    "task": "traffic_state_pred",
+    "model": "new_diffusion_fuzzy",
+    "dataset": "PEMSD4",
+    "status": "finished",
     "run_id": "20260508_133045__traffic_state_pred__new_diffusion_fuzzy__PEMSD4",
     "started_at": 1778218241.4423614,
     "ended_at": 1778218365.0351217,
