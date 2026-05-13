@@ -52,17 +52,35 @@ class DenoiserBlock(nn.Module):
         self.norm_ffn = nn.LayerNorm(hidden_dim)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, noisy_future, condition_features, adjacency_matrix):
+        # Per-block timestep re-injection via scale/shift modulation.
+        # Analogous to adaLN in DiT but simpler: applies once at block entry
+        # rather than replacing every LayerNorm, trading some expressivity
+        # for fewer parameters and training stability.
+        self.time_scale_shift = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim * 2),
+        )
+
+    def forward(self, noisy_future, condition_features, adjacency_matrix, timestep_emb=None):
         """Run one denoiser block.
 
         Args:
             noisy_future: [B, T_out, N, D] current noisy state.
             condition_features: [B, T_in, N, D] encoded history.
             adjacency_matrix: [N, N] or [B, N, N].
+            timestep_emb: Optional [B, D] timestep embedding for per-block
+                re-injection (scale/shift modulation).
 
         Returns:
             [B, T_out, N, D] updated features.
         """
+        # Timestep re-injection: scale/shift modulates features per block.
+        # Prevents timestep signal dilution across deep denoiser stacks.
+        if timestep_emb is not None:
+            scale, shift = self.time_scale_shift(timestep_emb).chunk(2, dim=-1)
+            # [B, D] → [B, 1, 1, D] for broadcast over time and node dims
+            noisy_future = noisy_future * (1.0 + scale.unsqueeze(1).unsqueeze(2)) + shift.unsqueeze(1).unsqueeze(2)
+
         # 1. Temporal self-attention
         temporal_output = apply_temporal_attention(noisy_future, self.temporal_attention)
         noisy_future = self.norm_temporal(noisy_future + self.dropout(temporal_output))
@@ -214,18 +232,37 @@ class AttentionDenoiser(nn.Module):
         condition_pooled = condition_pooled.expand(-1, denoiser_input.size(1), -1, -1)
         denoiser_input = self.condition_fusion(torch.cat([denoiser_input, condition_pooled], dim=-1))
 
+        # U-Net style skip connections: first half blocks encode (save skips),
+        # second half decode (add mirrored skip). Preserves spatial details
+        # that would otherwise be lost in deep sequential denoising.
+        num_layers = len(self.blocks)
+        mid = num_layers // 2
+        skips = []
+
         current_adjacency = adjacency_matrix
-        for block in self.blocks:
+        for i, block in enumerate(self.blocks):
             if self.adaptive_graph_learner is not None:
                 current_adjacency = self.adaptive_graph_learner(
                     denoiser_input, timestep_embedding=timestep_features
                 )
             if self.use_gradient_checkpointing and self.training:
                 denoiser_input = checkpoint(
-                    block, denoiser_input, condition_features, current_adjacency, use_reentrant=False
+                    block, denoiser_input, condition_features, current_adjacency, timestep_features,
+                    use_reentrant=False
                 )
             else:
-                denoiser_input = block(denoiser_input, condition_features, current_adjacency)
+                denoiser_input = block(
+                    denoiser_input, condition_features, current_adjacency, timestep_features
+                )
+
+            # Encoder half: save skip; Decoder half: add mirrored skip
+            if i < mid:
+                skips.append(denoiser_input)
+            else:
+                skip_idx = num_layers - 1 - i
+                if skip_idx < len(skips):
+                    denoiser_input = denoiser_input + skips[skip_idx]
+
         denoiser_input = self.final_norm(denoiser_input)
         denoised_output = self.output_projection(denoiser_input)
         if return_last_adjacency:

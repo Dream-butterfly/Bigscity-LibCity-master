@@ -1,6 +1,22 @@
 [
   {
     "task": "traffic_state_pred",
+    "model": "new_diffusion_fuzzy_2",
+    "dataset": "PEMSD7(M)",
+    "status": "stopped",
+    "run_id": "20260513_140822__traffic_state_pred__new_diffusion_fuzzy_2__PEMSD7-M",
+    "started_at": 1778652500.7019596,
+    "ended_at": 1778652699.1428068,
+    "duration_sec": 198.440847158432,
+    "major_metrics": {},
+    "output_dir": "",
+    "error": "Training stopped by user.",
+    "record_id": "tr_1778652500_82a4305b86",
+    "created_at": 1778652500.6984537,
+    "updated_at": 1778652699.1438053
+  },
+  {
+    "task": "traffic_state_pred",
     "model": "new_diffusion_fuzzy",
     "dataset": "PEMSD4",
     "status": "finished",
