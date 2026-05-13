@@ -1,0 +1,43 @@
+2026-05-08 18:04:58,049 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260508_180458__traffic_state_pred__new_diffusion_fuzzy__METR_LA/logs
+2026-05-08 18:05:16,687 - INFO - You select `adamw` optimizer.
+2026-05-08 18:05:16,688 - INFO - You select `cosineannealinglr` lr_scheduler.
+2026-05-08 18:05:16,688 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-08 18:05:16,688 - INFO - Start training ...
+2026-05-08 18:05:16,688 - INFO - num_batches:161
+2026-05-08 18:05:16,889 - INFO - Enable physics warmup: steps=3000 start_ratio=0.200 mode=linear.
+2026-05-08 18:06:03,360 - INFO - epoch complete!
+2026-05-08 18:06:03,360 - INFO - evaluating now!
+2026-05-08 18:06:07,871 - INFO - Epoch [0/10] train_loss: 6.6555, val_loss: 5.5029, lr: 0.000976, 51.18s
+2026-05-08 18:06:07,931 - INFO - Saved model at 0
+2026-05-08 18:06:07,931 - INFO - Val loss decrease from inf to 5.5029, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260508_180458__traffic_state_pred__new_diffusion_fuzzy__METR_LA/model_cache/new_diffusion_fuzzy_METR_LA_epoch0.tar
+2026-05-08 18:06:54,407 - INFO - epoch complete!
+2026-05-08 18:06:54,408 - INFO - evaluating now!
+2026-05-08 18:06:58,814 - INFO - Epoch [1/10] train_loss: 5.4726, val_loss: 5.5287, lr: 0.000905, 50.88s
+2026-05-08 18:07:44,924 - INFO - epoch complete!
+2026-05-08 18:07:44,924 - INFO - evaluating now!
+2026-05-08 18:07:49,334 - INFO - Epoch [2/10] train_loss: 5.1978, val_loss: 5.6558, lr: 0.000796, 50.52s
+2026-05-08 18:08:35,532 - INFO - epoch complete!
+2026-05-08 18:08:35,532 - INFO - evaluating now!
+2026-05-08 18:08:39,955 - INFO - Epoch [3/10] train_loss: 5.6365, val_loss: 5.7262, lr: 0.000658, 50.62s
+2026-05-08 18:09:26,661 - INFO - epoch complete!
+2026-05-08 18:09:26,661 - INFO - evaluating now!
+2026-05-08 18:09:31,088 - INFO - Epoch [4/10] train_loss: 5.6359, val_loss: 5.6099, lr: 0.000505, 51.13s
+2026-05-08 18:10:18,032 - INFO - epoch complete!
+2026-05-08 18:10:18,032 - INFO - evaluating now!
+2026-05-08 18:10:22,451 - INFO - Epoch [5/10] train_loss: 5.6158, val_loss: 5.6048, lr: 0.000352, 51.36s
+2026-05-08 18:11:09,474 - INFO - epoch complete!
+2026-05-08 18:11:09,474 - INFO - evaluating now!
+2026-05-08 18:11:13,896 - INFO - Epoch [6/10] train_loss: 5.6117, val_loss: 5.5975, lr: 0.000214, 51.44s
+2026-05-08 18:12:01,358 - INFO - epoch complete!
+2026-05-08 18:12:01,358 - INFO - evaluating now!
+2026-05-08 18:12:06,075 - INFO - Epoch [7/10] train_loss: 5.5742, val_loss: 5.5446, lr: 0.000105, 52.18s
+2026-05-08 18:12:53,854 - INFO - epoch complete!
+2026-05-08 18:12:53,855 - INFO - evaluating now!
+2026-05-08 18:12:58,266 - INFO - Epoch [8/10] train_loss: 5.6251, val_loss: 5.4968, lr: 0.000034, 52.19s
+2026-05-08 18:12:58,327 - INFO - Saved model at 8
+2026-05-08 18:12:58,327 - INFO - Val loss decrease from 5.5029 to 5.4968, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260508_180458__traffic_state_pred__new_diffusion_fuzzy__METR_LA/model_cache/new_diffusion_fuzzy_METR_LA_epoch8.tar
+2026-05-08 18:13:45,599 - INFO - epoch complete!
+2026-05-08 18:13:45,600 - INFO - evaluating now!
+2026-05-08 18:13:50,041 - INFO - Epoch [9/10] train_loss: 5.5686, val_loss: 5.5369, lr: 0.000010, 51.71s
+2026-05-08 18:13:50,041 - INFO - Trained totally 10 epochs, average train time is 46.864s, average eval time is 4.459s
+2026-05-08 18:13:50,182 - INFO - Loaded model at 8
