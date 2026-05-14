@@ -9,12 +9,16 @@
 """
 
 import argparse
+import os
+import re
 import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+import torch
 
 from GNNTP.common import ConfigParser
 from GNNTP.data.artifact_io import load_run_meta
@@ -24,9 +28,34 @@ from GNNTP.utils import (
     get_executor,
     get_logger,
     get_model,
+    get_output_root,
     set_random_seed,
     str2bool,
 )
+
+
+def _detect_checkpoint_layers(checkpoint_path: str) -> int | None:
+    """从 checkpoint state_dict 中检测 denoiser 实际层数。
+
+    扫描 noise_predictor.blocks.N.* 键，返回 max(N)+1。
+    如果 checkpoint 不存在或没有匹配的 key，返回 None。
+    """
+    if not os.path.exists(checkpoint_path):
+        return None
+    try:
+        state_dict = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+        if "model_state_dict" in state_dict:
+            state_dict = state_dict["model_state_dict"]
+    except Exception:
+        return None
+
+    max_idx = -1
+    pattern = re.compile(r"noise_predictor\.blocks\.(\d+)\.")
+    for key in state_dict:
+        m = pattern.match(key)
+        if m:
+            max_idx = max(max_idx, int(m.group(1)))
+    return (max_idx + 1) if max_idx >= 0 else None
 
 
 def run_eval_checkpoint(
@@ -117,6 +146,22 @@ def run_eval_checkpoint(
 
     for msg in runtime.warnings:
         logger.warning("[FORCE_REUSE] %s", msg)
+
+    # ── 自动检测 checkpoint 中的 denoiser_layers，确保模型结构与权重匹配 ──
+    _ckpt_path = os.path.join(
+        get_output_root(), text_run_id, "model_cache",
+        f"{resolved_model}_{resolved_dataset}_epoch{int(epoch)}.tar",
+    )
+    _ckpt_layers = _detect_checkpoint_layers(_ckpt_path)
+    if _ckpt_layers is not None:
+        _config_layers = config.config.get("denoiser_layers", 4)
+        if _ckpt_layers != _config_layers:
+            logger.warning(
+                "Checkpoint denoiser_layers=%d ≠ config denoiser_layers=%d, "
+                "overriding config to match checkpoint.",
+                _ckpt_layers, _config_layers,
+            )
+            config.config["denoiser_layers"] = _ckpt_layers
 
     model = get_model(config, runtime.data_feature)
     executor = get_executor(config, model, runtime.data_feature)

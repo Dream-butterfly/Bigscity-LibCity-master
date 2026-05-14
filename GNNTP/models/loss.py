@@ -15,6 +15,7 @@ def masked_mae_loss(y_pred, y_true):
 
 
 def masked_mae_torch(preds, labels, null_val=np.nan, reduce=True, mask_val=None):
+    labels = labels.clone()
     labels[torch.abs(labels) < 1e-4] = 0
     if np.isnan(null_val):
         mask = ~torch.isnan(labels)
@@ -57,6 +58,7 @@ def quantile_loss(preds, labels, delta=0.25):
 
 
 def masked_mape_torch(preds, labels, null_val=np.nan, eps=1e-5, mask_val=None):
+    labels = labels.clone()
     labels[torch.abs(labels) < 1e-4] = 0
     if np.isnan(null_val) and eps != 0:
         loss = torch.abs((preds - labels) / (labels + eps))
@@ -77,6 +79,7 @@ def masked_mape_torch(preds, labels, null_val=np.nan, eps=1e-5, mask_val=None):
 
 
 def masked_mse_torch(preds, labels, null_val=np.nan, mask_val=None):
+    labels = labels.clone()
     labels[torch.abs(labels) < 1e-4] = 0
     if np.isnan(null_val):
         mask = ~torch.isnan(labels)
@@ -94,6 +97,7 @@ def masked_mse_torch(preds, labels, null_val=np.nan, mask_val=None):
 
 
 def masked_rmse_torch(preds, labels, null_val=np.nan, mask_val=None):
+    labels = labels.clone()
     labels[torch.abs(labels) < 1e-4] = 0
     return torch.sqrt(masked_mse_torch(preds=preds, labels=labels,
                                        null_val=null_val, mask_val=mask_val))

@@ -325,8 +325,8 @@ class TrafficStateExecutor(AbstractExecutor):
                 batch.to_tensor(self.device)
                 with self._autocast_context():
                     output = self._unwrap_model().predict(batch)
-                y_true = self._scaler.inverse_transform(batch['y'][..., :self.output_dim])
-                y_pred = self._scaler.inverse_transform(output[..., :self.output_dim])
+                y_true = self._scaler.inverse_transform(batch['y'][..., :self.output_dim])[..., :self.output_dim]
+                y_pred = self._scaler.inverse_transform(output[..., :self.output_dim])[..., :self.output_dim]
                 y_truths.append(y_true.cpu().numpy())
                 y_preds.append(y_pred.cpu().numpy())
             y_preds = np.concatenate(y_preds, axis=0)
