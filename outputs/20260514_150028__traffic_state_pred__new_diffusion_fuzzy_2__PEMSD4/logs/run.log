@@ -1,0 +1,102 @@
+2026-05-14 15:00:28,276 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260514_150028__traffic_state_pred__new_diffusion_fuzzy_2__PEMSD4/logs
+2026-05-14 15:01:04,680 - INFO - Enable AMP training (dtype=float16).
+2026-05-14 15:01:04,681 - INFO - You select `adamw` optimizer.
+2026-05-14 15:01:04,689 - INFO - You select `cosineannealinglr` lr_scheduler.
+2026-05-14 15:01:04,689 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-14 15:01:04,689 - INFO - Start training ...
+2026-05-14 15:01:04,689 - INFO - num_batches:80
+2026-05-14 15:01:05,570 - INFO - Enable physics warmup: steps=3000 start_ratio=0.200 mode=linear.
+2026-05-14 15:02:20,824 - INFO - epoch complete!
+2026-05-14 15:02:20,824 - INFO - evaluating now!
+2026-05-14 15:02:28,238 - INFO - Epoch [0/50] train_loss: 4.4717, val_loss: 1.3435, lr: 0.000976, 83.55s
+2026-05-14 15:02:28,499 - INFO - Saved model at 0
+2026-05-14 15:02:28,500 - INFO - Val loss decrease from inf to 1.3435, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260514_150028__traffic_state_pred__new_diffusion_fuzzy_2__PEMSD4/model_cache/new_diffusion_fuzzy_2_PEMSD4_epoch0.tar
+2026-05-14 15:03:36,834 - INFO - epoch complete!
+2026-05-14 15:03:36,837 - INFO - evaluating now!
+2026-05-14 15:03:42,909 - INFO - Epoch [1/50] train_loss: 1.2502, val_loss: 1.3405, lr: 0.000905, 74.41s
+2026-05-14 15:03:43,125 - INFO - Saved model at 1
+2026-05-14 15:03:43,126 - INFO - Val loss decrease from 1.3435 to 1.3405, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260514_150028__traffic_state_pred__new_diffusion_fuzzy_2__PEMSD4/model_cache/new_diffusion_fuzzy_2_PEMSD4_epoch1.tar
+2026-05-14 15:04:55,810 - INFO - epoch complete!
+2026-05-14 15:04:55,811 - INFO - evaluating now!
+2026-05-14 15:05:02,948 - INFO - Epoch [2/50] train_loss: 1.0792, val_loss: 0.9045, lr: 0.000796, 79.82s
+2026-05-14 15:05:03,267 - INFO - Saved model at 2
+2026-05-14 15:05:03,268 - INFO - Val loss decrease from 1.3405 to 0.9045, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260514_150028__traffic_state_pred__new_diffusion_fuzzy_2__PEMSD4/model_cache/new_diffusion_fuzzy_2_PEMSD4_epoch2.tar
+2026-05-14 15:06:09,096 - INFO - epoch complete!
+2026-05-14 15:06:09,097 - INFO - evaluating now!
+2026-05-14 15:06:15,556 - INFO - Epoch [3/50] train_loss: 0.9247, val_loss: 0.8884, lr: 0.000658, 72.29s
+2026-05-14 15:06:15,888 - INFO - Saved model at 3
+2026-05-14 15:06:15,889 - INFO - Val loss decrease from 0.9045 to 0.8884, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260514_150028__traffic_state_pred__new_diffusion_fuzzy_2__PEMSD4/model_cache/new_diffusion_fuzzy_2_PEMSD4_epoch3.tar
+2026-05-14 15:07:15,188 - INFO - epoch complete!
+2026-05-14 15:07:15,188 - INFO - evaluating now!
+2026-05-14 15:07:21,360 - INFO - Epoch [4/50] train_loss: 0.8111, val_loss: 0.8464, lr: 0.000505, 65.47s
+2026-05-14 15:07:21,590 - INFO - Saved model at 4
+2026-05-14 15:07:21,591 - INFO - Val loss decrease from 0.8884 to 0.8464, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260514_150028__traffic_state_pred__new_diffusion_fuzzy_2__PEMSD4/model_cache/new_diffusion_fuzzy_2_PEMSD4_epoch4.tar
+2026-05-14 15:08:30,995 - INFO - epoch complete!
+2026-05-14 15:08:30,996 - INFO - evaluating now!
+2026-05-14 15:08:36,963 - INFO - Epoch [5/50] train_loss: 0.7949, val_loss: 0.7534, lr: 0.000352, 75.37s
+2026-05-14 15:08:37,122 - INFO - Saved model at 5
+2026-05-14 15:08:37,123 - INFO - Val loss decrease from 0.8464 to 0.7534, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260514_150028__traffic_state_pred__new_diffusion_fuzzy_2__PEMSD4/model_cache/new_diffusion_fuzzy_2_PEMSD4_epoch5.tar
+2026-05-14 15:09:45,178 - INFO - epoch complete!
+2026-05-14 15:09:45,179 - INFO - evaluating now!
+2026-05-14 15:09:49,640 - INFO - Epoch [6/50] train_loss: 0.7870, val_loss: 0.7457, lr: 0.000214, 72.52s
+2026-05-14 15:09:49,889 - INFO - Saved model at 6
+2026-05-14 15:09:49,891 - INFO - Val loss decrease from 0.7534 to 0.7457, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260514_150028__traffic_state_pred__new_diffusion_fuzzy_2__PEMSD4/model_cache/new_diffusion_fuzzy_2_PEMSD4_epoch6.tar
+2026-05-14 15:10:53,836 - INFO - epoch complete!
+2026-05-14 15:10:53,836 - INFO - evaluating now!
+2026-05-14 15:10:59,887 - INFO - Epoch [7/50] train_loss: 0.7869, val_loss: 0.7361, lr: 0.000105, 70.00s
+2026-05-14 15:11:00,147 - INFO - Saved model at 7
+2026-05-14 15:11:00,148 - INFO - Val loss decrease from 0.7457 to 0.7361, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260514_150028__traffic_state_pred__new_diffusion_fuzzy_2__PEMSD4/model_cache/new_diffusion_fuzzy_2_PEMSD4_epoch7.tar
+2026-05-14 15:12:01,455 - INFO - epoch complete!
+2026-05-14 15:12:01,455 - INFO - evaluating now!
+2026-05-14 15:12:06,261 - INFO - Epoch [8/50] train_loss: 0.7169, val_loss: 0.7378, lr: 0.000034, 66.11s
+2026-05-14 15:13:08,763 - INFO - epoch complete!
+2026-05-14 15:13:08,763 - INFO - evaluating now!
+2026-05-14 15:13:14,072 - INFO - Epoch [9/50] train_loss: 0.7003, val_loss: 0.7263, lr: 0.000010, 67.81s
+2026-05-14 15:13:14,333 - INFO - Saved model at 9
+2026-05-14 15:13:14,333 - INFO - Val loss decrease from 0.7361 to 0.7263, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260514_150028__traffic_state_pred__new_diffusion_fuzzy_2__PEMSD4/model_cache/new_diffusion_fuzzy_2_PEMSD4_epoch9.tar
+2026-05-14 15:14:11,182 - INFO - epoch complete!
+2026-05-14 15:14:11,182 - INFO - evaluating now!
+2026-05-14 15:14:16,862 - INFO - Epoch [10/50] train_loss: 0.7637, val_loss: 0.7093, lr: 0.000034, 62.53s
+2026-05-14 15:14:17,174 - INFO - Saved model at 10
+2026-05-14 15:14:17,178 - INFO - Val loss decrease from 0.7263 to 0.7093, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260514_150028__traffic_state_pred__new_diffusion_fuzzy_2__PEMSD4/model_cache/new_diffusion_fuzzy_2_PEMSD4_epoch10.tar
+2026-05-14 15:15:26,749 - INFO - epoch complete!
+2026-05-14 15:15:26,751 - INFO - evaluating now!
+2026-05-14 15:15:32,761 - INFO - Epoch [11/50] train_loss: 0.7486, val_loss: 0.6926, lr: 0.000105, 75.58s
+2026-05-14 15:15:33,003 - INFO - Saved model at 11
+2026-05-14 15:15:33,004 - INFO - Val loss decrease from 0.7093 to 0.6926, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260514_150028__traffic_state_pred__new_diffusion_fuzzy_2__PEMSD4/model_cache/new_diffusion_fuzzy_2_PEMSD4_epoch11.tar
+2026-05-14 15:16:44,069 - INFO - epoch complete!
+2026-05-14 15:16:44,070 - INFO - evaluating now!
+2026-05-14 15:16:49,978 - INFO - Epoch [12/50] train_loss: 0.7521, val_loss: 0.7424, lr: 0.000214, 76.97s
+2026-05-14 15:18:03,165 - INFO - epoch complete!
+2026-05-14 15:18:03,165 - INFO - evaluating now!
+2026-05-14 15:18:09,340 - INFO - Epoch [13/50] train_loss: 0.7339, val_loss: 0.7186, lr: 0.000352, 79.36s
+2026-05-14 15:19:06,181 - INFO - epoch complete!
+2026-05-14 15:19:06,182 - INFO - evaluating now!
+2026-05-14 15:19:11,838 - INFO - Epoch [14/50] train_loss: 0.7565, val_loss: 0.7624, lr: 0.000505, 62.50s
+2026-05-14 15:20:10,466 - INFO - epoch complete!
+2026-05-14 15:20:10,473 - INFO - evaluating now!
+2026-05-14 15:20:13,952 - INFO - Epoch [15/50] train_loss: 0.7621, val_loss: 0.7800, lr: 0.000658, 62.11s
+2026-05-14 15:21:25,294 - INFO - epoch complete!
+2026-05-14 15:21:25,298 - INFO - evaluating now!
+2026-05-14 15:21:31,132 - INFO - Epoch [16/50] train_loss: 0.7998, val_loss: 0.7601, lr: 0.000796, 77.15s
+2026-05-14 15:22:42,222 - INFO - epoch complete!
+2026-05-14 15:22:42,222 - INFO - evaluating now!
+2026-05-14 15:22:48,189 - INFO - Epoch [17/50] train_loss: 0.7760, val_loss: 0.8381, lr: 0.000905, 77.05s
+2026-05-14 15:23:57,842 - INFO - epoch complete!
+2026-05-14 15:23:57,843 - INFO - evaluating now!
+2026-05-14 15:24:03,890 - INFO - Epoch [18/50] train_loss: 0.7826, val_loss: 0.7776, lr: 0.000976, 75.70s
+2026-05-14 15:25:12,867 - INFO - epoch complete!
+2026-05-14 15:25:12,868 - INFO - evaluating now!
+2026-05-14 15:25:17,193 - INFO - Epoch [19/50] train_loss: 0.7980, val_loss: 0.7498, lr: 0.001000, 73.30s
+2026-05-14 15:26:31,237 - INFO - epoch complete!
+2026-05-14 15:26:31,237 - INFO - evaluating now!
+2026-05-14 15:26:37,447 - INFO - Epoch [20/50] train_loss: 0.7889, val_loss: 0.8273, lr: 0.000976, 80.25s
+2026-05-14 15:27:51,683 - INFO - epoch complete!
+2026-05-14 15:27:51,684 - INFO - evaluating now!
+2026-05-14 15:27:56,136 - INFO - Epoch [21/50] train_loss: 0.7591, val_loss: 0.7638, lr: 0.000905, 78.69s
+2026-05-14 15:28:56,603 - INFO - epoch complete!
+2026-05-14 15:28:56,604 - INFO - evaluating now!
+2026-05-14 15:29:00,761 - INFO - Epoch [22/50] train_loss: 0.7082, val_loss: 0.7507, lr: 0.000796, 64.62s
+2026-05-14 15:30:11,743 - INFO - epoch complete!
+2026-05-14 15:30:11,744 - INFO - evaluating now!
+2026-05-14 15:30:17,545 - INFO - Epoch [23/50] train_loss: 0.7197, val_loss: 0.7396, lr: 0.000658, 76.78s

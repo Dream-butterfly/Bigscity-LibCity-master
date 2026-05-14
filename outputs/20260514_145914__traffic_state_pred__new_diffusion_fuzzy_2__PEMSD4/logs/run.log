@@ -1,0 +1,8 @@
+2026-05-14 14:59:14,328 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260514_145914__traffic_state_pred__new_diffusion_fuzzy_2__PEMSD4/logs
+2026-05-14 14:59:49,884 - INFO - Enable AMP training (dtype=float16).
+2026-05-14 14:59:49,888 - INFO - You select `adamw` optimizer.
+2026-05-14 14:59:49,890 - INFO - You select `cosineannealinglr` lr_scheduler.
+2026-05-14 14:59:49,894 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-14 14:59:49,894 - INFO - Start training ...
+2026-05-14 14:59:49,895 - INFO - num_batches:40
+2026-05-14 14:59:51,118 - INFO - Enable physics warmup: steps=3000 start_ratio=0.200 mode=linear.
