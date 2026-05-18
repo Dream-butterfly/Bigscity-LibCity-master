@@ -39,7 +39,7 @@ class TrafficStateDataset(
         self.pad_with_last_sample = self.config.get("pad_with_last_sample", True)
         self.train_rate = self.config.get("train_rate", 0.7)
         self.eval_rate = self.config.get("eval_rate", 0.1)
-        self.scaler_type = self.config.get("scaler", "none")
+        self.scaler_type = self.config.get("scaler", "standard")
         self.ext_scaler_type = self.config.get("ext_scaler", "none")
         self.load_external = self.config.get("load_external", False)
         self.normal_external = self.config.get("normal_external", False)

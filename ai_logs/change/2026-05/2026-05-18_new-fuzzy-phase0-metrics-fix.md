@@ -4,6 +4,9 @@
 **类型**: 修复 + 清理
 **模型**: new_fuzzy
 **影响文件**:
+- `GNNTP/data/dataset/traffic_state_dataset.py` (🔴, L 批准)
+- `GNNTP/data/dataset/TrafficStatePointDataset.json` (🟡)
+- `GNNTP/data/dataset/traffic_flow_prediction/PDFormerDataset.json` (🟡)
 - `GNNTP/models/loss.py` (🟡)
 - `GNNTP/models/new/new_fuzzy/model.py` (🟢)
 - `GNNTP/models/new/new_fuzzy/config.json` (🟢)
@@ -14,6 +17,10 @@
 
 ## 问题
 
+0. **Scaler 默认值为 "none"**：基类 `TrafficStateDataset` 和 dataset JSON 配置
+   均将 scaler 默认为 "none"（不归一化）。导致多特征数据（flow/occupancy/speed）
+   量级差异巨大，L1 loss 被 flow 完全主导，occupancy R²=-114，speed R²=0.46。
+   诊断脚本证实这也是之前 R²=0.98 为统计假象的根本原因。
 1. **MAPE 爆炸**：Z-score 标准化后近零值导致 MAPE 达 6000-10000%，
    原 `masked_mape_torch` unmasked 路径直接对 `(label + 1e-5)` 取除法
 2. **steps_per_epoch 硬编码**：`model.py:170` 写死 160，DDP 下每个 rank
@@ -22,6 +29,14 @@
    `decoder.py` 和 `utils/__init__.py` 残留扩散模型注释
 
 ## 修改
+
+### 0. Scaler 默认值统一为 "standard"
+
+- `traffic_state_dataset.py:42`: `config.get("scaler", "none")` → `"standard"`
+- `TrafficStatePointDataset.json:8`: `"scaler": "none"` → `"standard"`
+- `PDFormerDataset.json:8`: `"scaler": "none"` → `"standard"`
+
+影响：所有新创建的数据工件默认使用 Z-score 归一化（除非显式覆盖）。
 
 ### 1. `loss.py` — masked_mape_torch unmasked 路径加近零过滤
 
