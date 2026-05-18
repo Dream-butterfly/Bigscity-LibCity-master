@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -122,6 +123,36 @@ def main():
     if args.num_sampling_steps_override > 0:
         config["num_sampling_steps"] = args.num_sampling_steps_override
 
+    # ── 提前探测 checkpoint 结构，覆盖配置以匹配 ─────────────
+    _ckpt_path = ""
+    if args.run_id and args.epoch > 0:
+        _ckpt_path = os.path.join(
+            OUTPUT_ROOT, args.run_id, "model_cache",
+            f"{args.model}_{args.dataset}_epoch{args.epoch}.tar",
+        )
+        if os.path.exists(_ckpt_path):
+            _ckpt = torch.load(_ckpt_path, map_location="cpu", weights_only=True)
+            _sd = _ckpt.get("model_state_dict", _ckpt)
+            # 检测 denoiser_layers
+            _max_block = -1
+            for k in _sd:
+                m = re.match(r"noise_predictor\.blocks\.(\d+)\.", k)
+                if m:
+                    _max_block = max(_max_block, int(m.group(1)))
+            if _max_block >= 0:
+                _ckpt_layers = _max_block + 1
+                _cfg_layers = config.config.get("denoiser_layers", 4)
+                if _ckpt_layers != _cfg_layers:
+                    print(f"⚠️  Checkpoint denoiser_layers={_ckpt_layers} ≠ config={_cfg_layers}, overriding config")
+                    config.config["denoiser_layers"] = _ckpt_layers
+            # 检测 diffusion_steps
+            _ckpt_steps = None
+            if "diffusion_scheduler.betas" in _sd:
+                _ckpt_steps = _sd["diffusion_scheduler.betas"].shape[0]
+            if _ckpt_steps is not None and _ckpt_steps != config.config.get("diffusion_steps", 100):
+                print(f"⚠️  Checkpoint diffusion_steps={_ckpt_steps} ≠ config, overriding config")
+                config.config["diffusion_steps"] = int(_ckpt_steps)
+
     data_feature = runtime.data_feature
     scaler = data_feature.get("scaler")
     adjacency = data_feature.get("adj_mx")
@@ -147,14 +178,10 @@ def main():
 
     # ── 加载训练好的 checkpoint ────────────────────────────
     if args.run_id and args.epoch > 0:
-        ckpt_path = os.path.join(
-            OUTPUT_ROOT, args.run_id, "model_cache",
-            f"{args.model}_{args.dataset}_epoch{args.epoch}.tar",
-        )
-        if not os.path.exists(ckpt_path):
-            print(f"⚠️  Checkpoint not found: {ckpt_path}")
+        if not os.path.exists(_ckpt_path):
+            print(f"⚠️  Checkpoint not found: {_ckpt_path}")
         else:
-            checkpoint = torch.load(ckpt_path, map_location=device, weights_only=False)
+            checkpoint = torch.load(_ckpt_path, map_location=device, weights_only=False)
             model.load_state_dict(checkpoint["model_state_dict"])
             print(f"\n✓ Loaded checkpoint: epoch={args.epoch}  "
                   f"val_loss={checkpoint.get('best_val_loss', 'N/A')}")
