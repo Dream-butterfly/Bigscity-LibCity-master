@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -27,6 +28,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from GNNTP.common import ConfigParser
 from GNNTP.data import build_dataset_runtime, build_artifact_runtime
 from GNNTP.models.registry import get_model_class
+from GNNTP.utils.paths import OUTPUT_ROOT
 
 
 def _seed(seed=42):
@@ -87,13 +89,15 @@ def main():
     parser.add_argument("--model", default="new_diffusion_fuzzy_2")
     parser.add_argument("--dataset", default="PEMSD4")
     parser.add_argument("--dataset_class", default="TrafficStateDataset")
-    parser.add_argument("--task", default="traffic_speed_prediction")
+    parser.add_argument("--task", default="traffic_state_pred")
     parser.add_argument("--artifact_id", default="", help="指定则用数据工件，否则实时构建 dataset")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--disable_time_scale_shift", action="store_true",
                         help="临时禁掉 DenoiserBlock 的 time_scale_shift 调制用于对比")
     parser.add_argument("--num_sampling_steps_override", type=int, default=0,
                         help="覆盖 num_sampling_steps (0=不改)")
+    parser.add_argument("--run_id", default="", help="加载训练好的 checkpoint（需配合 --epoch）")
+    parser.add_argument("--epoch", type=int, default=0, help="要加载的 checkpoint epoch")
     args = parser.parse_args()
 
     _seed()
@@ -140,6 +144,22 @@ def main():
     ModelClass = get_model_class(args.task, args.model)
     model = ModelClass(config, data_feature).to(device)
     model.eval()
+
+    # ── 加载训练好的 checkpoint ────────────────────────────
+    if args.run_id and args.epoch > 0:
+        ckpt_path = os.path.join(
+            OUTPUT_ROOT, args.run_id, "model_cache",
+            f"{args.model}_{args.dataset}_epoch{args.epoch}.tar",
+        )
+        if not os.path.exists(ckpt_path):
+            print(f"⚠️  Checkpoint not found: {ckpt_path}")
+        else:
+            checkpoint = torch.load(ckpt_path, map_location=device, weights_only=False)
+            model.load_state_dict(checkpoint["model_state_dict"])
+            print(f"\n✓ Loaded checkpoint: epoch={args.epoch}  "
+                  f"val_loss={checkpoint.get('best_val_loss', 'N/A')}")
+    elif not args.run_id:
+        print(f"\n⚠️  未指定 --run_id，使用随机初始化模型（仅用于检查管线结构）")
 
     # ── 临时禁掉 time_scale_shift ──────────────────────────
     if args.disable_time_scale_shift:
