@@ -182,7 +182,14 @@ def main():
             print(f"⚠️  Checkpoint not found: {_ckpt_path}")
         else:
             checkpoint = torch.load(_ckpt_path, map_location=device, weights_only=False)
-            model.load_state_dict(checkpoint["model_state_dict"])
+            # strict=False: tolerate checkpoint/model architecture drift
+            missing, unexpected = model.load_state_dict(
+                checkpoint["model_state_dict"], strict=False
+            )
+            if missing:
+                print(f"  ⚠️  Missing keys (using fresh init): {len(missing)} keys, e.g. {missing[0]}")
+            if unexpected:
+                print(f"  ⚠️  Unexpected keys (ignored): {len(unexpected)} keys, e.g. {unexpected[0]}")
             print(f"\n✓ Loaded checkpoint: epoch={args.epoch}  "
                   f"val_loss={checkpoint.get('best_val_loss', 'N/A')}")
     elif not args.run_id:
