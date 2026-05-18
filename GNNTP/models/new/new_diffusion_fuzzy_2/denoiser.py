@@ -171,10 +171,9 @@ class AttentionDenoiser(nn.Module):
             raise ValueError("input_window must be >= 1 for condition temporal weighting.")
         self.condition_temporal_weight = nn.Parameter(torch.zeros(input_window))
         self.condition_fusion = nn.Linear(hidden_dim * 2, hidden_dim)
-        # Blend: forces denoiser to rely on condition rather than bypassing
-        # it via unconditional denoising (a common failure mode).
-        # Initialised to sigmoid(2.0) ≈ 0.88 to bias strongly towards condition.
-        self.condition_blend = nn.Parameter(torch.tensor(2.0))
+        # Blend: gates between unconditional (noisy-only) and conditional paths.
+        # Start at 0 (σ(0)=0.5 → equal weight), model learns optimal balance.
+        self.condition_blend = nn.Parameter(torch.tensor(0.0))
         self.blocks = nn.ModuleList(
             [
                 DenoiserBlock(
@@ -236,8 +235,8 @@ class AttentionDenoiser(nn.Module):
         condition_pooled = condition_pooled.expand(-1, denoiser_input.size(1), -1, -1)
         noisy_only = denoiser_input  # preserve for blend (prevents bypassing condition)
         fused = self.condition_fusion(torch.cat([denoiser_input, condition_pooled], dim=-1))
-        # Blend: 0.5 + 0.5·σ → range [0.5, 1.0], ensures condition always contributes
-        alpha = 0.5 + 0.5 * torch.sigmoid(self.condition_blend)
+        # Blend: σ(blend) ∈ (0,1). Starts at 0.5 (equal weight), model learns optimal balance.
+        alpha = torch.sigmoid(self.condition_blend)
         denoiser_input = (1.0 - alpha) * noisy_only + alpha * fused
 
         # U-Net style skip connections: first half blocks encode (save skips),
