@@ -195,7 +195,7 @@ def main():
     # Reconstruct scaler
     scaler_payload = meta.get("scaler")
     scaler = deserialize_scaler(scaler_payload) if scaler_payload else None
-    scaler_name = scaler_payload.get("type", "none") if isinstance(scaler_payload, dict) else "none"
+    scaler_name = scaler_payload.get("kind", scaler_payload.get("type", "none")) if isinstance(scaler_payload, dict) else "none"
     print(f"Scaler:  {scaler_name}")
 
     # --- Extract arrays ---
