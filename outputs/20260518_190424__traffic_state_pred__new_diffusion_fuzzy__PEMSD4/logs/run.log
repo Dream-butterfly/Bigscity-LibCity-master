@@ -1,0 +1,27 @@
+2026-05-18 19:04:24,428 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_190424__traffic_state_pred__new_diffusion_fuzzy__PEMSD4/logs
+2026-05-18 19:04:24,429 - INFO - Overfitting test: dataset=PEMSD4 batches=8 epochs=200 lr=0.001 device=cuda:0
+2026-05-18 19:04:24,469 - INFO - Loaded file PEMSD4.geo, num_nodes=307
+2026-05-18 19:04:24,470 - INFO - set_weight_link_or_dist: link
+2026-05-18 19:04:24,470 - INFO - init_weight_inf_or_zero: zero
+2026-05-18 19:04:24,472 - INFO - Loaded file PEMSD4.rel, shape=(307, 307)
+2026-05-18 19:04:24,472 - INFO - Loading /home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/dataset_cache/point_based_PEMSD4_12_12_0.7_0.1_standard_32_False_True_True_True.npz
+2026-05-18 19:04:35,739 - INFO - train	x: (11878, 12, 307, 3), y: (11878, 12, 307, 3)
+2026-05-18 19:04:35,739 - INFO - eval	x: (1697, 12, 307, 3), y: (1697, 12, 307, 3)
+2026-05-18 19:04:35,739 - INFO - test	x: (3394, 12, 307, 3), y: (3394, 12, 307, 3)
+2026-05-18 19:04:38,460 - INFO - StandardScaler mean: 90.78135542073315, std: 126.14790771308698
+2026-05-18 19:04:38,460 - INFO - NoneScaler
+2026-05-18 19:04:41,055 - INFO - Full training set: 11908 samples
+2026-05-18 19:04:41,057 - INFO - Training on 256 samples, 8 batches/epoch
+2026-05-18 19:04:41,640 - INFO - Model params: 1713081
+2026-05-18 19:04:42,991 - INFO - Enable physics warmup: steps=3000 start_ratio=0.200 mode=linear.
+2026-05-18 19:04:49,102 - INFO - epoch    1 | loss=10.279422  best=10.279422  Δ=0.0%  |g|=38.25  step=8
+2026-05-18 19:06:38,273 - INFO - epoch   20 | loss=5.446523  best=5.337922  Δ=47.0%  |g|=10.93  step=160
+2026-05-18 19:08:34,014 - INFO - epoch   40 | loss=0.911585  best=0.902760  Δ=91.1%  |g|=7.09  step=320
+2026-05-18 19:10:28,198 - INFO - epoch   60 | loss=0.823330  best=0.740427  Δ=92.0%  |g|=5.74  step=480
+2026-05-18 19:12:24,047 - INFO - epoch   80 | loss=0.842258  best=0.619825  Δ=91.8%  |g|=2.15  step=640
+2026-05-18 19:14:18,561 - INFO - epoch  100 | loss=0.677550  best=0.619825  Δ=93.4%  |g|=1.42  step=800
+2026-05-18 19:16:14,281 - INFO - epoch  120 | loss=0.709191  best=0.587249  Δ=93.1%  |g|=2.63  step=960
+2026-05-18 19:18:09,736 - INFO - epoch  140 | loss=0.787031  best=0.557231  Δ=92.3%  |g|=3.97  step=1120
+2026-05-18 19:20:04,495 - INFO - epoch  160 | loss=0.526760  best=0.498244  Δ=94.9%  |g|=1.80  step=1280
+2026-05-18 19:21:59,959 - INFO - epoch  180 | loss=0.690938  best=0.492688  Δ=93.3%  |g|=2.15  step=1440
+2026-05-18 19:23:55,905 - INFO - epoch  200 | loss=0.622289  best=0.492688  Δ=93.9%  |g|=0.79  step=1600
