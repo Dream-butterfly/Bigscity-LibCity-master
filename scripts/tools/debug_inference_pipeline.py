@@ -231,6 +231,26 @@ def main():
     print(f"  condition 饱和率 (|x|>2): {cond_saturated:.4f}  "
           f"{'⚠️  接近饱和' if cond_saturated > 0.5 else '✓'}")
 
+    # ── 编码器细粒度诊断 ──────────────────────────────────
+    # 节点间方差 vs 时间步间方差
+    _c = condition.detach()  # [B, Tin, N, D]
+    # 每个节点的条件有多大差异？
+    node_std = _c.std(dim=(0, 1, 3))  # [N] → 每个节点的 std
+    # 每个时间步的条件有多大差异？
+    time_std = _c.std(dim=(0, 2, 3))  # [Tin] → 每个时间步的 std
+    # 不同样本间差异
+    batch_std = _c.std(dim=(1, 2, 3))  # [B] → 每个样本的 std
+    print(f"  ── Condition 细粒度方差 ──")
+    print(f"  node-wise  std:  mean={node_std.mean():.4f}  min={node_std.min():.4f}  max={node_std.max():.4f}")
+    print(f"  time-wise  std:  mean={time_std.mean():.4f}  min={time_std.min():.4f}  max={time_std.max():.4f}")
+    print(f"  batch-wise std:  mean={batch_std.mean():.4f}  min={batch_std.min():.4f}  max={batch_std.max():.4f}")
+    # 编码器最后 LayerNorm 的权重（检查是否零化）
+    encoder = model.condition_encoder
+    if hasattr(encoder, 'final_norm'):
+        ln = encoder.final_norm
+        print(f"  encoder.final_norm weight: mean={ln.weight.data.mean():.4f}  std={ln.weight.data.std():.4f}")
+        print(f"  encoder.final_norm bias:   mean={ln.bias.data.mean():.4f}  std={ln.bias.data.std():.4f}")
+
     # ═══════════════════════════════════════════════════════════
     # 3b. 去噪器单步输出（t=最大值）
     # ═══════════════════════════════════════════════════════════
