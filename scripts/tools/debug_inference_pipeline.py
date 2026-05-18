@@ -46,8 +46,9 @@ def _summarise(tensor, name, channel=0):
         t = t[..., channel]
     elif t.dim() == 3:  # [B, N, C]
         t = t[..., channel]
+    shape_str = str(list(tensor.shape))
     print(
-        f"  {name:30s}  shape={list(tensor.shape):22s}  "
+        f"  {name:30s}  shape={shape_str:22s}  "
         f"min={t.min().item():.4f}  max={t.max().item():.4f}  "
         f"mean={t.mean().item():.4f}  std={t.std().item():.4f}  "
         f"abs_mean={t.abs().mean().item():.4f}"
