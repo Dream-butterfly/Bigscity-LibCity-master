@@ -4,6 +4,46 @@
     "model": "new_fuzzy",
     "dataset": "PEMSD4",
     "status": "finished",
+    "run_id": "20260518_225740__traffic_state_pred__new_fuzzy__PEMSD4",
+    "started_at": 1779116255.7655528,
+    "ended_at": 1779116402.9537914,
+    "duration_sec": 147.18823862075806,
+    "major_metrics": {
+      "MAE": 15.487226406733194,
+      "RMSE": 34.61313692728678,
+      "MAPE": 38.218143145243324
+    },
+    "output_dir": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_225740__traffic_state_pred__new_fuzzy__PEMSD4",
+    "error": null,
+    "record_id": "tr_1779116255_a39d6f82c0",
+    "created_at": 1779116255.7613025,
+    "updated_at": 1779116402.9543865
+  },
+  {
+    "task": "traffic_state_pred",
+    "model": "new_fuzzy",
+    "dataset": "PEMSD4",
+    "status": "finished",
+    "run_id": "20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4",
+    "started_at": 1779113374.4323351,
+    "ended_at": 1779114226.148021,
+    "duration_sec": 851.7156858444214,
+    "major_metrics": {
+      "MAE": 8.106221675872803,
+      "RMSE": 19.97712739308675,
+      "MAPE": 6805.4770100911455
+    },
+    "output_dir": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4",
+    "error": null,
+    "record_id": "tr_1779113374_48f50bb60d",
+    "created_at": 1779113374.4263647,
+    "updated_at": 1779114226.1486905
+  },
+  {
+    "task": "traffic_state_pred",
+    "model": "new_fuzzy",
+    "dataset": "PEMSD4",
+    "status": "finished",
     "run_id": "20260518_215722__traffic_state_pred__new_fuzzy__PEMSD4",
     "started_at": 1779112637.1915288,
     "ended_at": 1779112860.3351583,

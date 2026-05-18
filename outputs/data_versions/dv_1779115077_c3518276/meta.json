@@ -1,0 +1,44 @@
+{
+  "status": "ready",
+  "task": "traffic_state_pred",
+  "model": "new_fuzzy",
+  "dataset": "METR_LA",
+  "seed": 42,
+  "train_rate": 0.6,
+  "eval_rate": 0.2,
+  "test_rate": 0.2,
+  "cli_options": {
+    "seed": "42",
+    "train_rate": "0.6",
+    "eval_rate": "0.2",
+    "batch_size": "64",
+    "dataset_class": "TrafficStatePointDataset"
+  },
+  "config_payload": {},
+  "created_at": 1779115077.0379758,
+  "version_id": "dv_1779115077_c3518276",
+  "updated_at": 1779115215.6750631,
+  "error": null,
+  "script_meta": {
+    "task": "traffic_state_pred",
+    "model": "new_fuzzy",
+    "dataset": "METR_LA",
+    "exp_id": "20260518_223759__traffic_state_pred__new_fuzzy__METR_LA",
+    "artifact_id": "da_20260518_223832__METR_LA__TrafficStatePointDataset__86d3f448",
+    "artifact_dir": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/data_artifacts/da_20260518_223832__METR_LA__TrafficStatePointDataset__86d3f448",
+    "data_signature": "86d3f44883fac6390fcb9ce091a2918d1d1d4c0d",
+    "train_batches": 322,
+    "valid_batches": 108,
+    "test_batches": 108,
+    "cache_file_name": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/dataset_cache/point_based_METR_LA_12_12_0.6_0.2_standard_64_False_True_True_False.npz",
+    "data_feature_keys": [
+      "adj_mx",
+      "ext_dim",
+      "feature_dim",
+      "num_batches",
+      "num_nodes",
+      "output_dim",
+      "scaler"
+    ]
+  }
+}

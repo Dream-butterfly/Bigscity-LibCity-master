@@ -1,0 +1,14 @@
+2026-05-18 22:37:59,912 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_223759__traffic_state_pred__new_fuzzy__METR_LA/logs
+2026-05-18 22:37:59,913 - INFO - Begin data artifact pipeline, task=traffic_state_pred, model_name=new_fuzzy, dataset_name=METR_LA, exp_id=20260518_223759__traffic_state_pred__new_fuzzy__METR_LA
+2026-05-18 22:37:59,929 - INFO - Loaded file METR_LA.geo, num_nodes=207
+2026-05-18 22:37:59,979 - INFO - set_weight_link_or_dist: dist
+2026-05-18 22:37:59,979 - INFO - init_weight_inf_or_zero: inf
+2026-05-18 22:37:59,997 - INFO - Loaded file METR_LA.rel, shape=(207, 207)
+2026-05-18 22:37:59,997 - INFO - Start Calculate the weight by Gauss kernel!
+2026-05-18 22:37:59,998 - INFO - Loading /home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/dataset_cache/point_based_METR_LA_12_12_0.6_0.2_standard_64_False_True_True_False.npz
+2026-05-18 22:38:20,495 - INFO - train	x: (20549, 12, 207, 9), y: (20549, 12, 207, 9)
+2026-05-18 22:38:20,495 - INFO - eval	x: (6850, 12, 207, 9), y: (6850, 12, 207, 9)
+2026-05-18 22:38:20,495 - INFO - test	x: (6850, 12, 207, 9), y: (6850, 12, 207, 9)
+2026-05-18 22:38:29,574 - INFO - StandardScaler mean: 54.10160182214715, std: 19.841298117393098
+2026-05-18 22:38:29,574 - INFO - NoneScaler
+2026-05-18 22:40:14,851 - INFO - Data artifact ready: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/data_artifacts/da_20260518_223832__METR_LA__TrafficStatePointDataset__86d3f448

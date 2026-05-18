@@ -1,0 +1,479 @@
+2026-05-18 22:09:40,063 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/logs
+2026-05-18 22:09:40,063 - INFO - Begin artifact training pipeline, task=traffic_state_pred, model_name=new_fuzzy, dataset_name=PEMSD4, exp_id=20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4
+2026-05-18 22:09:40,064 - INFO - {'task': 'traffic_state_pred', 'model': 'new_fuzzy', 'dataset': 'PEMSD4', 'saved_model': True, 'train': True, 'seed': 42, 'train_rate': 0.6, 'eval_rate': 0.2, 'batch_size': 128, 'learning_rate': 0.0005, 'max_epoch': 50, 'dataset_class': 'TrafficStatePointDataset', 'executor': 'TrafficStateExecutor', 'evaluator': 'TrafficStateEvaluator', 'adaptive_graph_blend_init': 0.5, 'adaptive_graph_embed_dim': 32, 'adaptive_graph_topk': 12, 'calculate_weight_adj': False, 'conservation_loss_weight': 0.1, 'conservation_warmup_epochs': 5, 'data_col': ['traffic_flow', 'traffic_occupancy', 'traffic_speed'], 'data_files': ['PEMSD4'], 'decoder_layers': 2, 'device': device(type='cuda', index=0), 'disturb_rate': 0.5, 'dropout': 0.1, 'dyna': {'including_types': ['state'], 'state': {'entity_id': 'geo_id', 'traffic_flow': 'num', 'traffic_occupancy': 'num', 'traffic_speed': 'num'}}, 'encoder_layers': 2, 'eval_batch_size': 64, 'evaluator_mode': 'single', 'ffn_hidden_dim': 128, 'fuzzy_conservation_temperature': 8, 'fuzzy_conservation_threshold': 0.6, 'fuzzy_graph_num_sets': 3, 'fuzzy_graph_sigma_init': 0.7, 'geo': {'including_types': ['Point'], 'Point': {}}, 'geo_file': 'PEMSD4', 'graph_k_hop': 2, 'hidden_dim': 64, 'init_weight_inf_or_zero': 'zero', 'is_distributed': True, 'metrics': ['MAE', 'MAPE', 'MSE', 'RMSE', 'masked_MAE', 'masked_MAPE', 'masked_MSE', 'masked_RMSE', 'R2', 'EVAR'], 'noise_SD': [10], 'noise_mean': [5], 'noise_type': 'gaussian', 'num_heads': 2, 'num_workers': 0, 'output_dim': 3, 'pad_with_last_sample': True, 'physics_channel_idx': 0, 'rank': 0, 'rel': {'including_types': ['geo'], 'geo': {'cost': 'num'}}, 'rel_file': 'PEMSD4', 'robustness_test': False, 'save_mode': ['csv'], 'scale_lr': False, 'set_weight_link_or_dist': 'link', 'time_intervals': 300, 'use_adaptive_graph': True, 'use_amp': True, 'use_fuzzy_conservation': True, 'use_fuzzy_graph': True, 'use_gradient_checkpointing': False, 'use_spatiotemporal_attention': True, 'use_temporal_position_embedding': True, 'weight_adj_epsilon': 0.1, 'weight_col': 'cost', 'world_size': 2, 'clip_grad_norm': True, 'epoch': 0, 'gpu': True, 'gpu_id': 0, 'learner': 'adamw', 'load_best_epoch': True, 'log_every': 1, 'lr_decay': True, 'lr_decay_ratio': 0.5, 'lr_patience': 5, 'lr_scheduler': 'reducelronplateau', 'lr_threshold': 0.001, 'max_grad_norm': 3, 'patience': 30, 'train_loss': 'none', 'use_early_stop': True, 'weight_decay': 0.0001, 'data_version_id': 'dv_1779112524_260f3d21', 'input_window': 12, 'output_window': 12, 'scaler': 'standard', 'load_external': False, 'normal_external': False, 'add_time_in_day': True, 'add_day_in_week': True, 'cache_dataset': True, 'ext_scaler': 'none', 'local_rank': 0, 'dist_backend': 'nccl', 'exp_id': '20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4'}
+2026-05-18 22:09:51,499 - INFO - DistributedDataParallel(
+  (module): NewFuzzy(
+    (condition_encoder): STEncoder(
+      (input_projection): Linear(in_features=3, out_features=64, bias=True)
+      (blocks): ModuleList(
+        (0-1): 2 x STEncoderBlock(
+          (temporal_attention): MultiHeadAttention(
+            (query_projection): Linear(in_features=64, out_features=64, bias=True)
+            (key_projection): Linear(in_features=64, out_features=64, bias=True)
+            (value_projection): Linear(in_features=64, out_features=64, bias=True)
+            (output_projection): Linear(in_features=64, out_features=64, bias=True)
+            (dropout): Dropout(p=0.1, inplace=False)
+          )
+          (graph_convolution): GraphConvolution(
+            (projections): ModuleList(
+              (0-2): 3 x Linear(in_features=64, out_features=64, bias=True)
+            )
+          )
+          (feed_forward): FeedForwardNetwork(
+            (network): Sequential(
+              (0): Linear(in_features=64, out_features=128, bias=True)
+              (1): GELU(approximate='none')
+              (2): Dropout(p=0.1, inplace=False)
+              (3): Linear(in_features=128, out_features=64, bias=True)
+              (4): Dropout(p=0.1, inplace=False)
+            )
+          )
+          (norm_temporal): LayerNorm((64,), eps=1e-05, elementwise_affine=True)
+          (norm_graph): LayerNorm((64,), eps=1e-05, elementwise_affine=True)
+          (norm_ffn): LayerNorm((64,), eps=1e-05, elementwise_affine=True)
+          (dropout): Dropout(p=0.1, inplace=False)
+        )
+      )
+      (final_norm): LayerNorm((64,), eps=1e-05, elementwise_affine=True)
+    )
+    (future_decoder): FutureDecoder(
+      (blocks): ModuleList(
+        (0-1): 2 x DecoderBlock(
+          (temporal_attention): MultiHeadAttention(
+            (query_projection): Linear(in_features=64, out_features=64, bias=True)
+            (key_projection): Linear(in_features=64, out_features=64, bias=True)
+            (value_projection): Linear(in_features=64, out_features=64, bias=True)
+            (output_projection): Linear(in_features=64, out_features=64, bias=True)
+            (dropout): Dropout(p=0.1, inplace=False)
+          )
+          (graph_convolution): GraphConvolution(
+            (projections): ModuleList(
+              (0-2): 3 x Linear(in_features=64, out_features=64, bias=True)
+            )
+          )
+          (cross_attention): MultiHeadAttention(
+            (query_projection): Linear(in_features=64, out_features=64, bias=True)
+            (key_projection): Linear(in_features=64, out_features=64, bias=True)
+            (value_projection): Linear(in_features=64, out_features=64, bias=True)
+            (output_projection): Linear(in_features=64, out_features=64, bias=True)
+            (dropout): Dropout(p=0.1, inplace=False)
+          )
+          (spatiotemporal_attention): MultiHeadAttention(
+            (query_projection): Linear(in_features=64, out_features=64, bias=True)
+            (key_projection): Linear(in_features=64, out_features=64, bias=True)
+            (value_projection): Linear(in_features=64, out_features=64, bias=True)
+            (output_projection): Linear(in_features=64, out_features=64, bias=True)
+            (dropout): Dropout(p=0.1, inplace=False)
+          )
+          (feed_forward): FeedForwardNetwork(
+            (network): Sequential(
+              (0): Linear(in_features=64, out_features=128, bias=True)
+              (1): GELU(approximate='none')
+              (2): Dropout(p=0.1, inplace=False)
+              (3): Linear(in_features=128, out_features=64, bias=True)
+              (4): Dropout(p=0.1, inplace=False)
+            )
+          )
+          (norm_temporal): LayerNorm((64,), eps=1e-05, elementwise_affine=True)
+          (norm_graph): LayerNorm((64,), eps=1e-05, elementwise_affine=True)
+          (norm_cross): LayerNorm((64,), eps=1e-05, elementwise_affine=True)
+          (norm_spatiotemporal): LayerNorm((64,), eps=1e-05, elementwise_affine=True)
+          (norm_ffn): LayerNorm((64,), eps=1e-05, elementwise_affine=True)
+          (dropout): Dropout(p=0.1, inplace=False)
+        )
+      )
+      (final_norm): LayerNorm((64,), eps=1e-05, elementwise_affine=True)
+      (output_projection): Linear(in_features=64, out_features=3, bias=True)
+      (adaptive_graph_learner): AdaptiveGraphLearner(
+        (feature_projection): Linear(in_features=64, out_features=32, bias=True)
+        (time_projection): Linear(in_features=64, out_features=32, bias=True)
+      )
+    )
+  )
+)
+2026-05-18 22:09:51,500 - INFO - module.condition_encoder.temporal_position_embedding	torch.Size([1, 12, 1, 64])	cuda:0	True
+2026-05-18 22:09:51,500 - INFO - module.condition_encoder.input_projection.weight	torch.Size([64, 3])	cuda:0	True
+2026-05-18 22:09:51,500 - INFO - module.condition_encoder.input_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.temporal_attention.query_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.temporal_attention.query_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.temporal_attention.key_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.temporal_attention.key_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.temporal_attention.value_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.temporal_attention.value_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.temporal_attention.output_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.temporal_attention.output_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.graph_convolution.projections.0.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.graph_convolution.projections.0.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.graph_convolution.projections.1.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.graph_convolution.projections.1.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.graph_convolution.projections.2.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.graph_convolution.projections.2.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.feed_forward.network.0.weight	torch.Size([128, 64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.feed_forward.network.0.bias	torch.Size([128])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.feed_forward.network.3.weight	torch.Size([64, 128])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.feed_forward.network.3.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,501 - INFO - module.condition_encoder.blocks.0.norm_temporal.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.0.norm_temporal.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.0.norm_graph.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.0.norm_graph.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.0.norm_ffn.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.0.norm_ffn.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.temporal_attention.query_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.temporal_attention.query_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.temporal_attention.key_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.temporal_attention.key_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.temporal_attention.value_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.temporal_attention.value_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.temporal_attention.output_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.temporal_attention.output_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.graph_convolution.projections.0.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.graph_convolution.projections.0.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.graph_convolution.projections.1.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.graph_convolution.projections.1.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.graph_convolution.projections.2.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.graph_convolution.projections.2.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.feed_forward.network.0.weight	torch.Size([128, 64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.feed_forward.network.0.bias	torch.Size([128])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.feed_forward.network.3.weight	torch.Size([64, 128])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.feed_forward.network.3.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.norm_temporal.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.norm_temporal.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,502 - INFO - module.condition_encoder.blocks.1.norm_graph.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.condition_encoder.blocks.1.norm_graph.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.condition_encoder.blocks.1.norm_ffn.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.condition_encoder.blocks.1.norm_ffn.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.condition_encoder.final_norm.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.condition_encoder.final_norm.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.future_queries	torch.Size([1, 12, 307, 64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.temporal_attention.query_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.temporal_attention.query_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.temporal_attention.key_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.temporal_attention.key_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.temporal_attention.value_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.temporal_attention.value_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.temporal_attention.output_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.temporal_attention.output_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.graph_convolution.projections.0.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.graph_convolution.projections.0.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.graph_convolution.projections.1.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.graph_convolution.projections.1.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.graph_convolution.projections.2.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.graph_convolution.projections.2.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.cross_attention.query_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.cross_attention.query_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.cross_attention.key_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.cross_attention.key_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,503 - INFO - module.future_decoder.blocks.0.cross_attention.value_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.cross_attention.value_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.cross_attention.output_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.cross_attention.output_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.spatiotemporal_attention.query_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.spatiotemporal_attention.query_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.spatiotemporal_attention.key_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.spatiotemporal_attention.key_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.spatiotemporal_attention.value_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.spatiotemporal_attention.value_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.spatiotemporal_attention.output_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.spatiotemporal_attention.output_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.feed_forward.network.0.weight	torch.Size([128, 64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.feed_forward.network.0.bias	torch.Size([128])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.feed_forward.network.3.weight	torch.Size([64, 128])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.feed_forward.network.3.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.norm_temporal.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.norm_temporal.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.norm_graph.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.norm_graph.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.norm_cross.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.norm_cross.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.norm_spatiotemporal.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.norm_spatiotemporal.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.norm_ffn.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.0.norm_ffn.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,504 - INFO - module.future_decoder.blocks.1.temporal_attention.query_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.temporal_attention.query_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.temporal_attention.key_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.temporal_attention.key_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.temporal_attention.value_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.temporal_attention.value_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.temporal_attention.output_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.temporal_attention.output_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.graph_convolution.projections.0.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.graph_convolution.projections.0.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.graph_convolution.projections.1.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.graph_convolution.projections.1.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.graph_convolution.projections.2.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.graph_convolution.projections.2.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.cross_attention.query_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.cross_attention.query_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.cross_attention.key_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.cross_attention.key_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.cross_attention.value_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.cross_attention.value_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.cross_attention.output_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.cross_attention.output_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.spatiotemporal_attention.query_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.spatiotemporal_attention.query_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.spatiotemporal_attention.key_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.spatiotemporal_attention.key_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,505 - INFO - module.future_decoder.blocks.1.spatiotemporal_attention.value_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.spatiotemporal_attention.value_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.spatiotemporal_attention.output_projection.weight	torch.Size([64, 64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.spatiotemporal_attention.output_projection.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.feed_forward.network.0.weight	torch.Size([128, 64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.feed_forward.network.0.bias	torch.Size([128])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.feed_forward.network.3.weight	torch.Size([64, 128])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.feed_forward.network.3.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.norm_temporal.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.norm_temporal.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.norm_graph.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.norm_graph.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.norm_cross.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.norm_cross.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.norm_spatiotemporal.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.norm_spatiotemporal.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.norm_ffn.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.blocks.1.norm_ffn.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.final_norm.weight	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.final_norm.bias	torch.Size([64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.output_projection.weight	torch.Size([3, 64])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.output_projection.bias	torch.Size([3])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.adaptive_graph_learner.node_embeddings	torch.Size([307, 32])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.adaptive_graph_learner.blend_logit	torch.Size([])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.adaptive_graph_learner.fuzzy_centers	torch.Size([3])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.adaptive_graph_learner.fuzzy_log_sigmas	torch.Size([3])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.adaptive_graph_learner.fuzzy_rule_logits	torch.Size([3])	cuda:0	True
+2026-05-18 22:09:51,506 - INFO - module.future_decoder.adaptive_graph_learner.feature_projection.weight	torch.Size([32, 64])	cuda:0	True
+2026-05-18 22:09:51,507 - INFO - module.future_decoder.adaptive_graph_learner.feature_projection.bias	torch.Size([32])	cuda:0	True
+2026-05-18 22:09:51,507 - INFO - module.future_decoder.adaptive_graph_learner.time_projection.weight	torch.Size([32, 64])	cuda:0	True
+2026-05-18 22:09:51,507 - INFO - module.future_decoder.adaptive_graph_learner.time_projection.bias	torch.Size([32])	cuda:0	True
+2026-05-18 22:09:51,507 - INFO - Total parameter numbers: 502637
+2026-05-18 22:09:51,507 - INFO - Enable AMP training (dtype=float16).
+2026-05-18 22:09:51,507 - INFO - You select `adamw` optimizer.
+2026-05-18 22:09:51,508 - INFO - You select `reducelronplateau` lr_scheduler.
+2026-05-18 22:09:51,508 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-18 22:09:51,508 - INFO - Start training ...
+2026-05-18 22:09:51,508 - INFO - num_batches:40
+2026-05-18 22:10:05,659 - INFO - epoch complete!
+2026-05-18 22:10:05,660 - INFO - evaluating now!
+2026-05-18 22:10:07,309 - INFO - Epoch [0/50] train_loss: 0.2855, val_loss: 0.1368, lr: 0.000500, 15.80s
+2026-05-18 22:10:07,345 - INFO - Saved model at 0
+2026-05-18 22:10:07,345 - INFO - Val loss decrease from inf to 0.1368, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch0.tar
+2026-05-18 22:10:21,045 - INFO - epoch complete!
+2026-05-18 22:10:21,045 - INFO - evaluating now!
+2026-05-18 22:10:22,696 - INFO - Epoch [1/50] train_loss: 0.1643, val_loss: 0.1236, lr: 0.000500, 15.35s
+2026-05-18 22:10:22,729 - INFO - Saved model at 1
+2026-05-18 22:10:22,730 - INFO - Val loss decrease from 0.1368 to 0.1236, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch1.tar
+2026-05-18 22:10:36,611 - INFO - epoch complete!
+2026-05-18 22:10:36,612 - INFO - evaluating now!
+2026-05-18 22:10:38,309 - INFO - Epoch [2/50] train_loss: 0.1429, val_loss: 0.1163, lr: 0.000500, 15.58s
+2026-05-18 22:10:38,344 - INFO - Saved model at 2
+2026-05-18 22:10:38,344 - INFO - Val loss decrease from 0.1236 to 0.1163, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch2.tar
+2026-05-18 22:10:52,483 - INFO - epoch complete!
+2026-05-18 22:10:52,484 - INFO - evaluating now!
+2026-05-18 22:10:54,180 - INFO - Epoch [3/50] train_loss: 0.1249, val_loss: 0.0949, lr: 0.000500, 15.84s
+2026-05-18 22:10:54,214 - INFO - Saved model at 3
+2026-05-18 22:10:54,214 - INFO - Val loss decrease from 0.1163 to 0.0949, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch3.tar
+2026-05-18 22:11:08,351 - INFO - epoch complete!
+2026-05-18 22:11:08,352 - INFO - evaluating now!
+2026-05-18 22:11:10,049 - INFO - Epoch [4/50] train_loss: 0.1086, val_loss: 0.0927, lr: 0.000500, 15.83s
+2026-05-18 22:11:10,082 - INFO - Saved model at 4
+2026-05-18 22:11:10,082 - INFO - Val loss decrease from 0.0949 to 0.0927, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch4.tar
+2026-05-18 22:11:23,998 - INFO - epoch complete!
+2026-05-18 22:11:23,998 - INFO - evaluating now!
+2026-05-18 22:11:25,665 - INFO - Epoch [5/50] train_loss: 0.0997, val_loss: 0.0878, lr: 0.000500, 15.58s
+2026-05-18 22:11:25,699 - INFO - Saved model at 5
+2026-05-18 22:11:25,699 - INFO - Val loss decrease from 0.0927 to 0.0878, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch5.tar
+2026-05-18 22:11:39,438 - INFO - epoch complete!
+2026-05-18 22:11:39,438 - INFO - evaluating now!
+2026-05-18 22:11:41,099 - INFO - Epoch [6/50] train_loss: 0.0945, val_loss: 0.0821, lr: 0.000500, 15.40s
+2026-05-18 22:11:41,136 - INFO - Saved model at 6
+2026-05-18 22:11:41,136 - INFO - Val loss decrease from 0.0878 to 0.0821, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch6.tar
+2026-05-18 22:11:54,877 - INFO - epoch complete!
+2026-05-18 22:11:54,878 - INFO - evaluating now!
+2026-05-18 22:11:56,538 - INFO - Epoch [7/50] train_loss: 0.0918, val_loss: 0.0827, lr: 0.000500, 15.40s
+2026-05-18 22:12:10,304 - INFO - epoch complete!
+2026-05-18 22:12:10,304 - INFO - evaluating now!
+2026-05-18 22:12:11,975 - INFO - Epoch [8/50] train_loss: 0.0894, val_loss: 0.0829, lr: 0.000500, 15.44s
+2026-05-18 22:12:25,716 - INFO - epoch complete!
+2026-05-18 22:12:25,717 - INFO - evaluating now!
+2026-05-18 22:12:27,429 - INFO - Epoch [9/50] train_loss: 0.0882, val_loss: 0.0790, lr: 0.000500, 15.45s
+2026-05-18 22:12:27,463 - INFO - Saved model at 9
+2026-05-18 22:12:27,463 - INFO - Val loss decrease from 0.0821 to 0.0790, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch9.tar
+2026-05-18 22:12:41,503 - INFO - epoch complete!
+2026-05-18 22:12:41,503 - INFO - evaluating now!
+2026-05-18 22:12:43,200 - INFO - Epoch [10/50] train_loss: 0.0866, val_loss: 0.0786, lr: 0.000500, 15.74s
+2026-05-18 22:12:43,233 - INFO - Saved model at 10
+2026-05-18 22:12:43,233 - INFO - Val loss decrease from 0.0790 to 0.0786, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch10.tar
+2026-05-18 22:12:57,356 - INFO - epoch complete!
+2026-05-18 22:12:57,356 - INFO - evaluating now!
+2026-05-18 22:12:59,046 - INFO - Epoch [11/50] train_loss: 0.0851, val_loss: 0.0793, lr: 0.000500, 15.81s
+2026-05-18 22:13:13,186 - INFO - epoch complete!
+2026-05-18 22:13:13,186 - INFO - evaluating now!
+2026-05-18 22:13:14,887 - INFO - Epoch [12/50] train_loss: 0.0867, val_loss: 0.0784, lr: 0.000500, 15.84s
+2026-05-18 22:13:14,922 - INFO - Saved model at 12
+2026-05-18 22:13:14,923 - INFO - Val loss decrease from 0.0786 to 0.0784, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch12.tar
+2026-05-18 22:13:28,687 - INFO - epoch complete!
+2026-05-18 22:13:28,687 - INFO - evaluating now!
+2026-05-18 22:13:30,349 - INFO - Epoch [13/50] train_loss: 0.0837, val_loss: 0.0797, lr: 0.000500, 15.43s
+2026-05-18 22:13:44,097 - INFO - epoch complete!
+2026-05-18 22:13:44,098 - INFO - evaluating now!
+2026-05-18 22:13:45,758 - INFO - Epoch [14/50] train_loss: 0.0836, val_loss: 0.0769, lr: 0.000500, 15.41s
+2026-05-18 22:13:45,792 - INFO - Saved model at 14
+2026-05-18 22:13:45,792 - INFO - Val loss decrease from 0.0784 to 0.0769, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch14.tar
+2026-05-18 22:13:59,535 - INFO - epoch complete!
+2026-05-18 22:13:59,536 - INFO - evaluating now!
+2026-05-18 22:14:01,181 - INFO - Epoch [15/50] train_loss: 0.0823, val_loss: 0.0771, lr: 0.000500, 15.39s
+2026-05-18 22:14:14,961 - INFO - epoch complete!
+2026-05-18 22:14:14,961 - INFO - evaluating now!
+2026-05-18 22:14:16,607 - INFO - Epoch [16/50] train_loss: 0.0814, val_loss: 0.0770, lr: 0.000500, 15.42s
+2026-05-18 22:14:30,314 - INFO - epoch complete!
+2026-05-18 22:14:30,314 - INFO - evaluating now!
+2026-05-18 22:14:31,999 - INFO - Epoch [17/50] train_loss: 0.0802, val_loss: 0.0755, lr: 0.000500, 15.39s
+2026-05-18 22:14:32,032 - INFO - Saved model at 17
+2026-05-18 22:14:32,033 - INFO - Val loss decrease from 0.0769 to 0.0755, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch17.tar
+2026-05-18 22:14:46,163 - INFO - epoch complete!
+2026-05-18 22:14:46,163 - INFO - evaluating now!
+2026-05-18 22:14:47,861 - INFO - Epoch [18/50] train_loss: 0.0801, val_loss: 0.0746, lr: 0.000500, 15.83s
+2026-05-18 22:14:47,896 - INFO - Saved model at 18
+2026-05-18 22:14:47,896 - INFO - Val loss decrease from 0.0755 to 0.0746, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch18.tar
+2026-05-18 22:15:02,058 - INFO - epoch complete!
+2026-05-18 22:15:02,058 - INFO - evaluating now!
+2026-05-18 22:15:03,757 - INFO - Epoch [19/50] train_loss: 0.0786, val_loss: 0.0761, lr: 0.000500, 15.86s
+2026-05-18 22:15:17,859 - INFO - epoch complete!
+2026-05-18 22:15:17,859 - INFO - evaluating now!
+2026-05-18 22:15:19,522 - INFO - Epoch [20/50] train_loss: 0.0788, val_loss: 0.0745, lr: 0.000500, 15.76s
+2026-05-18 22:15:19,556 - INFO - Saved model at 20
+2026-05-18 22:15:19,556 - INFO - Val loss decrease from 0.0746 to 0.0745, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch20.tar
+2026-05-18 22:15:33,305 - INFO - epoch complete!
+2026-05-18 22:15:33,305 - INFO - evaluating now!
+2026-05-18 22:15:34,969 - INFO - Epoch [21/50] train_loss: 0.0786, val_loss: 0.0762, lr: 0.000500, 15.41s
+2026-05-18 22:15:48,780 - INFO - epoch complete!
+2026-05-18 22:15:48,781 - INFO - evaluating now!
+2026-05-18 22:15:50,449 - INFO - Epoch [22/50] train_loss: 0.0783, val_loss: 0.0728, lr: 0.000500, 15.48s
+2026-05-18 22:15:50,485 - INFO - Saved model at 22
+2026-05-18 22:15:50,485 - INFO - Val loss decrease from 0.0745 to 0.0728, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch22.tar
+2026-05-18 22:16:04,275 - INFO - epoch complete!
+2026-05-18 22:16:04,276 - INFO - evaluating now!
+2026-05-18 22:16:05,941 - INFO - Epoch [23/50] train_loss: 0.0776, val_loss: 0.0730, lr: 0.000500, 15.46s
+2026-05-18 22:16:19,712 - INFO - epoch complete!
+2026-05-18 22:16:19,712 - INFO - evaluating now!
+2026-05-18 22:16:21,379 - INFO - Epoch [24/50] train_loss: 0.0763, val_loss: 0.0713, lr: 0.000500, 15.44s
+2026-05-18 22:16:21,417 - INFO - Saved model at 24
+2026-05-18 22:16:21,417 - INFO - Val loss decrease from 0.0728 to 0.0713, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch24.tar
+2026-05-18 22:16:35,344 - INFO - epoch complete!
+2026-05-18 22:16:35,345 - INFO - evaluating now!
+2026-05-18 22:16:37,050 - INFO - Epoch [25/50] train_loss: 0.0755, val_loss: 0.0709, lr: 0.000500, 15.63s
+2026-05-18 22:16:37,085 - INFO - Saved model at 25
+2026-05-18 22:16:37,085 - INFO - Val loss decrease from 0.0713 to 0.0709, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch25.tar
+2026-05-18 22:16:51,281 - INFO - epoch complete!
+2026-05-18 22:16:51,282 - INFO - evaluating now!
+2026-05-18 22:16:52,998 - INFO - Epoch [26/50] train_loss: 0.0754, val_loss: 0.0701, lr: 0.000500, 15.91s
+2026-05-18 22:16:53,035 - INFO - Saved model at 26
+2026-05-18 22:16:53,035 - INFO - Val loss decrease from 0.0709 to 0.0701, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch26.tar
+2026-05-18 22:17:07,222 - INFO - epoch complete!
+2026-05-18 22:17:07,223 - INFO - evaluating now!
+2026-05-18 22:17:08,931 - INFO - Epoch [27/50] train_loss: 0.0758, val_loss: 0.0713, lr: 0.000500, 15.90s
+2026-05-18 22:17:22,995 - INFO - epoch complete!
+2026-05-18 22:17:22,995 - INFO - evaluating now!
+2026-05-18 22:17:24,657 - INFO - Epoch [28/50] train_loss: 0.0743, val_loss: 0.0692, lr: 0.000500, 15.73s
+2026-05-18 22:17:24,692 - INFO - Saved model at 28
+2026-05-18 22:17:24,692 - INFO - Val loss decrease from 0.0701 to 0.0692, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch28.tar
+2026-05-18 22:17:38,510 - INFO - epoch complete!
+2026-05-18 22:17:38,510 - INFO - evaluating now!
+2026-05-18 22:17:40,169 - INFO - Epoch [29/50] train_loss: 0.0739, val_loss: 0.0689, lr: 0.000500, 15.48s
+2026-05-18 22:17:40,205 - INFO - Saved model at 29
+2026-05-18 22:17:40,205 - INFO - Val loss decrease from 0.0692 to 0.0689, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch29.tar
+2026-05-18 22:17:54,006 - INFO - epoch complete!
+2026-05-18 22:17:54,006 - INFO - evaluating now!
+2026-05-18 22:17:55,654 - INFO - Epoch [30/50] train_loss: 0.0739, val_loss: 0.0696, lr: 0.000500, 15.45s
+2026-05-18 22:18:09,479 - INFO - epoch complete!
+2026-05-18 22:18:09,479 - INFO - evaluating now!
+2026-05-18 22:18:11,163 - INFO - Epoch [31/50] train_loss: 0.0744, val_loss: 0.0697, lr: 0.000500, 15.51s
+2026-05-18 22:18:24,971 - INFO - epoch complete!
+2026-05-18 22:18:24,971 - INFO - evaluating now!
+2026-05-18 22:18:26,649 - INFO - Epoch [32/50] train_loss: 0.0726, val_loss: 0.0698, lr: 0.000500, 15.49s
+2026-05-18 22:18:40,661 - INFO - epoch complete!
+2026-05-18 22:18:40,661 - INFO - evaluating now!
+2026-05-18 22:18:42,371 - INFO - Epoch [33/50] train_loss: 0.0737, val_loss: 0.0694, lr: 0.000500, 15.72s
+2026-05-18 22:18:56,599 - INFO - epoch complete!
+2026-05-18 22:18:56,600 - INFO - evaluating now!
+2026-05-18 22:18:58,310 - INFO - Epoch [34/50] train_loss: 0.0721, val_loss: 0.0676, lr: 0.000500, 15.94s
+2026-05-18 22:18:58,347 - INFO - Saved model at 34
+2026-05-18 22:18:58,347 - INFO - Val loss decrease from 0.0689 to 0.0676, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch34.tar
+2026-05-18 22:19:12,542 - INFO - epoch complete!
+2026-05-18 22:19:12,543 - INFO - evaluating now!
+2026-05-18 22:19:14,251 - INFO - Epoch [35/50] train_loss: 0.0722, val_loss: 0.0683, lr: 0.000500, 15.90s
+2026-05-18 22:19:28,191 - INFO - epoch complete!
+2026-05-18 22:19:28,191 - INFO - evaluating now!
+2026-05-18 22:19:29,866 - INFO - Epoch [36/50] train_loss: 0.0728, val_loss: 0.0706, lr: 0.000500, 15.61s
+2026-05-18 22:19:43,645 - INFO - epoch complete!
+2026-05-18 22:19:43,645 - INFO - evaluating now!
+2026-05-18 22:19:45,291 - INFO - Epoch [37/50] train_loss: 0.0721, val_loss: 0.0666, lr: 0.000500, 15.42s
+2026-05-18 22:19:45,328 - INFO - Saved model at 37
+2026-05-18 22:19:45,329 - INFO - Val loss decrease from 0.0676 to 0.0666, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch37.tar
+2026-05-18 22:19:59,096 - INFO - epoch complete!
+2026-05-18 22:19:59,096 - INFO - evaluating now!
+2026-05-18 22:20:00,777 - INFO - Epoch [38/50] train_loss: 0.0715, val_loss: 0.0678, lr: 0.000500, 15.45s
+2026-05-18 22:20:14,573 - INFO - epoch complete!
+2026-05-18 22:20:14,573 - INFO - evaluating now!
+2026-05-18 22:20:16,245 - INFO - Epoch [39/50] train_loss: 0.0716, val_loss: 0.0696, lr: 0.000500, 15.47s
+2026-05-18 22:20:30,046 - INFO - epoch complete!
+2026-05-18 22:20:30,046 - INFO - evaluating now!
+2026-05-18 22:20:31,697 - INFO - Epoch [40/50] train_loss: 0.0715, val_loss: 0.0662, lr: 0.000500, 15.45s
+2026-05-18 22:20:31,734 - INFO - Saved model at 40
+2026-05-18 22:20:31,734 - INFO - Val loss decrease from 0.0666 to 0.0662, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch40.tar
+2026-05-18 22:20:45,052 - INFO - epoch complete!
+2026-05-18 22:20:45,052 - INFO - evaluating now!
+2026-05-18 22:20:46,631 - INFO - Epoch [41/50] train_loss: 0.0702, val_loss: 0.0673, lr: 0.000500, 14.90s
+2026-05-18 22:20:59,948 - INFO - epoch complete!
+2026-05-18 22:20:59,949 - INFO - evaluating now!
+2026-05-18 22:21:01,670 - INFO - Epoch [42/50] train_loss: 0.0706, val_loss: 0.0668, lr: 0.000500, 15.04s
+2026-05-18 22:21:15,834 - INFO - epoch complete!
+2026-05-18 22:21:15,835 - INFO - evaluating now!
+2026-05-18 22:21:17,548 - INFO - Epoch [43/50] train_loss: 0.0697, val_loss: 0.0682, lr: 0.000500, 15.88s
+2026-05-18 22:21:31,504 - INFO - epoch complete!
+2026-05-18 22:21:31,505 - INFO - evaluating now!
+2026-05-18 22:21:33,178 - INFO - Epoch [44/50] train_loss: 0.0711, val_loss: 0.0658, lr: 0.000500, 15.63s
+2026-05-18 22:21:33,221 - INFO - Saved model at 44
+2026-05-18 22:21:33,222 - INFO - Val loss decrease from 0.0662 to 0.0658, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch44.tar
+2026-05-18 22:21:46,987 - INFO - epoch complete!
+2026-05-18 22:21:46,988 - INFO - evaluating now!
+2026-05-18 22:21:48,680 - INFO - Epoch [45/50] train_loss: 0.0703, val_loss: 0.0672, lr: 0.000500, 15.46s
+2026-05-18 22:22:02,451 - INFO - epoch complete!
+2026-05-18 22:22:02,451 - INFO - evaluating now!
+2026-05-18 22:22:04,121 - INFO - Epoch [46/50] train_loss: 0.0698, val_loss: 0.0669, lr: 0.000500, 15.44s
+2026-05-18 22:22:17,907 - INFO - epoch complete!
+2026-05-18 22:22:17,907 - INFO - evaluating now!
+2026-05-18 22:22:19,582 - INFO - Epoch [47/50] train_loss: 0.0701, val_loss: 0.0649, lr: 0.000500, 15.46s
+2026-05-18 22:22:19,619 - INFO - Saved model at 47
+2026-05-18 22:22:19,619 - INFO - Val loss decrease from 0.0658 to 0.0649, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch47.tar
+2026-05-18 22:22:33,406 - INFO - epoch complete!
+2026-05-18 22:22:33,406 - INFO - evaluating now!
+2026-05-18 22:22:35,089 - INFO - Epoch [48/50] train_loss: 0.0694, val_loss: 0.0645, lr: 0.000500, 15.47s
+2026-05-18 22:22:35,139 - INFO - Saved model at 48
+2026-05-18 22:22:35,139 - INFO - Val loss decrease from 0.0649 to 0.0645, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4_epoch48.tar
+2026-05-18 22:22:48,901 - INFO - epoch complete!
+2026-05-18 22:22:48,901 - INFO - evaluating now!
+2026-05-18 22:22:50,578 - INFO - Epoch [49/50] train_loss: 0.0689, val_loss: 0.0679, lr: 0.000500, 15.44s
+2026-05-18 22:22:50,579 - INFO - Trained totally 50 epochs, average train time is 13.884s, average eval time is 1.676s
+2026-05-18 22:22:50,687 - INFO - Loaded model at 48
+2026-05-18 22:22:50,688 - INFO - Saved model at /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/model_cache/new_fuzzy_PEMSD4.m
+2026-05-18 22:22:50,756 - INFO - Start evaluating ...
+2026-05-18 22:23:41,091 - INFO - Note that you select the single mode to evaluate!
+2026-05-18 22:23:41,096 - INFO - Evaluate result is saved at /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260518_220940__traffic_state_pred__new_fuzzy__PEMSD4/evaluate_cache/2026_05_18_22_23_41_new_fuzzy_PEMSD4.csv
+2026-05-18 22:23:41,110 - INFO - 
+         MAE         MAPE         MSE  ...  masked_RMSE        R2      EVAR
+1   6.658722  4685.551758  280.790375  ...    16.653101  0.983140  0.983142
+2   7.011479  5181.559082  308.998718  ...    17.460890  0.981446  0.981449
+3   7.321523  5572.166992  334.289185  ...    18.156164  0.979928  0.979933
+4   7.572158  5936.297363  354.903351  ...    18.705894  0.978691  0.978697
+5   7.793846  6259.417480  373.882446  ...    19.197163  0.977551  0.977560
+6   8.020850  6631.442383  392.873016  ...    19.677883  0.976411  0.976422
+7   8.261364  6925.873047  414.008270  ...    20.201786  0.975142  0.975155
+8   8.492015  7290.322754  434.021484  ...    20.682497  0.973941  0.973954
+9   8.694868  7663.167480  452.622437  ...    21.117918  0.972824  0.972837
+10  8.890855  8124.505859  469.970490  ...    21.512358  0.971783  0.971795
+11  9.121372  8502.078125  490.885773  ...    21.984745  0.970527  0.970539
+12  9.435609  8893.341797  520.789001  ...    22.648283  0.968732  0.968746
+
+[12 rows x 10 columns]
