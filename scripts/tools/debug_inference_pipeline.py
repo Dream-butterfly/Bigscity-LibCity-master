@@ -24,10 +24,9 @@ import torch
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from GNNTP.utils.config_parser import ConfigParser
-from GNNTP.data.pipeline import build_dataset_runtime
-from GNNTP.data.artifact_io import build_artifact_runtime
-from GNNTP.models.locator import get_model_class
+from GNNTP.common import ConfigParser
+from GNNTP.data import build_dataset_runtime, build_artifact_runtime
+from GNNTP.models.registry import get_model_class
 
 
 def _seed(seed=42):
@@ -108,7 +107,10 @@ def main():
     config["device"] = device
 
     if args.artifact_id:
-        runtime = build_artifact_runtime(config, artifact_id=args.artifact_id, force_reuse=True)
+        runtime = build_artifact_runtime(
+            config, task=args.task, model_name=args.model,
+            artifact_id=args.artifact_id, force_reuse=True,
+        )
     else:
         runtime = build_dataset_runtime(config)
 
@@ -134,7 +136,7 @@ def main():
     # ═══════════════════════════════════════════════════════════
     # 2. 加载模型
     # ═══════════════════════════════════════════════════════════
-    ModelClass = get_model_class(args.model)
+    ModelClass = get_model_class(args.task, args.model)
     model = ModelClass(config, data_feature).to(device)
     model.eval()
 
