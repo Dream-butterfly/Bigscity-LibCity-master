@@ -1953,6 +1953,11 @@ async def api_start(request: Request):
     extra_args = str(body.get("extra_args", ""))
     user_config_payload = body.get("config", {})
     cli_options = body.get("cli_options", {})
+    # v2 frontend sends num_gpus/gpu_ids as top-level fields (not inside cli_options).
+    # Inject them so _run_training_background can pick them up.
+    for _gpu_key in ("num_gpus", "gpu_ids"):
+        if _gpu_key in body and _gpu_key not in cli_options:
+            cli_options[_gpu_key] = body[_gpu_key]
     if not isinstance(user_config_payload, dict):
         return JSONResponse(status_code=400, content={"error": "config must be an object."})
     if not isinstance(cli_options, dict):
