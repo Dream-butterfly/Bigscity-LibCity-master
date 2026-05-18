@@ -23,7 +23,8 @@ from GNNTP.utils.paths import OUTPUT_ROOT
 from GNNTP.data.artifact_io import load_data_artifact, deserialize_scaler
 
 
-def load_model_from_run(run_id: str, data_feature: dict):
+def load_model_from_run(run_id: str, data_feature: dict,
+                        input_window: int, output_window: int):
     """Load trained NewFuzzy model from a run output directory."""
     from GNNTP.models.new.new_fuzzy.model import NewFuzzy
 
@@ -51,45 +52,75 @@ def load_model_from_run(run_id: str, data_feature: dict):
     print(f"  Loading checkpoint: {checkpoint_path.name}")
     checkpoint = torch.load(str(checkpoint_path), map_location="cpu", weights_only=False)
 
-    # Build minimal config from checkpoint or run_meta
-    state_dict = checkpoint.get("state_dict", checkpoint)
+    # Handle two checkpoint formats:
+    #   .m  → tuple (model_state_dict, optimizer_state_dict)
+    #   .tar → dict with "model_state_dict" key
+    if isinstance(checkpoint, tuple):
+        # .m format: (model_state_dict, optimizer_state_dict)
+        state_dict = checkpoint[0]
+    elif isinstance(checkpoint, dict):
+        # .tar format: {"model_state_dict": ..., "optimizer_state_dict": ..., ...}
+        state_dict = checkpoint.get("model_state_dict", checkpoint.get("state_dict", checkpoint))
+    else:
+        raise TypeError(f"Unknown checkpoint format: {type(checkpoint)}")
+
+    # Try to find key prefix (DDP wraps with "module." prefix)
+    sample_key = next(iter(state_dict.keys()))
+    if sample_key.startswith("module."):
+        state_dict = {k[len("module."):]: v for k, v in state_dict.items()}
 
     # Infer hidden_dim from state_dict
     # input_projection.weight shape: [hidden_dim, input_dim]
     hidden_dim = state_dict["condition_encoder.input_projection.weight"].shape[0]
+
+    # Infer feature_dim and num_nodes from data_feature
+    feature_dim = data_feature.get("feature_dim", 1)
+    num_nodes = data_feature.get("num_nodes", 1)
+    output_dim = data_feature.get("output_dim", 1)
     num_heads = 2
     if hidden_dim >= 128:
         num_heads = 4
 
+    # Infer encoder/decoder layers from state_dict keys
+    encoder_layers = sum(1 for k in state_dict if k.startswith("condition_encoder.blocks.") and k.endswith(".norm_temporal.weight"))
+    decoder_layers = sum(1 for k in state_dict if k.startswith("future_decoder.blocks.") and k.endswith(".norm_temporal.weight"))
+    use_adaptive_graph = any("adaptive_graph_learner" in k for k in state_dict)
+    use_fuzzy_graph = any("fuzzy_centers" in k for k in state_dict)
+    use_spatiotemporal = any("spatiotemporal_attention" in k for k in state_dict)
+    use_temporal_pe = any("temporal_position_embedding" in k for k in state_dict)
+
     config = {
-        "input_window": data_feature.get("input_window", 12),
-        "output_window": data_feature.get("output_window", 12),
+        "input_window": input_window,
+        "output_window": output_window,
         "hidden_dim": hidden_dim,
         "num_heads": num_heads,
-        "encoder_layers": 2,
-        "decoder_layers": 2,
+        "encoder_layers": encoder_layers,
+        "decoder_layers": decoder_layers,
         "ffn_hidden_dim": hidden_dim * 2,
         "graph_k_hop": 2,
         "dropout": 0.1,
         "device": torch.device("cpu"),
-        "use_adaptive_graph": True,
+        "use_adaptive_graph": use_adaptive_graph,
         "adaptive_graph_embed_dim": 32,
         "adaptive_graph_topk": 12,
         "adaptive_graph_blend_init": 0.5,
-        "use_fuzzy_graph": True,
+        "use_fuzzy_graph": use_fuzzy_graph,
         "fuzzy_graph_num_sets": 3,
         "fuzzy_graph_sigma_init": 0.7,
-        "use_spatiotemporal_attention": True,
-        "use_temporal_position_embedding": True,
+        "use_spatiotemporal_attention": use_spatiotemporal,
+        "use_temporal_position_embedding": use_temporal_pe,
         "use_gradient_checkpointing": False,
         "conservation_loss_weight": 0.0,
         "use_fuzzy_conservation": False,
+        "conservation_steps_per_epoch": 80,
     }
 
     model = NewFuzzy(config, data_feature)
     model.load_state_dict(state_dict, strict=False)
     model.eval()
-    print(f"  Model loaded: hidden_dim={hidden_dim}, params={sum(p.numel() for p in model.parameters()):,}")
+    print(f"  Model loaded: hidden_dim={hidden_dim}, enc_layers={encoder_layers}, "
+          f"dec_layers={decoder_layers}, adaptive={use_adaptive_graph}, fuzzy={use_fuzzy_graph}")
+    print(f"  Params: {sum(p.numel() for p in model.parameters()):,}")
     return model
 
 
@@ -188,7 +219,9 @@ def main():
     if not args.no_model:
         print("\n--- Loading model ---")
         try:
-            model = load_model_from_run(run_id, data_feature)
+            model = load_model_from_run(run_id, data_feature,
+                                        input_window=x_test.shape[1],
+                                        output_window=y_test.shape[1])
         except Exception as e:
             print(f"WARNING: Could not load model: {e}")
             print("Continuing with data-only checks.\n")
