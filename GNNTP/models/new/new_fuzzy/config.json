@@ -21,6 +21,7 @@
   "dropout": 0.1,
   "conservation_loss_weight": 0.1,
   "conservation_warmup_epochs": 5,
+  "conservation_steps_per_epoch": 80,
   "physics_channel_idx": 0,
   "use_fuzzy_conservation": true,
   "fuzzy_conservation_threshold": 0.6,

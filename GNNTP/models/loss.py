@@ -61,8 +61,14 @@ def masked_mape_torch(preds, labels, null_val=np.nan, eps=1e-5, mask_val=None):
     labels = labels.clone()
     labels[torch.abs(labels) < 1e-4] = 0
     if np.isnan(null_val) and eps != 0:
+        # Exclude near-zero labels where MAPE is numerically unstable
+        # (e.g. Z-score standardized data with values ≈ 0).
+        valid = torch.abs(labels) > 1e-3
+        if valid.sum() == 0:
+            return torch.tensor(0.0, device=preds.device, dtype=preds.dtype)
         loss = torch.abs((preds - labels) / (labels + eps))
-        return torch.mean(loss)
+        loss = loss * valid.float()
+        return loss.sum() / valid.sum()
     if np.isnan(null_val):
         mask = ~torch.isnan(labels)
     else:

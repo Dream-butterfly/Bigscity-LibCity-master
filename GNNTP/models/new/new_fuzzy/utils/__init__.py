@@ -1,4 +1,4 @@
-"""Shared utility exports for `new_diffusion_fuzzy_2`."""
+"""Shared utility exports for ``new_fuzzy``."""
 
 from .adjacency import build_normalized_adjacency, expand_adjacency_batch
 from .attention_ops import (

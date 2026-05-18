@@ -1,4 +1,10 @@
-"""Time embedding utilities for diffusion models."""
+"""Time embedding utilities (unused in new_fuzzy — kept for reference).
+
+NOTE: ``SinusoidalTimeEmbedding`` is NOT imported or used by the current
+new_fuzzy model. It is a leftover from an earlier diffusion-based design.
+Other packages (new_diffusion_fuzzy, new_diffusion_fuzzy_2) have their
+own independent copies.
+"""
 
 import math
 

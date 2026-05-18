@@ -65,6 +65,12 @@ class NewFuzzy(AbstractTrafficStateModel):
         # ── Conservation Loss ─────────────────────────────────────
         self.conservation_loss_weight = config.get("conservation_loss_weight", 0.1)
         self.conservation_warmup_epochs = int(max(0, config.get("conservation_warmup_epochs", 5)))
+        # Steps-per-epoch for warmup ramp; must be set to match the
+        # actual number of training batches per epoch (depends on dataset
+        # size, batch_size, and DDP world_size).
+        self.conservation_steps_per_epoch = int(
+            config.get("conservation_steps_per_epoch", 80)
+        )
         self.physics_channel_idx = config.get("physics_channel_idx", 0)
         self.use_fuzzy_conservation = config.get("use_fuzzy_conservation", True)
         self.fuzzy_conservation_threshold = config.get("fuzzy_conservation_threshold", 0.6)
@@ -162,16 +168,24 @@ class NewFuzzy(AbstractTrafficStateModel):
         return regression_loss
 
     def _get_effective_conservation_weight(self):
-        """Linearly ramp conservation loss weight over warmup epochs."""
+        """Linearly ramp conservation loss weight over warmup epochs.
+
+        Uses ``conservation_steps_per_epoch`` to convert epoch-based warmup
+        to step-based ramp.  Must match the actual number of training batches
+        per epoch for the current dataset / batch-size / DDP-world-size
+        combination.
+        """
         if self.conservation_loss_weight <= 0:
             return 0.0
         if self.conservation_warmup_epochs <= 0:
             return self.conservation_loss_weight
-        steps_per_epoch = 160
+        steps_per_epoch = self.conservation_steps_per_epoch
         total_warmup_steps = self.conservation_warmup_epochs * steps_per_epoch
+        if total_warmup_steps <= 0:
+            return self.conservation_loss_weight
         if self._train_step_count >= total_warmup_steps:
             return self.conservation_loss_weight
-        return self.conservation_loss_weight * (self._train_step_count / max(total_warmup_steps, 1))
+        return self.conservation_loss_weight * (self._train_step_count / total_warmup_steps)
 
     def _fuzzy_conservation_loss(self, future_sequence, adjacency_matrix):
         """Fuzzy traffic conservation: soft penalty on flow imbalance.

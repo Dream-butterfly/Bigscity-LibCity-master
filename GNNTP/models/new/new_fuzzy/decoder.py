@@ -1,7 +1,7 @@
 """Future decoder for deterministic fuzzy-graph traffic prediction.
 
 Refines learnable future queries through cross-attention over encoded history.
-Based on the denoiser architecture but without diffusion/timestep components.
+Encoder-decoder architecture with cross-attention decoding — no diffusion.
 """
 
 import torch
