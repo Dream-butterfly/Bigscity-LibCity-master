@@ -1,0 +1,11 @@
+{
+  "task": "traffic_state_pred",
+  "model": "new_fuzzy_3",
+  "model_entry": "GNNTP.models.new.new_fuzzy_3.model:NewFuzzy3",
+  "dataset_class": "TrafficStatePointDataset",
+  "dataset_entry": "GNNTP.data.dataset.traffic_state_point_dataset:TrafficStatePointDataset",
+  "executor": "DiffusionTrafficStateExecutor",
+  "executor_entry": "GNNTP.models.new.new_fuzzy_3.executor:DiffusionTrafficStateExecutor",
+  "evaluator": "TrafficStateEvaluator",
+  "evaluator_entry": "GNNTP.common.traffic_state_evaluator:TrafficStateEvaluator"
+}
