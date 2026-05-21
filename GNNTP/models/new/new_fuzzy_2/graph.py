@@ -75,14 +75,24 @@ class FuzzyGraphConvolution(nn.Module):
         )
 
     @staticmethod
-    def _max_min_compose(R, S):
-        """Max-min composition: (R∘S)[i,j] = max_k min(R[i,k], S[k,j])."""
+    def _max_min_compose_2d(R, S):
+        """Max-min composition on [N, N] matrices (no batch dim).
+
+        (R∘S)[i,j] = max_k min(R[i,k], S[k,j])
+
+        Intermediate: [N, N, N] instead of [B, N, N, N]
+        """
+        # R: [N, N] → [N, 1, N]; S: [N, N] → [1, N, N]
         return torch.max(
-            torch.min(R.unsqueeze(3), S.unsqueeze(2)), dim=1
-        ).values
+            torch.min(R.unsqueeze(1), S.unsqueeze(0)), dim=-1
+        ).values  # [N, N]
 
     def forward(self, node_features, fuzzy_relation):
         """K-hop fuzzy propagation.
+
+        All max-min compositions run on [N, N] — the fuzzy relation is
+        shared across batch elements.  Only the final feature propagation
+        (bmm) expands to batch dimension.
 
         Args:
             node_features:  [B, N, D]
@@ -92,19 +102,34 @@ class FuzzyGraphConvolution(nn.Module):
         """
         batch_size, num_nodes, _ = node_features.shape
 
-        if fuzzy_relation.dim() == 2:
-            fuzzy_relation = fuzzy_relation.unsqueeze(0).expand(batch_size, -1, -1)
-        R = fuzzy_relation.to(device=node_features.device, dtype=node_features.dtype)
+        # ── Extract base [N, N] relation (all batch elements identical) ──
+        if fuzzy_relation.dim() == 3:
+            R_base = fuzzy_relation[0].to(
+                device=node_features.device, dtype=node_features.dtype
+            )
+        else:
+            R_base = fuzzy_relation.to(
+                device=node_features.device, dtype=node_features.dtype
+            )
+        # R_base: [N, N]
 
+        # ── Pre-compute k-hop powers on [N, N] (tiny, shared) ──
         I = torch.eye(num_nodes, device=node_features.device, dtype=node_features.dtype)
-        R_power = I.unsqueeze(0).expand(batch_size, -1, -1)  # R^(0)
+        R_powers = [I]  # R^(0)
+        current = R_base
+        for _ in range(self.k_hop):
+            R_powers.append(current)
+            current = self._max_min_compose_2d(R_base, current)  # R^(k+1)
 
-        output = torch.zeros_like(node_features)
-        for hop_index, projection in enumerate(self.projections):
-            if hop_index > 0:
-                R_power = self._max_min_compose(R, R_power)  # R^(k)
-            propagated = torch.bmm(R_power, node_features)    # R^(k) @ X
-            output = output + projection(propagated)
+        # ── Feature propagation (expand R^(k) to batch for bmm) ──
+        output = self.projections[0](
+            torch.bmm(I.unsqueeze(0).expand(batch_size, -1, -1), node_features)
+        )
+        for hop_index in range(1, self.k_hop + 1):
+            R_k_batch = R_powers[hop_index].unsqueeze(0).expand(batch_size, -1, -1)
+            propagated = torch.bmm(R_k_batch, node_features)
+            output = output + self.projections[hop_index](propagated)
+
         return output
 
 
