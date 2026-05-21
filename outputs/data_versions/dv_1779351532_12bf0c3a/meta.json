@@ -1,0 +1,22 @@
+{
+  "status": "failed",
+  "task": "traffic_state_pred",
+  "model": "STGCN",
+  "dataset": "METR_LA",
+  "seed": 42,
+  "train_rate": 0.6,
+  "eval_rate": 0.2,
+  "test_rate": 0.2,
+  "cli_options": {
+    "seed": "42",
+    "train_rate": "0.6",
+    "eval_rate": "0.2",
+    "batch_size": "64",
+    "dataset_class": "TrafficStatePointDataset"
+  },
+  "config_payload": {},
+  "created_at": 1779351532.240067,
+  "version_id": "dv_1779351532_12bf0c3a",
+  "updated_at": 1779351535.805136,
+  "error": "Data processing failed with return code 1."
+}

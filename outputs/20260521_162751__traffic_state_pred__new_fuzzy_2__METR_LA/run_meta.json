@@ -1,0 +1,12 @@
+{
+  "task": "traffic_state_pred",
+  "model": "new_fuzzy_2",
+  "dataset": "METR_LA",
+  "artifact_id": "da_20260521_160256__METR_LA__TrafficStatePointDataset__86d3f448",
+  "artifact_dir": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/data_artifacts/da_20260521_160256__METR_LA__TrafficStatePointDataset__86d3f448",
+  "data_signature": "86d3f44883fac6390fcb9ce091a2918d1d1d4c0d",
+  "force_reuse": false,
+  "source": "run_train_artifact",
+  "run_id": "20260521_162751__traffic_state_pred__new_fuzzy_2__METR_LA",
+  "updated_at": 1779352328.2568164
+}

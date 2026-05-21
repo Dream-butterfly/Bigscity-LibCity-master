@@ -1,0 +1,292 @@
+2026-05-21 16:25:24,360 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/logs
+2026-05-21 16:25:24,503 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/logs
+2026-05-21 16:25:24,504 - INFO - Begin artifact training pipeline, task=traffic_state_pred, model_name=STGCN, dataset_name=METR_LA, exp_id=20260521_162524__traffic_state_pred__STGCN__METR_LA
+2026-05-21 16:25:24,504 - INFO - {'task': 'traffic_state_pred', 'model': 'STGCN', 'dataset': 'METR_LA', 'saved_model': True, 'train': True, 'seed': 42, 'train_rate': 0.6, 'eval_rate': 0.2, 'batch_size': 64, 'learning_rate': 0.004, 'max_epoch': 10, 'dataset_class': 'TrafficStatePointDataset', 'executor': 'TrafficStateExecutor', 'evaluator': 'TrafficStateEvaluator', 'Ks': 3, 'Kt': 3, 'bidir_adj_mx': True, 'blocks': [[1, 32, 64], [64, 32, 128]], 'calculate_weight_adj': True, 'data_col': ['traffic_speed'], 'data_files': ['METR_LA'], 'device': device(type='cuda', index=0), 'disturb_rate': 0.5, 'dropout': 0, 'dyna': {'including_types': ['state'], 'state': {'entity_id': 'geo_id', 'traffic_speed': 'num'}}, 'evaluator_mode': 'single', 'geo': {'including_types': ['Point'], 'Point': {}}, 'geo_file': 'METR_LA', 'graph_conv_type': 'chebconv', 'init_weight_inf_or_zero': 'inf', 'is_distributed': True, 'metrics': ['MAE', 'MAPE', 'MSE', 'RMSE', 'masked_MAE', 'masked_MAPE', 'masked_MSE', 'masked_RMSE', 'R2', 'EVAR'], 'noise_SD': [10], 'noise_mean': [5], 'noise_type': 'gaussian', 'num_workers': 0, 'output_dim': 1, 'pad_with_last_sample': True, 'rank': 0, 'rel': {'including_types': ['geo'], 'geo': {'cost': 'num'}}, 'rel_file': 'METR_LA', 'robustness_test': False, 'save_mode': ['csv'], 'set_weight_link_or_dist': 'dist', 'stgcn_train_mode': 'quick', 'time_intervals': 300, 'weight_adj_epsilon': 0.1, 'weight_col': 'cost', 'world_size': 4, 'clip_grad_norm': False, 'epoch': 0, 'gpu': True, 'gpu_id': 0, 'hyper_tune': False, 'learner': 'rmsprop', 'load_best_epoch': True, 'log_every': 1, 'log_level': 'INFO', 'lr_T_max': 30, 'lr_alpha': 0.99, 'lr_beta1': 0.9, 'lr_beta2': 0.999, 'lr_decay': True, 'lr_decay_ratio': 0.7, 'lr_epsilon': 1e-08, 'lr_eta_min': 0, 'lr_momentum': 0, 'lr_patience': 10, 'lr_scheduler': 'steplr', 'lr_threshold': 0.0001, 'max_grad_norm': 1, 'patience': 50, 'step_size': 5, 'steps': [5, 20, 40, 70], 'train_loss': 'none', 'use_early_stop': False, 'weight_decay': 0, 'data_version_id': 'dv_1779351806_c90cb847', 'scaler': 'standard', 'load_external': False, 'normal_external': False, 'ext_scaler': 'none', 'add_time_in_day': False, 'add_day_in_week': False, 'cache_dataset': True, 'input_window': 12, 'output_window': 12, 'local_rank': 0, 'dist_backend': 'nccl', 'exp_id': '20260521_162524__traffic_state_pred__STGCN__METR_LA'}
+2026-05-21 16:25:24,599 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/logs
+2026-05-21 16:25:24,610 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/logs
+2026-05-21 16:25:26,262 - INFO - You select quick mode to train STGCN model.
+2026-05-21 16:25:26,383 - INFO - Chebyshev_polynomial_Lk shape: (3, 207, 207)
+2026-05-21 16:25:26,421 - INFO - You select quick mode to train STGCN model.
+2026-05-21 16:25:26,474 - INFO - Chebyshev_polynomial_Lk shape: (3, 207, 207)
+2026-05-21 16:25:26,488 - INFO - You select quick mode to train STGCN model.
+2026-05-21 16:25:26,538 - INFO - You select quick mode to train STGCN model.
+2026-05-21 16:25:26,541 - INFO - Chebyshev_polynomial_Lk shape: (3, 207, 207)
+2026-05-21 16:25:26,591 - INFO - Chebyshev_polynomial_Lk shape: (3, 207, 207)
+2026-05-21 16:25:28,410 - INFO - Enable AMP training (dtype=float16).
+2026-05-21 16:25:28,410 - INFO - You select `rmsprop` optimizer.
+2026-05-21 16:25:28,410 - INFO - Enable AMP training (dtype=float16).
+2026-05-21 16:25:28,410 - INFO - You select `rmsprop` optimizer.
+2026-05-21 16:25:28,411 - INFO - You select `steplr` lr_scheduler.
+2026-05-21 16:25:28,411 - INFO - You select `steplr` lr_scheduler.
+2026-05-21 16:25:28,411 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-21 16:25:28,411 - INFO - Start training ...
+2026-05-21 16:25:28,411 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-21 16:25:28,411 - INFO - num_batches:81
+2026-05-21 16:25:28,411 - INFO - Start training ...
+2026-05-21 16:25:28,411 - INFO - num_batches:81
+2026-05-21 16:25:28,412 - INFO - DistributedDataParallel(
+  (module): STGCN(
+    (st_conv1): STConvBlock(
+      (tconv1): TemporalConvLayer(
+        (align): Align()
+        (conv): Conv2d(1, 64, kernel_size=(3, 1), stride=(1, 1))
+      )
+      (sconv): SpatioConvLayer(
+        (align): Align()
+      )
+      (tconv2): TemporalConvLayer(
+        (align): Align()
+        (conv): Conv2d(32, 64, kernel_size=(3, 1), stride=(1, 1))
+      )
+      (ln): LayerNorm((207, 64), eps=1e-05, elementwise_affine=True)
+      (dropout): Dropout(p=0, inplace=False)
+    )
+    (st_conv2): STConvBlock(
+      (tconv1): TemporalConvLayer(
+        (align): Align(
+          (conv1x1): Conv2d(64, 32, kernel_size=(1, 1), stride=(1, 1))
+        )
+        (conv): Conv2d(64, 64, kernel_size=(3, 1), stride=(1, 1))
+      )
+      (sconv): SpatioConvLayer(
+        (align): Align()
+      )
+      (tconv2): TemporalConvLayer(
+        (align): Align()
+        (conv): Conv2d(32, 128, kernel_size=(3, 1), stride=(1, 1))
+      )
+      (ln): LayerNorm((207, 128), eps=1e-05, elementwise_affine=True)
+      (dropout): Dropout(p=0, inplace=False)
+    )
+    (output): OutputLayer(
+      (tconv1): TemporalConvLayer(
+        (align): Align()
+        (conv): Conv2d(128, 256, kernel_size=(4, 1), stride=(1, 1))
+      )
+      (ln): LayerNorm((207, 128), eps=1e-05, elementwise_affine=True)
+      (tconv2): TemporalConvLayer(
+        (align): Align()
+        (conv): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1))
+      )
+      (fc): FullyConvLayer(
+        (conv): Conv2d(128, 1, kernel_size=(1, 1), stride=(1, 1))
+      )
+    )
+  )
+)
+2026-05-21 16:25:28,413 - INFO - module.st_conv1.tconv1.conv.weight	torch.Size([64, 1, 3, 1])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv1.tconv1.conv.bias	torch.Size([64])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv1.sconv.theta	torch.Size([32, 32, 3])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv1.sconv.b	torch.Size([1, 32, 1, 1])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv1.tconv2.conv.weight	torch.Size([64, 32, 3, 1])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv1.tconv2.conv.bias	torch.Size([64])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv1.ln.weight	torch.Size([207, 64])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv1.ln.bias	torch.Size([207, 64])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv2.tconv1.align.conv1x1.weight	torch.Size([32, 64, 1, 1])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv2.tconv1.align.conv1x1.bias	torch.Size([32])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv2.tconv1.conv.weight	torch.Size([64, 64, 3, 1])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv2.tconv1.conv.bias	torch.Size([64])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv2.sconv.theta	torch.Size([32, 32, 3])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv2.sconv.b	torch.Size([1, 32, 1, 1])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv2.tconv2.conv.weight	torch.Size([128, 32, 3, 1])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv2.tconv2.conv.bias	torch.Size([128])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv2.ln.weight	torch.Size([207, 128])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.st_conv2.ln.bias	torch.Size([207, 128])	cuda:0	True
+2026-05-21 16:25:28,413 - INFO - module.output.tconv1.conv.weight	torch.Size([256, 128, 4, 1])	cuda:0	True
+2026-05-21 16:25:28,414 - INFO - module.output.tconv1.conv.bias	torch.Size([256])	cuda:0	True
+2026-05-21 16:25:28,414 - INFO - module.output.ln.weight	torch.Size([207, 128])	cuda:0	True
+2026-05-21 16:25:28,414 - INFO - module.output.ln.bias	torch.Size([207, 128])	cuda:0	True
+2026-05-21 16:25:28,414 - INFO - module.output.tconv2.conv.weight	torch.Size([128, 128, 1, 1])	cuda:0	True
+2026-05-21 16:25:28,414 - INFO - module.output.tconv2.conv.bias	torch.Size([128])	cuda:0	True
+2026-05-21 16:25:28,414 - INFO - module.output.fc.conv.weight	torch.Size([1, 128, 1, 1])	cuda:0	True
+2026-05-21 16:25:28,414 - INFO - module.output.fc.conv.bias	torch.Size([1])	cuda:0	True
+2026-05-21 16:25:28,414 - INFO - Total parameter numbers: 319969
+2026-05-21 16:25:28,414 - INFO - Enable AMP training (dtype=float16).
+2026-05-21 16:25:28,414 - INFO - You select `rmsprop` optimizer.
+2026-05-21 16:25:28,414 - INFO - Enable AMP training (dtype=float16).
+2026-05-21 16:25:28,414 - INFO - You select `rmsprop` optimizer.
+2026-05-21 16:25:28,415 - INFO - You select `steplr` lr_scheduler.
+2026-05-21 16:25:28,415 - INFO - You select `steplr` lr_scheduler.
+2026-05-21 16:25:28,415 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-21 16:25:28,415 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-21 16:25:28,415 - INFO - Start training ...
+2026-05-21 16:25:28,415 - INFO - Start training ...
+2026-05-21 16:25:28,415 - INFO - num_batches:81
+2026-05-21 16:25:28,415 - INFO - num_batches:81
+2026-05-21 16:25:30,891 - INFO - epoch complete!
+2026-05-21 16:25:30,891 - INFO - evaluating now!
+2026-05-21 16:25:30,891 - INFO - epoch complete!
+2026-05-21 16:25:30,892 - INFO - evaluating now!
+2026-05-21 16:25:30,903 - INFO - epoch complete!
+2026-05-21 16:25:30,903 - INFO - evaluating now!
+2026-05-21 16:25:31,567 - INFO - Epoch [0/10] train_loss: 602.8441, val_loss: 165.7659, lr: 0.004000, 3.15s
+2026-05-21 16:25:31,569 - INFO - Epoch [0/10] train_loss: 651.3632, val_loss: 199.4687, lr: 0.004000, 3.16s
+2026-05-21 16:25:31,588 - INFO - Epoch [0/10] train_loss: 570.9236, val_loss: 186.2602, lr: 0.004000, 3.18s
+2026-05-21 16:25:31,681 - INFO - Saved model at 0
+2026-05-21 16:25:31,681 - INFO - Val loss decrease from inf to 199.4687, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/model_cache/STGCN_METR_LA_epoch0.tar
+2026-05-21 16:25:31,681 - INFO - Saved model at 0
+2026-05-21 16:25:31,681 - INFO - Val loss decrease from inf to 165.7659, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/model_cache/STGCN_METR_LA_epoch0.tar
+2026-05-21 16:25:31,750 - INFO - Saved model at 0
+2026-05-21 16:25:31,751 - INFO - Val loss decrease from inf to 186.2602, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/model_cache/STGCN_METR_LA_epoch0.tar
+2026-05-21 16:25:32,263 - INFO - epoch complete!
+2026-05-21 16:25:32,263 - INFO - evaluating now!
+2026-05-21 16:25:32,501 - INFO - epoch complete!
+2026-05-21 16:25:32,501 - INFO - evaluating now!
+2026-05-21 16:25:32,593 - INFO - epoch complete!
+2026-05-21 16:25:32,593 - INFO - evaluating now!
+2026-05-21 16:25:32,615 - INFO - epoch complete!
+2026-05-21 16:25:32,616 - INFO - evaluating now!
+2026-05-21 16:25:33,176 - INFO - Epoch [1/10] train_loss: 70.9922, val_loss: 189.8472, lr: 0.004000, 1.49s
+2026-05-21 16:25:33,306 - INFO - Epoch [1/10] train_loss: 68.2639, val_loss: 142.5019, lr: 0.004000, 1.56s
+2026-05-21 16:25:33,316 - INFO - Saved model at 1
+2026-05-21 16:25:33,316 - INFO - Val loss decrease from 186.2602 to 142.5019, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/model_cache/STGCN_METR_LA_epoch1.tar
+2026-05-21 16:25:33,427 - INFO - Epoch [1/10] train_loss: 68.9196, val_loss: 150.2004, lr: 0.004000, 1.75s
+2026-05-21 16:25:33,440 - INFO - Saved model at 1
+2026-05-21 16:25:33,440 - INFO - Val loss decrease from 199.4687 to 150.2004, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/model_cache/STGCN_METR_LA_epoch1.tar
+2026-05-21 16:25:33,724 - INFO - Epoch [0/10] train_loss: 661.8009, val_loss: 142.9084, lr: 0.004000, 5.31s
+2026-05-21 16:25:33,736 - INFO - Saved model at 0
+2026-05-21 16:25:33,736 - INFO - Val loss decrease from inf to 142.9084, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/model_cache/STGCN_METR_LA_epoch0.tar
+2026-05-21 16:25:33,937 - INFO - epoch complete!
+2026-05-21 16:25:33,937 - INFO - evaluating now!
+2026-05-21 16:25:34,113 - INFO - epoch complete!
+2026-05-21 16:25:34,113 - INFO - evaluating now!
+2026-05-21 16:25:34,316 - INFO - epoch complete!
+2026-05-21 16:25:34,316 - INFO - evaluating now!
+2026-05-21 16:25:34,582 - INFO - Epoch [2/10] train_loss: 52.5193, val_loss: 155.6296, lr: 0.004000, 1.41s
+2026-05-21 16:25:34,592 - INFO - Saved model at 2
+2026-05-21 16:25:34,592 - INFO - Val loss decrease from 165.7659 to 155.6296, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/model_cache/STGCN_METR_LA_epoch2.tar
+2026-05-21 16:25:34,769 - INFO - Epoch [2/10] train_loss: 50.7823, val_loss: 167.3618, lr: 0.004000, 1.45s
+2026-05-21 16:25:35,006 - INFO - Epoch [2/10] train_loss: 51.8736, val_loss: 152.7253, lr: 0.004000, 1.57s
+2026-05-21 16:25:35,217 - INFO - epoch complete!
+2026-05-21 16:25:35,217 - INFO - evaluating now!
+2026-05-21 16:25:35,362 - INFO - epoch complete!
+2026-05-21 16:25:35,363 - INFO - evaluating now!
+2026-05-21 16:25:35,555 - INFO - epoch complete!
+2026-05-21 16:25:35,555 - INFO - evaluating now!
+2026-05-21 16:25:35,803 - INFO - epoch complete!
+2026-05-21 16:25:35,803 - INFO - evaluating now!
+2026-05-21 16:25:36,022 - INFO - Epoch [3/10] train_loss: 45.9358, val_loss: 200.0666, lr: 0.004000, 1.43s
+2026-05-21 16:25:36,235 - INFO - Epoch [3/10] train_loss: 56.1405, val_loss: 173.3691, lr: 0.004000, 1.47s
+2026-05-21 16:25:36,551 - INFO - Epoch [1/10] train_loss: 63.6577, val_loss: 256.3182, lr: 0.004000, 2.81s
+2026-05-21 16:25:36,587 - INFO - Epoch [3/10] train_loss: 48.9228, val_loss: 158.3568, lr: 0.004000, 1.58s
+2026-05-21 16:25:36,897 - INFO - epoch complete!
+2026-05-21 16:25:36,897 - INFO - evaluating now!
+2026-05-21 16:25:37,101 - INFO - epoch complete!
+2026-05-21 16:25:37,101 - INFO - evaluating now!
+2026-05-21 16:25:37,495 - INFO - epoch complete!
+2026-05-21 16:25:37,495 - INFO - evaluating now!
+2026-05-21 16:25:37,713 - INFO - Epoch [4/10] train_loss: 52.8274, val_loss: 131.7079, lr: 0.002800, 1.69s
+2026-05-21 16:25:37,725 - INFO - Saved model at 4
+2026-05-21 16:25:37,725 - INFO - Val loss decrease from 155.6296 to 131.7079, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/model_cache/STGCN_METR_LA_epoch4.tar
+2026-05-21 16:25:37,754 - INFO - Epoch [4/10] train_loss: 49.9941, val_loss: 251.2512, lr: 0.002800, 1.52s
+2026-05-21 16:25:38,066 - INFO - epoch complete!
+2026-05-21 16:25:38,066 - INFO - evaluating now!
+2026-05-21 16:25:38,177 - INFO - Epoch [4/10] train_loss: 49.0120, val_loss: 207.6472, lr: 0.002800, 1.59s
+2026-05-21 16:25:38,551 - INFO - epoch complete!
+2026-05-21 16:25:38,551 - INFO - evaluating now!
+2026-05-21 16:25:38,623 - INFO - epoch complete!
+2026-05-21 16:25:38,623 - INFO - evaluating now!
+2026-05-21 16:25:39,046 - INFO - epoch complete!
+2026-05-21 16:25:39,047 - INFO - evaluating now!
+2026-05-21 16:25:39,247 - INFO - Epoch [5/10] train_loss: 50.6365, val_loss: 139.5657, lr: 0.002800, 1.49s
+2026-05-21 16:25:39,257 - INFO - Saved model at 5
+2026-05-21 16:25:39,257 - INFO - Val loss decrease from 142.5019 to 139.5657, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/model_cache/STGCN_METR_LA_epoch5.tar
+2026-05-21 16:25:39,313 - INFO - Epoch [2/10] train_loss: 52.2505, val_loss: 167.0480, lr: 0.004000, 2.76s
+2026-05-21 16:25:39,423 - INFO - Epoch [5/10] train_loss: 45.2200, val_loss: 137.2220, lr: 0.002800, 1.70s
+2026-05-21 16:25:39,702 - INFO - Epoch [5/10] train_loss: 38.0702, val_loss: 155.2636, lr: 0.002800, 1.53s
+2026-05-21 16:25:40,076 - INFO - epoch complete!
+2026-05-21 16:25:40,076 - INFO - evaluating now!
+2026-05-21 16:25:40,287 - INFO - epoch complete!
+2026-05-21 16:25:40,288 - INFO - evaluating now!
+2026-05-21 16:25:40,566 - INFO - epoch complete!
+2026-05-21 16:25:40,566 - INFO - evaluating now!
+2026-05-21 16:25:40,670 - INFO - epoch complete!
+2026-05-21 16:25:40,670 - INFO - evaluating now!
+2026-05-21 16:25:40,733 - INFO - Epoch [6/10] train_loss: 51.2469, val_loss: 227.0654, lr: 0.002800, 1.48s
+2026-05-21 16:25:41,166 - INFO - Epoch [6/10] train_loss: 45.1887, val_loss: 124.5486, lr: 0.002800, 1.74s
+2026-05-21 16:25:41,178 - INFO - Saved model at 6
+2026-05-21 16:25:41,178 - INFO - Val loss decrease from 131.7079 to 124.5486, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/model_cache/STGCN_METR_LA_epoch6.tar
+2026-05-21 16:25:41,339 - INFO - Epoch [6/10] train_loss: 43.9743, val_loss: 1724.1151, lr: 0.002800, 1.64s
+2026-05-21 16:25:41,552 - INFO - Epoch [3/10] train_loss: 51.8461, val_loss: 1585.9264, lr: 0.004000, 2.24s
+2026-05-21 16:25:41,559 - INFO - epoch complete!
+2026-05-21 16:25:41,559 - INFO - evaluating now!
+2026-05-21 16:25:42,076 - INFO - epoch complete!
+2026-05-21 16:25:42,076 - INFO - evaluating now!
+2026-05-21 16:25:42,166 - INFO - epoch complete!
+2026-05-21 16:25:42,166 - INFO - evaluating now!
+2026-05-21 16:25:42,221 - INFO - Epoch [7/10] train_loss: 39.2749, val_loss: 190.0620, lr: 0.002800, 1.49s
+2026-05-21 16:25:42,755 - INFO - epoch complete!
+2026-05-21 16:25:42,755 - INFO - evaluating now!
+2026-05-21 16:25:42,881 - INFO - Epoch [7/10] train_loss: 51.2333, val_loss: 131.5826, lr: 0.002800, 1.54s
+2026-05-21 16:25:42,892 - INFO - Saved model at 7
+2026-05-21 16:25:42,892 - INFO - Val loss decrease from 150.2004 to 131.5826, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/model_cache/STGCN_METR_LA_epoch7.tar
+2026-05-21 16:25:42,913 - INFO - Epoch [7/10] train_loss: 43.4786, val_loss: 1997.0450, lr: 0.002800, 1.73s
+2026-05-21 16:25:43,024 - INFO - epoch complete!
+2026-05-21 16:25:43,024 - INFO - evaluating now!
+2026-05-21 16:25:43,683 - INFO - Epoch [8/10] train_loss: 53.9591, val_loss: 141.0583, lr: 0.002800, 1.46s
+2026-05-21 16:25:43,690 - INFO - epoch complete!
+2026-05-21 16:25:43,690 - INFO - evaluating now!
+2026-05-21 16:25:43,797 - INFO - epoch complete!
+2026-05-21 16:25:43,797 - INFO - evaluating now!
+2026-05-21 16:25:44,005 - INFO - Epoch [4/10] train_loss: 51.7987, val_loss: 134.2580, lr: 0.002800, 2.45s
+2026-05-21 16:25:44,122 - INFO - Saved model at 4
+2026-05-21 16:25:44,122 - INFO - Val loss decrease from 142.9084 to 134.2580, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/model_cache/STGCN_METR_LA_epoch4.tar
+2026-05-21 16:25:44,351 - INFO - Epoch [8/10] train_loss: 44.6633, val_loss: 190.6790, lr: 0.002800, 1.46s
+2026-05-21 16:25:44,508 - INFO - epoch complete!
+2026-05-21 16:25:44,508 - INFO - evaluating now!
+2026-05-21 16:25:44,518 - INFO - Epoch [8/10] train_loss: 41.2374, val_loss: 137.7045, lr: 0.002800, 1.61s
+2026-05-21 16:25:45,166 - INFO - epoch complete!
+2026-05-21 16:25:45,166 - INFO - evaluating now!
+2026-05-21 16:25:45,191 - INFO - Epoch [9/10] train_loss: 47.2927, val_loss: 130.0209, lr: 0.001960, 1.51s
+2026-05-21 16:25:45,200 - INFO - Saved model at 9
+2026-05-21 16:25:45,200 - INFO - Val loss decrease from 139.5657 to 130.0209, saving to /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/model_cache/STGCN_METR_LA_epoch9.tar
+2026-05-21 16:25:45,200 - INFO - Trained totally 10 epochs, average train time is 0.987s, average eval time is 0.672s
+2026-05-21 16:25:45,225 - INFO - Loaded model at 9
+2026-05-21 16:25:45,225 - INFO - Start evaluating ...
+2026-05-21 16:25:45,316 - INFO - epoch complete!
+2026-05-21 16:25:45,316 - INFO - evaluating now!
+2026-05-21 16:25:45,519 - INFO - epoch complete!
+2026-05-21 16:25:45,519 - INFO - evaluating now!
+2026-05-21 16:25:45,937 - INFO - Epoch [9/10] train_loss: 47.6886, val_loss: 161.4519, lr: 0.001960, 1.59s
+2026-05-21 16:25:45,937 - INFO - Trained totally 10 epochs, average train time is 1.025s, average eval time is 0.714s
+2026-05-21 16:25:45,957 - INFO - Loaded model at 7
+2026-05-21 16:25:45,957 - INFO - Start evaluating ...
+2026-05-21 16:25:45,988 - INFO - Epoch [9/10] train_loss: 43.9574, val_loss: 920.9971, lr: 0.001960, 1.47s
+2026-05-21 16:25:45,988 - INFO - Trained totally 10 epochs, average train time is 1.004s, average eval time is 0.738s
+2026-05-21 16:25:46,008 - INFO - Loaded model at 6
+2026-05-21 16:25:46,008 - INFO - Start evaluating ...
+2026-05-21 16:25:46,682 - INFO - Epoch [5/10] train_loss: 38.8400, val_loss: 218.1267, lr: 0.002800, 2.56s
+2026-05-21 16:25:48,198 - INFO - epoch complete!
+2026-05-21 16:25:48,199 - INFO - evaluating now!
+2026-05-21 16:25:49,572 - INFO - Epoch [6/10] train_loss: 43.7741, val_loss: 136.9823, lr: 0.002800, 2.89s
+2026-05-21 16:25:51,174 - INFO - epoch complete!
+2026-05-21 16:25:51,174 - INFO - evaluating now!
+2026-05-21 16:25:52,802 - INFO - Epoch [7/10] train_loss: 51.0395, val_loss: 185.0289, lr: 0.002800, 3.23s
+2026-05-21 16:25:54,626 - INFO - epoch complete!
+2026-05-21 16:25:54,626 - INFO - evaluating now!
+2026-05-21 16:25:56,124 - INFO - Epoch [8/10] train_loss: 38.8705, val_loss: 1897.5900, lr: 0.002800, 3.29s
+2026-05-21 16:25:57,921 - INFO - epoch complete!
+2026-05-21 16:25:57,921 - INFO - evaluating now!
+2026-05-21 16:25:59,524 - INFO - Epoch [9/10] train_loss: 40.8925, val_loss: 171.6399, lr: 0.001960, 3.40s
+2026-05-21 16:25:59,524 - INFO - Trained totally 10 epochs, average train time is 1.740s, average eval time is 1.354s
+2026-05-21 16:25:59,589 - INFO - Loaded model at 4
+2026-05-21 16:25:59,590 - INFO - Saved model at /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/model_cache/STGCN_METR_LA.m
+2026-05-21 16:25:59,599 - INFO - Start evaluating ...
+2026-05-21 16:26:17,860 - INFO - Note that you select the single mode to evaluate!
+2026-05-21 16:26:17,864 - INFO - Evaluate result is saved at /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260521_162524__traffic_state_pred__STGCN__METR_LA/evaluate_cache/2026_05_21_16_26_17_STGCN_METR_LA.csv
+2026-05-21 16:26:17,876 - INFO - 
+         MAE      MAPE         MSE  ...  masked_RMSE        R2      EVAR
+1   3.380498  0.072653   47.651806  ...     5.559116  0.908087  0.908647
+2   4.040443  0.088564   77.719810  ...     7.102035  0.850093  0.851414
+3   4.564569  0.101205  102.464226  ...     8.273856  0.802370  0.804302
+4   5.073412  0.112997  127.538277  ...     9.278927  0.754017  0.756494
+5   5.570477  0.124457  151.558777  ...    10.147282  0.707697  0.710737
+6   6.039035  0.135227  174.785446  ...    10.917803  0.662907  0.666480
+7   6.466315  0.145389  196.155914  ...    11.608572  0.621703  0.625803
+8   6.841125  0.154985  214.953430  ...    12.180815  0.585462  0.590102
+9   7.219447  0.163986  234.344894  ...    12.750891  0.548077  0.553260
+10  7.558352  0.172532  251.904419  ...    13.241279  0.514232  0.519938
+11  7.865518  0.180520  267.652374  ...    13.691348  0.483882  0.490082
+12  8.166080  0.188242  283.671661  ...    14.112516  0.453009  0.459671
+
+[12 rows x 10 columns]
