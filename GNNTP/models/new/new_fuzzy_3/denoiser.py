@@ -188,13 +188,15 @@ class FuzzyGuidedDenoiser(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
         )
 
-        # ── Condition fusion (concat+linear, proven) ────────────
+        # ── Condition fusion (concat+linear, always-on) ─────────
         if input_window is None or input_window < 1:
             raise ValueError("input_window must be >= 1 for condition temporal weighting.")
         self.condition_temporal_weight = nn.Parameter(torch.zeros(input_window))
         self.condition_fusion = nn.Linear(hidden_dim * 2, hidden_dim)
-        # Blend gate: σ(0)=0.5 → equal weight. Model learns optimal balance.
-        self.condition_blend = nn.Parameter(torch.tensor(0.0))
+        # NOTE: the learnable blend gate has been removed.  In prior
+        # experiments the gate learned α→0 (ignore conditions) as a
+        # shortcut to reduce poisoned conservation-loss gradients.
+        # Always-on concat+linear fusion is more robust.
 
         # ── Denoiser blocks ─────────────────────────────────────
         self.blocks = nn.ModuleList([
@@ -239,7 +241,7 @@ class FuzzyGuidedDenoiser(nn.Module):
         ).to(dtype=denoiser_input.dtype)
         denoiser_input = denoiser_input + timestep_features.unsqueeze(1).unsqueeze(2)
 
-        # ── 3. Condition injection (concat+linear + blend gate) ─
+        # ── 3. Condition injection (concat+linear, always-on) ───
         temporal_weights = F.softmax(self.condition_temporal_weight, dim=0)
         condition_pooled = (
             condition_features * temporal_weights[None, :, None, None]
@@ -247,12 +249,9 @@ class FuzzyGuidedDenoiser(nn.Module):
         condition_pooled = condition_pooled.expand(
             -1, denoiser_input.size(1), -1, -1
         )
-        noisy_only = denoiser_input
-        fused = self.condition_fusion(
+        denoiser_input = self.condition_fusion(
             torch.cat([denoiser_input, condition_pooled], dim=-1)
         )
-        alpha = torch.sigmoid(self.condition_blend)
-        denoiser_input = (1.0 - alpha) * noisy_only + alpha * fused
 
         # ── 4. Denoiser blocks (with U-Net skips) ───────────────
         num_layers = len(self.blocks)

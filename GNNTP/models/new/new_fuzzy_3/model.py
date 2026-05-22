@@ -93,6 +93,13 @@ class NewFuzzy3(AbstractTrafficStateModel):
             self.prediction_clamp_min = config.get("prediction_clamp_min", -3.0)
             self.prediction_clamp_max = config.get("prediction_clamp_max", 3.0)
             self.denoiser_layers = config.get("denoiser_layers", 2)
+            # Conservation loss in diffusion path: DISABLED by default.
+            # The one-step Ŷ₀ recovery from an untrained denoiser produces
+            # garbage signals that poison gradients.  Enable only after
+            # denoiser convergence is verified.
+            self.diffusion_conservation_enabled = config.get(
+                "diffusion_conservation_enabled", False
+            )
             self.diffusion = DiffusionScheduler(
                 diffusion_steps=self.diffusion_steps,
                 schedule=config.get("diffusion_schedule", "linear"),
@@ -276,7 +283,14 @@ class NewFuzzy3(AbstractTrafficStateModel):
         return regression_loss
 
     def _diffusion_loss(self, future_sequence, condition_features, graph_matrix):
-        """SNR-weighted MSE diffusion loss + optional conservation."""
+        """SNR-weighted MSE diffusion loss (+ optional conservation, off by default).
+
+        Conservation loss is disabled by default in the diffusion path
+        because the one-step Ŷ₀ recovery from an untrained denoiser
+        produces meaningless signals that poison gradients.  Enable via
+        ``diffusion_conservation_enabled=true`` only after verifying
+        denoiser convergence.
+        """
         B = future_sequence.size(0)
         device = future_sequence.device
 
@@ -286,8 +300,9 @@ class NewFuzzy3(AbstractTrafficStateModel):
         # 2. Forward diffusion: Y_t = √ᾱ_t · Y_0 + √(1-ᾱ_t) · ε
         Y_t, epsilon = self.diffusion.add_noise(future_sequence, t)
 
-        # 3. Predict noise
+        # 3. Predict noise (clamped to prevent runaway gradients)
         epsilon_theta = self.denoiser(Y_t, t, condition_features, graph_matrix)
+        epsilon_theta = epsilon_theta.clamp(-10.0, 10.0)
 
         # 4. SNR-weighted MSE (Improved DDPM)
         alpha_bar_t = self.diffusion.alphas_cumprod[t]
@@ -298,20 +313,21 @@ class NewFuzzy3(AbstractTrafficStateModel):
             loss_weight * F.mse_loss(epsilon_theta, epsilon, reduction='none')
         ).mean()
 
-        # 5. Conservation loss (only for low-noise steps where
-        #    one-step reconstruction is meaningful)
-        effective_weight = self._get_effective_conservation_weight()
-        if effective_weight > 0:
-            low_noise_mask = t < int(0.7 * self.diffusion_steps)
-            if low_noise_mask.any():
-                Y_0_pred = self.diffusion.predict_start_from_noise(
-                    Y_t[low_noise_mask], t[low_noise_mask],
-                    epsilon_theta[low_noise_mask],
-                )
-                conservation_loss = self._fuzzy_conservation_loss(
-                    Y_0_pred, graph_matrix,
-                )
-                return diffusion_loss + effective_weight * conservation_loss
+        # 5. Conservation loss — DISABLED by default.
+        #    Only enable after denoiser has converged (e.g. after 30+ epochs).
+        if self.diffusion_conservation_enabled:
+            effective_weight = self._get_effective_conservation_weight()
+            if effective_weight > 0:
+                low_noise_mask = t < int(0.7 * self.diffusion_steps)
+                if low_noise_mask.any():
+                    Y_0_pred = self.diffusion.predict_start_from_noise(
+                        Y_t[low_noise_mask], t[low_noise_mask],
+                        epsilon_theta[low_noise_mask],
+                    )
+                    conservation_loss = self._fuzzy_conservation_loss(
+                        Y_0_pred, graph_matrix,
+                    )
+                    return diffusion_loss + effective_weight * conservation_loss
 
         return diffusion_loss
 

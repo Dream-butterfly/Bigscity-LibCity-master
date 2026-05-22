@@ -25,6 +25,7 @@
   "denoiser_layers": 2,
   "prediction_clamp_min": -3.0,
   "prediction_clamp_max": 3.0,
+  "diffusion_conservation_enabled": false,
   "conservation_loss_weight": 0.1,
   "conservation_warmup_epochs": 5,
   "conservation_steps_per_epoch": 80,
