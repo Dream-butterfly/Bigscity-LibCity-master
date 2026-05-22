@@ -34,6 +34,7 @@ class NewFuzzy3(AbstractTrafficStateModel):
     DDP: ``_ddp_loss_through_forward = True`` ensures the executor calls
     ``self.model(batch)`` which triggers the DDP backward hook correctly
     for both diffusion and deterministic paths.
+    中文翻译版：Fuzzy 相关图 +
     """
 
     # DDP hook — forward() returns loss when training
@@ -75,6 +76,12 @@ class NewFuzzy3(AbstractTrafficStateModel):
         )
         self.physics_channel_idx = config.get("physics_channel_idx", 0)
         self.use_fuzzy_conservation = config.get("use_fuzzy_conservation", True)
+
+        # ── FCM Regularization ────────────────────────────────────
+        self.fcm_loss_weight = config.get("fcm_loss_weight", 0.01)
+        self.fcm_warmup_epochs = int(max(0, config.get("fcm_warmup_epochs", 3)))
+        self.fcm_steps_per_epoch = int(config.get("fcm_steps_per_epoch", 80))
+
         self._train_step_count = 0
 
         # ── Diffusion (Phase C) ───────────────────────────────────
@@ -187,7 +194,7 @@ class NewFuzzy3(AbstractTrafficStateModel):
         return self.predict(batch)
 
     def predict(self, batch):
-        """Predict future traffic from history.
+        """Predict future traffic from history. 从历史数据预测未来的交通
 
         Diffusion path: DDIM reverse sampling.
         Deterministic path: single forward pass through decoder.
@@ -236,17 +243,26 @@ class NewFuzzy3(AbstractTrafficStateModel):
     # ═══════════════════════════════════════════════════════════════
 
     def calculate_loss(self, batch):
-        """Compute loss: diffusion (SNR-MSE) or deterministic (L1)."""
+        """Compute loss: main (diffusion or deterministic) + FCM regularization."""
         history_sequence = batch["X"]
         future_sequence = batch["y"][..., :self.output_dim]
 
         condition_features = self.encode_condition(history_sequence)
         graph_matrix = self._get_graph_matrix(history_sequence)
 
+        # ── Main loss ────────────────────────────────────────────
         if self.use_diffusion:
-            return self._diffusion_loss(future_sequence, condition_features, graph_matrix)
+            total_loss = self._diffusion_loss(future_sequence, condition_features, graph_matrix)
         else:
-            return self._deterministic_loss(future_sequence, condition_features, graph_matrix)
+            total_loss = self._deterministic_loss(future_sequence, condition_features, graph_matrix)
+
+        # ── FCM membership–prototype regularization ──────────────
+        effective_fcm = self._get_effective_fcm_weight()
+        if effective_fcm > 0 and self.use_fuzzy_graph and self.fuzzy_graph is not None:
+            fcm_loss = self.fuzzy_graph.fcm_loss(history_sequence)
+            total_loss = total_loss + effective_fcm * fcm_loss
+
+        return total_loss
 
     def _deterministic_loss(self, future_sequence, condition_features, graph_matrix):
         """L1 regression + optional fuzzy conservation."""
@@ -316,6 +332,24 @@ class NewFuzzy3(AbstractTrafficStateModel):
         if self._train_step_count >= total_warmup_steps:
             return self.conservation_loss_weight
         return self.conservation_loss_weight * (self._train_step_count / total_warmup_steps)
+
+    def _get_effective_fcm_weight(self):
+        """Linearly ramp FCM loss weight over warmup epochs.
+
+        Symmetric to ``_get_effective_conservation_weight`` so both
+        regularisation terms follow the same ramp-in schedule.
+        """
+        if self.fcm_loss_weight <= 0:
+            return 0.0
+        if self.fcm_warmup_epochs <= 0:
+            return self.fcm_loss_weight
+        steps_per_epoch = self.fcm_steps_per_epoch
+        total_warmup_steps = self.fcm_warmup_epochs * steps_per_epoch
+        if total_warmup_steps <= 0:
+            return self.fcm_loss_weight
+        if self._train_step_count >= total_warmup_steps:
+            return self.fcm_loss_weight
+        return self.fcm_loss_weight * (self._train_step_count / total_warmup_steps)
 
     def _fuzzy_conservation_loss(self, future_sequence, fuzzy_relation):
         """Łukasiewicz T-norm fuzzy conservation loss.

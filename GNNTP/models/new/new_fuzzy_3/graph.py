@@ -282,6 +282,50 @@ class FuzzyRelationalGraphLearner(nn.Module):
         """Return fuzzy set prototypes (for FCM regularization)."""
         return self.fuzzy_prototypes  # [K, D]
 
+    # ── FCM Regularization ──────────────────────────────────────
+
+    def fcm_loss(self, node_features=None):
+        """FCM membership–prototype regularization.
+
+        J = (1/(N·K)) Σ_i Σ_k (μ_ik)² · ||h_i − v_k||²
+
+        Encourages fuzzy prototypes v_k to be cluster centres in the
+        projected feature space, and membership vectors μ to reflect
+        actual feature similarity.  This gives the max-min fuzzy
+        relation R[i,j] = max_k min(μ_k(i), μ_k(j)) a geometrically
+        grounded interpretation.
+
+        Args:
+            node_features: [B, T, N, D] or [B, N, D] raw input, or None.
+        Returns:
+            scalar loss; 0 if node_features is None.
+        """
+        if node_features is None:
+            return torch.tensor(0.0, device=self.fuzzy_prototypes.device)
+
+        # ── Aggregate to [N, D] (shared across batch / time) ──
+        if node_features.dim() == 4:
+            node_feat = node_features.mean(dim=(0, 1))
+        elif node_features.dim() == 3:
+            node_feat = node_features.mean(dim=0)
+        else:
+            node_feat = node_features
+
+        # ── Project to hidden_dim if needed ──
+        if self.raw_projection is not None:
+            node_feat = self.raw_projection(node_feat)   # [N, D]
+
+        # ── Memberships (same computation as forward) ──
+        memberships = self._compute_memberships(node_features)  # [N, K]
+
+        # ── Squared Euclidean distances ||h_i − v_k||² ──
+        h = node_feat.unsqueeze(1)                    # [N, 1, D]
+        v = self.fuzzy_prototypes.unsqueeze(0)        # [1, K, D]
+        dist_sq = ((h - v) ** 2).sum(dim=-1)          # [N, K]
+
+        # ── Standard FCM objective (m=2) ──
+        return (memberships ** 2 * dist_sq).mean()
+
 
 # ═══════════════════════════════════════════════════════════════════
 #  Adaptive Graph Learner  (kept for reference)
