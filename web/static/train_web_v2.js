@@ -16,6 +16,35 @@ const DEFAULT_THEME = new URLSearchParams(window.location.search).get('theme')
 const HIDDEN_TRAIN_PARAM_KEYS = new Set([
   'config_file', 'train_rate', 'eval_rate', 'dataset_class', 'task', 'model', 'dataset', 'seed',
 ]);
+/* ── 参数候选值（有候选项的参数渲染为下拉菜单，无需手动输入）── */
+const PARAM_CANDIDATES = {
+  // 归一化
+  scaler:      ['standard','normal','minmax01','minmax11','log','none'],
+  ext_scaler:  ['none','standard','normal','minmax01','minmax11','log'],
+  // 优化器 & 调度器
+  learner:     ['adam','sgd','adagrad','rmsprop','sparseadam'],
+  lr_scheduler: ['multisteplr','steplr','exponentiallr','cosineannealinglr','lambdalr','reduceonplateau'],
+  // 损失函数
+  loss_fn:     ['masked_mae','masked_mse','masked_rmse','masked_mape','masked_huber','log_cosh','r2','evar'],
+  train_loss:  ['none','masked_mae','masked_mse','huber','log_cosh'],
+  huber_delta: ['0.5','1.0','2.0','5.0'],
+  // bool 类
+  saved_model:       ['true','false'],
+  train:             ['true','false'],
+  use_early_stop:    ['true','false'],
+  lr_decay:          ['true','false'],
+  clip_grad_norm:    ['true','false'],
+  load_external:     ['true','false'],
+  normal_external:   ['true','false'],
+  time_of_day:       ['true','false'],
+  day_of_week:       ['true','false'],
+  add_time_in_day:   ['true','false'],
+  add_day_in_week:   ['true','false'],
+  use_mixed_proj:    ['true','false'],
+  // 数据集
+  dataset_class: ['TrafficStatePointDataset','TrafficStateDataset'],
+};
+
 const CLI_FIELDS = [
   'config_file', 'exp_id', 'seed', 'gpu', 'gpu_id',
   'train_rate', 'eval_rate', 'batch_size', 'learning_rate',
@@ -428,9 +457,15 @@ function renderParamCell(section, idx) {
   if (idx === null) return '';
   const rows = section === 'executor' ? _state.paramRowsExecutor : _state.paramRowsConfig;
   const row = rows[idx];
-  const valueEditor = row.type === 'json'
-    ? `<textarea class="param-value mono value-input value-input-json" data-section="${section}" data-idx="${idx}" rows="4">${escHtml(row.value)}</textarea>`
-    : `<input class="param-value mono value-input" data-section="${section}" data-idx="${idx}" value="${escHtml(row.value)}"/>`;
+  const candidates = PARAM_CANDIDATES[row.key];
+  let valueEditor;
+  if (candidates) {
+    valueEditor = `<select class="param-value mono value-input" data-section="${section}" data-idx="${idx}">`
+      + candidates.map(c => `<option value="${escHtml(c)}" ${row.value === c ? 'selected' : ''}>${escHtml(c)}</option>`).join('')
+      + `</select>`;
+  } else {
+    valueEditor = `<input class="param-value mono value-input" data-section="${section}" data-idx="${idx}" value="${escHtml(row.value)}"/>`;
+  }
   return `
     <td class="param-localized">${escHtml(getParamDisplayName(row.key))}</td>
     <td class="mono param-key">${escHtml(row.key)}</td>
@@ -483,14 +518,16 @@ function renderParamTable() {
       renderParamTable();
     });
   });
-  // Bind value input change
+  // Bind value input change (input for text, change for select)
   document.querySelectorAll('#param_tbody_config .value-input, #param_tbody_executor .value-input').forEach(el => {
-    el.addEventListener('input', e => {
+    const handler = e => {
       const section = e.target.getAttribute('data-section');
       const idx = Number(e.target.getAttribute('data-idx'));
       const rows = section === 'executor' ? _state.paramRowsExecutor : _state.paramRowsConfig;
       rows[idx].value = e.target.value;
-    });
+    };
+    el.addEventListener('input', handler);
+    el.addEventListener('change', handler);
   });
 }
 

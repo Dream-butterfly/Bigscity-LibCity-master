@@ -142,7 +142,7 @@ tr.is-selected td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
 .chart-container-lg{height:380px}
 
 /* ═══ PARAM SPLIT TABLE ═══ */
-.param-split{display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-md)}
+.param-split{display:grid;grid-template-columns:1fr;gap:var(--spacing-md)}
 .param-table-wrap{max-height:230px}
 .param-key{vertical-align:middle!important}
 .param-localized{min-width:130px}
