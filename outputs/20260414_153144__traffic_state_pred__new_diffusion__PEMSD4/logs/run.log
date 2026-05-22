@@ -1,7 +1,0 @@
-2026-04-14 15:31:44,651 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260414_153144__traffic_state_pred__new_diffusion__PEMSD4/logs
-2026-04-14 15:31:44,651 - INFO - Begin data prep, task=traffic_state_pred, model_name=new_diffusion, dataset_name=PEMSD4, exp_id=20260414_153144__traffic_state_pred__new_diffusion__PEMSD4
-2026-04-14 15:31:44,657 - INFO - Loaded file PEMSD4.geo, num_nodes=307
-2026-04-14 15:31:44,659 - INFO - set_weight_link_or_dist: link
-2026-04-14 15:31:44,659 - INFO - init_weight_inf_or_zero: zero
-2026-04-14 15:31:44,663 - INFO - Loaded file PEMSD4.rel, shape=(307, 307)
-2026-04-14 15:31:44,663 - INFO - Loading file PEMSD4.dyna

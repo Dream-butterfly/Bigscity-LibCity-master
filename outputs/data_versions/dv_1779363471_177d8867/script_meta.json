@@ -1,0 +1,22 @@
+{
+  "task": "traffic_state_pred",
+  "model": "new_fuzzy_2",
+  "dataset": "PEMS_BAY",
+  "exp_id": "20260521_193754__traffic_state_pred__new_fuzzy_2__PEMS_BAY",
+  "artifact_id": "da_20260521_194439__PEMS_BAY__TrafficStatePointDataset__3bec95c6",
+  "artifact_dir": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/data_artifacts/da_20260521_194439__PEMS_BAY__TrafficStatePointDataset__3bec95c6",
+  "data_signature": "3bec95c6b17d3aae9265a7ac0c06a4ef9744a9a2",
+  "train_batches": 489,
+  "valid_batches": 163,
+  "test_batches": 163,
+  "cache_file_name": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/dataset_cache/point_based_PEMS_BAY_12_12_0.6_0.2_standard_64_False_True_True_False.npz",
+  "data_feature_keys": [
+    "adj_mx",
+    "ext_dim",
+    "feature_dim",
+    "num_batches",
+    "num_nodes",
+    "output_dim",
+    "scaler"
+  ]
+}

@@ -1,0 +1,14 @@
+2026-05-22 10:12:31,121 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260522_101231__traffic_state_pred__new_fuzzy_3__PEMSD4/logs
+2026-05-22 10:12:31,537 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260522_101231__traffic_state_pred__new_fuzzy_3__PEMSD4/logs
+2026-05-22 10:12:42,037 - INFO - Enable AMP training (dtype=bfloat16).
+2026-05-22 10:12:42,037 - INFO - You select `adamw` optimizer.
+2026-05-22 10:12:42,038 - INFO - You select `reducelronplateau` lr_scheduler.
+2026-05-22 10:12:42,038 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-22 10:12:42,038 - INFO - Start training ...
+2026-05-22 10:12:42,038 - INFO - num_batches:40
+2026-05-22 10:12:42,040 - INFO - Enable AMP training (dtype=bfloat16).
+2026-05-22 10:12:42,040 - INFO - You select `adamw` optimizer.
+2026-05-22 10:12:42,041 - INFO - You select `reducelronplateau` lr_scheduler.
+2026-05-22 10:12:42,041 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-22 10:12:42,041 - INFO - Start training ...
+2026-05-22 10:12:42,041 - INFO - num_batches:40

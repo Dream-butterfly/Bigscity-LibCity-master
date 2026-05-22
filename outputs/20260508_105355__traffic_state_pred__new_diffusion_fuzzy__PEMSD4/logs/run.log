@@ -1,7 +1,0 @@
-2026-05-08 10:53:55,941 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260508_105355__traffic_state_pred__new_diffusion_fuzzy__PEMSD4/logs
-2026-05-08 10:53:55,967 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260508_105355__traffic_state_pred__new_diffusion_fuzzy__PEMSD4/logs
-2026-05-08 10:54:07,408 - INFO - You select `adamw` optimizer.
-2026-05-08 10:54:07,409 - INFO - You select `cosineannealinglr` lr_scheduler.
-2026-05-08 10:54:07,409 - WARNING - Received none train loss func and will use the loss func defined in the model.
-2026-05-08 10:54:07,410 - INFO - Start training ...
-2026-05-08 10:54:07,410 - INFO - num_batches:80
