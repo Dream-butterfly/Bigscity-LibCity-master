@@ -121,13 +121,16 @@ class FuzzyGraphConvolution(nn.Module):
             R_powers.append(current)
             current = self._max_min_compose_2d(R_base, current)  # R^(k+1)
 
-        # ── Feature propagation (expand R^(k) to batch for bmm) ──
-        output = self.projections[0](
-            torch.bmm(I.unsqueeze(0).expand(batch_size, -1, -1), node_features)
-        )
+        # ── Feature propagation (memory-efficient: avoids [B,N,N] intermediates) ──
+        # Hop 0: I @ X = X → projection directly
+        output = self.projections[0](node_features)
         for hop_index in range(1, self.k_hop + 1):
-            R_k_batch = R_powers[hop_index].unsqueeze(0).expand(batch_size, -1, -1)
-            propagated = torch.bmm(R_k_batch, node_features)
+            R_k = R_powers[hop_index]  # [N, N] — never expanded to batch
+            # R_k @ X via reshape trick: [N,N] @ [N, B*D] → [N, B*D] → [B, N, D]
+            # Saves ~N/D × memory vs. expand([B,N,N])
+            x_flat = node_features.permute(1, 0, 2).reshape(num_nodes, -1)
+            propagated_flat = torch.mm(R_k, x_flat)
+            propagated = propagated_flat.reshape(num_nodes, batch_size, -1).permute(1, 0, 2)
             output = output + self.projections[hop_index](propagated)
 
         return output
