@@ -1,0 +1,12 @@
+{
+  "task": "traffic_state_pred",
+  "model": "new_fuzzy_2",
+  "dataset": "PEMSD4",
+  "artifact_id": "da_20260525_170409__PEMSD4__TrafficStatePointDataset__1e7272c2",
+  "artifact_dir": "D:\\a_code\\A_Agent\\projects\\LibCity\\cache\\data_artifacts\\da_20260525_170409__PEMSD4__TrafficStatePointDataset__1e7272c2",
+  "data_signature": "1e7272c2108bb3dbf29930eeff91dc722b106ce0",
+  "force_reuse": false,
+  "source": "run_train_artifact",
+  "run_id": "20260525_170536__traffic_state_pred__new_fuzzy_2__PEMSD4",
+  "updated_at": 1779700486.1563041
+}
