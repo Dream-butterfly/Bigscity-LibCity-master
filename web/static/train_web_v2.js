@@ -22,12 +22,16 @@ const PARAM_CANDIDATES = {
   scaler:      ['standard','normal','minmax01','minmax11','log','none'],
   ext_scaler:  ['none','standard','normal','minmax01','minmax11','log'],
   // 优化器 & 调度器
-  learner:     ['adam','sgd','adagrad','rmsprop','sparseadam'],
+  learner:     ['adam','adamw','sgd','adagrad','rmsprop','sparseadam'],
   lr_scheduler: ['multisteplr','steplr','exponentiallr','cosineannealinglr','lambdalr','reduceonplateau'],
   // 损失函数
   loss_fn:     ['masked_mae','masked_mse','masked_rmse','masked_mape','masked_huber','log_cosh','r2','evar'],
   train_loss:  ['none','masked_mae','masked_mse','huber','log_cosh'],
   huber_delta: ['0.5','1.0','2.0','5.0'],
+  // 扩散调度
+  diffusion_schedule:   ['linear','cosine'],
+  sampling_method:      ['ddim','ddpm'],
+  physics_warmup_mode:  ['linear','cosine'],
   // bool 类
   saved_model:       ['true','false'],
   train:             ['true','false'],
@@ -41,6 +45,15 @@ const PARAM_CANDIDATES = {
   add_time_in_day:   ['true','false'],
   add_day_in_week:   ['true','false'],
   use_mixed_proj:    ['true','false'],
+  // 模糊 & 扩散 bool
+  use_fuzzy_graph:               ['true','false'],
+  use_fuzzy_conservation:        ['true','false'],
+  use_adaptive_graph:            ['true','false'],
+  use_spatiotemporal_attention:  ['true','false'],
+  use_temporal_position_embedding: ['true','false'],
+  use_gradient_checkpointing:    ['true','false'],
+  use_amp:                       ['true','false'],
+  scale_lr:                      ['true','false'],
   // 数据集
   dataset_class: ['TrafficStatePointDataset','TrafficStateDataset'],
 };
