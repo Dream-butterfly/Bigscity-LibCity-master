@@ -310,8 +310,12 @@ class FuzzyRelationalGraphLearner(nn.Module):
         if self.raw_projection is not None:
             h = self.raw_projection(h)          # → [N, hidden_dim]
 
+        # ── Cast to fp32: h² and matrix multiply easily overflow fp16 ──
+        h = h.float()
+        prototypes = self.fuzzy_prototypes.float()  # [K, D]
+
         # ── Base memberships (inherent fuzzy structure) ──
-        mu = torch.sigmoid(self.base_memberships)  # [N, K]
+        mu = torch.sigmoid(self.base_memberships.float())  # [N, K]
 
         # ── Pairwise squared distances: ‖h_i − c_k‖² ──
         prototypes = self.fuzzy_prototypes  # [K, D]
