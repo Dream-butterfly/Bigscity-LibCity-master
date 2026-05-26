@@ -4,8 +4,8 @@
   "model_entry": "GNNTP.models.new.final_new.model:NewFuzzyCellAttention",
   "dataset_class": "TrafficStatePointDataset",
   "dataset_entry": "GNNTP.data.dataset.traffic_state_point_dataset:TrafficStatePointDataset",
-  "executor": "TrafficStateExecutor",
-  "executor_entry": "GNNTP.common.traffic_state_executor:TrafficStateExecutor",
+  "executor": "FinalNewExecutor",
+  "executor_entry": "GNNTP.models.new.final_new.executor:FinalNewExecutor",
   "evaluator": "TrafficStateEvaluator",
   "evaluator_entry": "GNNTP.common.traffic_state_evaluator:TrafficStateEvaluator"
 }
