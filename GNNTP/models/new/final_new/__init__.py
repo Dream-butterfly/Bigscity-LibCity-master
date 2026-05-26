@@ -1,9 +1,11 @@
-"""new_fuzzy_cellattention — Fuzzy Cell Attention model package.
+"""final_new — Fuzzy Region Transformer for traffic forecasting.
 
-FuzDiff + Fuzzy Cell Attention:
-  H' = λ₁·FuzzyGCN(H, R) + λ₂·CellAttention(H, C)
+Local-Global Spatial Dual architecture:
+  Spatial-Local:  FuzzyGCN (K-hop topology propagation)
+  Spatial-Global: FRR (Fuzzy Region Routing, replaces spatial self-attn)
+  Temporal:       Per-node Transformer
 """
 
-from GNNTP.models.new.new_fuzzy_cellattention.model import NewFuzzyCellAttention
+from GNNTP.models.new.final_new.model import NewFuzzyCellAttention
 
 __all__ = ["NewFuzzyCellAttention"]
