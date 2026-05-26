@@ -26,7 +26,8 @@
 
 ## 分析（analysis）
 
-1. `分析 11` | 2026-05-07 | 问题定位/根因分析 | [new_diffusion_fuzzy 训练无效 & 预测散乱诊断](analysis/2026-05/2026-05-07_new-diffusion-fuzzy-training-debug.md)
+1. ⭐ `分析 12` | 2026-05-25 | 创新方向/概念设计 | [模糊胞型图注意力（Fuzzy Tessellation Graph Attention）— 未来方向](analysis/2026-05/2026-05-25_fuzzy-tessellation-attention-concept.md)
+2. `分析 11` | 2026-05-07 | 问题定位/根因分析 | [new_diffusion_fuzzy 训练无效 & 预测散乱诊断](analysis/2026-05/2026-05-07_new-diffusion-fuzzy-training-debug.md)
 2. `分析 10` | 2026-05-07 09:52:00 +08:00 | 方案设计/决策建议 | [Web 前端深度迁移计划](analysis/2026-05/2026-05-07_web-frontend-migration-plan.md)
 2. `分析 9` | 2026-04-22 11:58:52 +08:00 | 方案设计/决策建议 | [数据-训练解耦方案与口径确认](analysis/2026-04/2026-04-22_1158_data-training-decoupling-design-and-decisions.md)
 2. `分析 8` | 2026-04-21 01:30:00 +08:00 | 方案设计/决策建议 | [不改核心结构下的稳训与降耗方案](analysis/2026-04/2026-04-21_0130_stability-and-efficiency-without-architecture-change.md)
