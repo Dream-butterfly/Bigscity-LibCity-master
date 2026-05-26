@@ -130,11 +130,11 @@ class FuzzyCellAttention(nn.Module):
         self.output_projection = nn.Linear(hidden_dim, hidden_dim)
 
         # ── Learnable blend weight λ₂  ──
-        self.cell_blend = nn.Parameter(torch.tensor(cell_blend_init))
+        self.cell_blend = nn.Parameter(torch.tensor(cell_blend_init, dtype=torch.float32))
 
         # ── Topological band-pass gate ──
-        self.band_center = nn.Parameter(torch.tensor(band_center_init))
-        self.band_width_raw = nn.Parameter(torch.tensor(band_width_init))
+        self.band_center = nn.Parameter(torch.tensor(band_center_init, dtype=torch.float32))
+        self.band_width_raw = nn.Parameter(torch.tensor(band_width_init, dtype=torch.float32))
 
         # ── Region Transformer ──
         self.region_transformer = None
