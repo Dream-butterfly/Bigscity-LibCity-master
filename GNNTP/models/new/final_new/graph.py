@@ -192,11 +192,6 @@ class FuzzyRelationalGraphLearner(nn.Module):
             nn.Linear(hidden_dim // 2, num_fuzzy_sets),
         )
 
-        # ── Fuzzy set prototypes (for FCM regularization) ──
-        self.fuzzy_prototypes = nn.Parameter(
-            torch.randn(num_fuzzy_sets, hidden_dim) * 0.02
-        )
-
         # ── Static adjacency (optional, for fuzzy union) ──
         if static_adjacency is not None:
             static_adj = static_adjacency.to(dtype=torch.float32)
@@ -280,10 +275,6 @@ class FuzzyRelationalGraphLearner(nn.Module):
     def get_memberships(self):
         """Return learned membership vectors (for interpretability vis)."""
         return torch.sigmoid(self.base_memberships)  # [N, K]
-
-    def get_prototypes(self):
-        """Return fuzzy set prototypes (for FCM regularization)."""
-        return self.fuzzy_prototypes  # [K, D]
 
     # ── Stability Diagnostics (路线 A) ─────────────────────────────
 
