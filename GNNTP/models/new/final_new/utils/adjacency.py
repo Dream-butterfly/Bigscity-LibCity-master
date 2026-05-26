@@ -35,3 +35,35 @@ def expand_adjacency_batch(adjacency_matrix, target_batch_size):
         repeat_factor = target_batch_size // adjacency_matrix.size(0)
         return adjacency_matrix.repeat_interleave(repeat_factor, dim=0)
     raise ValueError("adjacency_matrix must be 2D or 3D tensor.")
+
+
+def compute_hop_distance(adjacency, max_hops=20):
+    """Iterative hop distance propagation.  O(K·N²), <1s for N≤1000.
+
+    For each hop k, compute which node pairs become reachable via
+    k-step random walk on the binary adjacency, and assign distance=k.
+
+    Traffic graphs do not need exact Euclidean shortest paths;
+    hop distance is sufficient and is a proper metric.
+
+    Args:
+        adjacency: [N, N] binary adjacency (edges > 0).
+        max_hops: distance for unreachable pairs.
+
+    Returns:
+        [N, N] float distance matrix.
+    """
+    N = adjacency.shape[0]
+    dist = torch.full((N, N), float(max_hops), dtype=torch.float32)
+    dist.fill_diagonal_(0.0)
+    mask_edges = (adjacency > 0) & ~torch.eye(N, dtype=torch.bool, device=adjacency.device)
+    dist[mask_edges] = 1.0
+
+    A_k = adjacency.float()
+    for hop in range(2, max_hops + 1):
+        A_k = (A_k @ adjacency.float()).clamp(min=0, max=1)
+        mask = (A_k > 0) & (dist == max_hops)
+        if not mask.any():
+            break
+        dist[mask] = float(hop)
+    return dist
