@@ -1,5 +1,9 @@
-"""new_fuzzy_2 (FuzDiff Phase A) model package."""
+"""new_fuzzy_cellattention — Fuzzy Cell Attention model package.
 
-from GNNTP.models.new.new_fuzzy_2.model import NewFuzzy2
+FuzDiff + Fuzzy Cell Attention:
+  H' = λ₁·FuzzyGCN(H, R) + λ₂·CellAttention(H, C)
+"""
 
-__all__ = ["NewFuzzy2"]
+from GNNTP.models.new.new_fuzzy_cellattention.model import NewFuzzyCellAttention
+
+__all__ = ["NewFuzzyCellAttention"]

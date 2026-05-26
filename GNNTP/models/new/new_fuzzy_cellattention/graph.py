@@ -285,6 +285,32 @@ class FuzzyRelationalGraphLearner(nn.Module):
         """Return fuzzy set prototypes (for FCM regularization)."""
         return self.fuzzy_prototypes  # [K, D]
 
+    # ── Stability Diagnostics (路线 A) ─────────────────────────────
+
+    def get_cell_entropy(self):
+        """模糊胞熵: H(i) = -Σ_k μ_k(i) log μ_k(i)。
+
+        基于 base_memberships（全局可学习参数，不依赖输入特征）。
+
+        Returns:
+            [N] 熵值。高值 → 节点位于模糊 Voronoi 边界 (交通相变边界候选)。
+        """
+        mu = torch.sigmoid(self.base_memberships)  # [N, K] → [0,1]
+        mu = mu / mu.sum(dim=-1, keepdim=True).clamp_min(1e-8)
+        return -(mu * mu.log()).sum(dim=-1)  # [N]
+
+    def get_margin_stability(self):
+        """归属稳定度: S(i) = μ_{(1)}(i) - μ_{(2)}(i)。
+
+        基于 base_memberships（全局可学习参数）。
+
+        Returns:
+            [N] 稳定度。低值 → 最大和第二大模糊集归属几乎相等 → 归属易翻转。
+        """
+        mu = torch.sigmoid(self.base_memberships)  # [N, K]
+        top2 = mu.topk(2, dim=-1).values  # [N, 2]
+        return top2[:, 0] - top2[:, 1]    # [N]
+
 
 # ═══════════════════════════════════════════════════════════════════
 #  Adaptive Graph Learner  (kept for reference)

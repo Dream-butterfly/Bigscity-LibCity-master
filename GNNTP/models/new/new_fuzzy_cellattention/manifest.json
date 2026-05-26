@@ -1,7 +1,7 @@
 {
   "task": "traffic_state_pred",
-  "model": "new_fuzzy_2",
-  "model_entry": "GNNTP.models.new.new_fuzzy_2.model:NewFuzzy2",
+  "model": "new_fuzzy_cellattention",
+  "model_entry": "GNNTP.models.new.new_fuzzy_cellattention.model:NewFuzzyCellAttention",
   "dataset_class": "TrafficStatePointDataset",
   "dataset_entry": "GNNTP.data.dataset.traffic_state_point_dataset:TrafficStatePointDataset",
   "executor": "TrafficStateExecutor",

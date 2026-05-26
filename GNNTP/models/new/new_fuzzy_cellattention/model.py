@@ -25,6 +25,7 @@ from GNNTP.models.abstract_traffic_state_model import AbstractTrafficStateModel
 from .encoder import STEncoder
 from .decoder import FutureDecoder
 from .graph import FuzzyRelationalGraphLearner
+from .utils import apply_temporal_attention
 
 
 class NewFuzzyCellAttention(AbstractTrafficStateModel):
@@ -140,12 +141,18 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         )
 
     def encode_condition(self, history_sequence):
-        """Encode historical traffic into condition feature H."""
+        """Encode historical traffic → (H, R).
+
+        Returns:
+            condition_features: [B, Tin, N, D]
+            graph_matrix: [N, N] fuzzy relation or adjacency
+        """
         if self.use_fuzzy_graph and self.fuzzy_graph is not None:
             fuzzy_R = self.fuzzy_graph(history_sequence).to(history_sequence.device)
         else:
             fuzzy_R = self.adjacency_matrix.to(history_sequence.device)
-        return self.condition_encoder(history_sequence, fuzzy_R)
+        condition_features = self.condition_encoder(history_sequence, fuzzy_R)
+        return condition_features, fuzzy_R
 
     # ═══════════════════════════════════════════════════════════════
     #  Forward / Predict
@@ -165,15 +172,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             [B, T_out, N, C_out] predicted future.
         """
         history_sequence = batch["X"]
-        condition_features = self.encode_condition(history_sequence)
-        # encode_condition already computed fuzzy_R, but it's not returned.
-        # Re-use the graph_matrix from the encoder flow.
-        # For simplicity, re-derive (the fuzzy graph is cheap compared to encoder).
-        if self.use_fuzzy_graph and self.fuzzy_graph is not None:
-            fuzzy_R = self.fuzzy_graph(history_sequence).to(history_sequence.device)
-        else:
-            fuzzy_R = self.adjacency_matrix.to(history_sequence.device)
-        return self.future_decoder(condition_features, fuzzy_R)
+        condition_features, graph_matrix = self.encode_condition(history_sequence)
+        return self.future_decoder(condition_features, graph_matrix)
 
     # ═══════════════════════════════════════════════════════════════
     #  Training loss
@@ -184,22 +184,80 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         history_sequence = batch["X"]
         future_sequence = batch["y"][..., :self.output_dim]
 
-        condition_features = self.encode_condition(history_sequence)
-
-        if self.use_fuzzy_graph and self.fuzzy_graph is not None:
-            fuzzy_R = self.fuzzy_graph(history_sequence).to(history_sequence.device)
-        else:
-            fuzzy_R = self.adjacency_matrix.to(history_sequence.device)
-
-        predicted_future = self.future_decoder(condition_features, fuzzy_R)
+        condition_features, graph_matrix = self.encode_condition(history_sequence)
+        predicted_future = self.future_decoder(condition_features, graph_matrix)
 
         regression_loss = F.l1_loss(predicted_future, future_sequence)
 
         effective_weight = self._get_effective_conservation_weight()
         if effective_weight > 0:
-            conservation_loss = self._fuzzy_conservation_loss(predicted_future, fuzzy_R)
+            conservation_loss = self._fuzzy_conservation_loss(predicted_future, graph_matrix)
             return regression_loss + effective_weight * conservation_loss
         return regression_loss
+
+    # ═══════════════════════════════════════════════════════════════
+    #  Stability Diagnostics (路线 A)
+    # ═══════════════════════════════════════════════════════════════
+
+    def get_fuzzy_graph_stability(self, history_sequence=None):
+        """获取模糊关系图的稳定性指标（路线A）。
+
+        基于 FuzzyRelationalGraphLearner 的成员隶属度:
+          - 模糊胞熵 H ∈ [0, log K] → 高值=模糊边界节点
+          - 归属稳定度 S ∈ [0, 1]  → 低值=归属易翻转
+
+        Returns:
+            (H, S): 各 [N] 张量，或 (None, None) 如果未启用模糊图。
+        """
+        if self.fuzzy_graph is None:
+            return None, None
+        H = self.fuzzy_graph.get_cell_entropy()
+        S = self.fuzzy_graph.get_margin_stability()
+        return H, S
+
+    def get_cell_attention_stability(self, history_sequence):
+        """获取模糊胞型注意力的稳定性指标。
+
+        从每个 Encoder/Decoder Block 的 FuzzyCellAttention 中聚合:
+          - 模糊胞熵 H → 高值=交通功能区边界
+          - 归属稳定度 S → 低值=归属易翻转（交通相变边界候选）
+
+        Args:
+            history_sequence: [B, Tin, N, Cin] 用于计算节点特征。
+
+        Returns:
+            metrics: list of (H, S) tuples, 每个 block 一个。
+        """
+        metrics = []
+        with torch.no_grad():
+            # 通过 encoder 前向获取中间节点表示
+            if self.use_fuzzy_graph and self.fuzzy_graph is not None:
+                graph_matrix = self.fuzzy_graph(history_sequence).to(history_sequence.device)
+            else:
+                graph_matrix = self.adjacency_matrix.to(history_sequence.device)
+
+            x = self.condition_encoder.input_projection(history_sequence)
+            if self.condition_encoder.temporal_position_embedding is not None:
+                x = x + self.condition_encoder.temporal_position_embedding[:, :x.shape[1]]
+
+            for block in self.condition_encoder.blocks:
+                # 收集该 block 的 cell attention 稳定性
+                if hasattr(block, 'cell_attention'):
+                    node_repr = x.mean(dim=(0, 1))  # global pool [N, D]
+                    H, S = block.cell_attention.get_stability_metrics(node_repr)
+                    metrics.append((H.cpu(), S.cpu()))
+                # 继续前向（不做残差，只收集后续 block 的节点特征）
+                temporal_out = apply_temporal_attention(x, block.temporal_attention)
+                x = block.norm_temporal(x + block.dropout(temporal_out))
+
+                bt, t, n, d = x.shape
+                g_in = x.reshape(bt * t, n, d)
+                g_out = block.graph_convolution(g_in, graph_matrix)
+                x = block.norm_graph(x + block.dropout(g_out.reshape(bt, t, n, d)))
+                # FFN (简化，不做残差因为只需要收集特征)
+                x = block.norm_ffn(x + block.dropout(block.feed_forward(x)))
+
+        return metrics
 
     def _get_effective_conservation_weight(self):
         """Linearly ramp conservation loss weight over warmup epochs."""
