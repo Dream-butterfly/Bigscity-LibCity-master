@@ -96,6 +96,12 @@ class GCONV(nn.Module):
         x0 = torch.reshape(x0, shape=[self._num_nodes, input_size * batch_size])
         x = torch.unsqueeze(x0, 0)  # (1, num_nodes, total_arg_size * batch_size)
 
+        # CUDA sparse.mm doesn't support FP16 (Half), cast to FP32 temporarily
+        original_dtype = x0.dtype
+        if original_dtype != torch.float32:
+            x0 = x0.float()
+            x = x.float()
+
         # 3阶[T0,T1,T2]Chebyshev多项式近似g(theta)
         # 把图卷积公式中的~L替换成了随机游走拉普拉斯D^(-1)*W
         if self._max_diffusion_step == 0:
@@ -118,6 +124,10 @@ class GCONV(nn.Module):
         x = torch.reshape(x, shape=[self._num_matrices, self._num_nodes, input_size, batch_size])
         x = x.permute(3, 1, 2, 0)  # (batch_size, num_nodes, input_size, num_matrices)
         x = torch.reshape(x, shape=[batch_size * self._num_nodes, input_size * self._num_matrices])
+
+        # Cast back to original dtype before matmul with weight (for AMP compatibility)
+        if original_dtype != torch.float32:
+            x = x.to(original_dtype)
 
         x = torch.matmul(x, self.weight)  # (batch_size * self._num_nodes, self._output_dim)
         x += self.biases
