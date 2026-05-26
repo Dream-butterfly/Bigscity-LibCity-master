@@ -22,6 +22,7 @@
   "conservation_steps_per_epoch": 80,
   "physics_channel_idx": 0,
   "fir_mode": "lukasiewicz",
+  "fcm_reg_weight": 0.01,
   "scaler": "standard",
   "load_external": false,
   "normal_external": false,

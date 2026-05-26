@@ -85,6 +85,9 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.physics_channel_idx = config.get("physics_channel_idx", 0)
         self._train_step_count = 0
 
+        # ── FCM (Fuzzy C-Means Regularization) ────────────
+        self.fcm_reg_weight = config.get("fcm_reg_weight", 0.01)
+
         # ── Device ────────────────────────────────────────────
         self.device = config.get("device", torch.device("cpu"))
 
@@ -203,7 +206,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
     # ═══════════════════════════════════════════════════════════
 
     def calculate_loss(self, batch):
-        """Compute L1 loss + optional FIR regularization."""
+        """Compute L1 loss + optional FIR / FCM regularization."""
         history_sequence = batch["X"]
         future_sequence = batch["y"][..., :self.output_dim]
 
@@ -211,19 +214,26 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         pred = self.future_decoder(
             condition, fuzzy_R, graph_dist=self.graph_dist, mu_fuzzy=mu)
 
-        regression_loss = F.l1_loss(pred, future_sequence)
+        total_loss = F.l1_loss(pred, future_sequence)
 
-        eff_weight = self._get_effective_reg_weight()
-        if eff_weight > 0 and self.fir_mode != "none":
-            if self.fir_mode == "lukasiewicz":
-                reg_loss = self._fuzzy_interaction_regularization(
-                    pred, fuzzy_R)
-            elif self.fir_mode == "simple":
-                reg_loss = self._simple_consistency_loss(pred, fuzzy_R)
-            else:
-                reg_loss = 0.0
-            return regression_loss + eff_weight * reg_loss
-        return regression_loss
+        # ── FIR: Fuzzy Interaction Regularization ──────────
+        if self.fir_mode != "none":
+            eff_weight = self._get_effective_reg_weight()
+            if eff_weight > 0:
+                if self.fir_mode == "lukasiewicz":
+                    reg_loss = self._fuzzy_interaction_regularization(pred, fuzzy_R)
+                elif self.fir_mode == "simple":
+                    reg_loss = self._simple_consistency_loss(pred, fuzzy_R)
+                else:
+                    reg_loss = 0.0
+                total_loss = total_loss + eff_weight * reg_loss
+
+        # ── FCM: Fuzzy C-Means Regularization ──────────────
+        if self.fcm_reg_weight > 0:
+            fcm_loss = self.fuzzy_graph.fcm_regularization(history_sequence)
+            total_loss = total_loss + self.fcm_reg_weight * fcm_loss
+
+        return total_loss
 
     # ═══════════════════════════════════════════════════════════
     #  FIR: Fuzzy Interaction Regularization

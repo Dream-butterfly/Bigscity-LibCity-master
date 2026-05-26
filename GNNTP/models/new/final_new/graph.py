@@ -285,6 +285,44 @@ class FuzzyRelationalGraphLearner(nn.Module):
         """Return fuzzy set prototypes (for FCM regularization)."""
         return self.fuzzy_prototypes  # [K, D]
 
+    # ── FCM Regularization ─────────────────────────────────────
+
+    def fcm_regularization(self, node_features):
+        """Fuzzy C-Means regularization: pull prototypes toward feature clusters.
+
+        L_fcm = mean_i mean_k μ_ik² · ‖h_i − c_k‖²
+
+        Args:
+            node_features: [B, T, N, D] or [B, N, D] raw traffic features.
+        Returns:
+            Scalar loss. Returns 0 if node_features is None.
+        """
+        if node_features is None:
+            return torch.tensor(0.0, device=self.fuzzy_prototypes.device)
+
+        # ── Project features to hidden_dim ──
+        if node_features.dim() == 4:       # [B, T, N, D]
+            h = node_features.mean(dim=(0, 1))  # → [N, D]
+        elif node_features.dim() == 3:     # [B, N, D]
+            h = node_features.mean(dim=0)       # → [N, D]
+        else:
+            h = node_features
+        if self.raw_projection is not None:
+            h = self.raw_projection(h)          # → [N, hidden_dim]
+
+        # ── Base memberships (inherent fuzzy structure) ──
+        mu = torch.sigmoid(self.base_memberships)  # [N, K]
+
+        # ── Pairwise squared distances: ‖h_i − c_k‖² ──
+        prototypes = self.fuzzy_prototypes  # [K, D]
+        h_norm = (h ** 2).sum(dim=1, keepdim=True)   # [N, 1]
+        c_norm = (prototypes ** 2).sum(dim=1).unsqueeze(0)  # [1, K]
+        dist_sq = h_norm + c_norm - 2 * torch.mm(h, prototypes.T)
+        dist_sq = dist_sq.clamp(min=1e-8)              # [N, K]
+
+        # ── FCM: squared memberships × distance ──
+        return (mu.pow(2) * dist_sq).mean()
+
     # ── Stability Diagnostics (路线 A) ─────────────────────────────
 
     def get_cell_entropy(self):
