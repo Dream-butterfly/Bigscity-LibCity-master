@@ -1,0 +1,100 @@
+2026-05-26 19:55:49,713 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260526_195549__traffic_state_pred__STGformer__PEMSD4/logs
+2026-05-26 19:55:49,714 - INFO - Begin artifact training pipeline, task=traffic_state_pred, model_name=STGformer, dataset_name=PEMSD4, exp_id=20260526_195549__traffic_state_pred__STGformer__PEMSD4
+2026-05-26 19:55:49,714 - INFO - {'task': 'traffic_state_pred', 'model': 'STGformer', 'dataset': 'PEMSD4', 'saved_model': True, 'train': True, 'seed': 42, 'gpu': True, 'gpu_id': 0, 'train_rate': 0.6, 'eval_rate': 0.2, 'batch_size': 16, 'learning_rate': 0.001, 'max_epoch': 10, 'dataset_class': 'TrafficStatePointDataset', 'executor': 'STGformerExecutor', 'evaluator': 'TrafficStateEvaluator', 'adaptive_embedding_dim': 12, 'calculate_weight_adj': False, 'data_col': ['traffic_flow', 'traffic_occupancy', 'traffic_speed'], 'data_files': ['PEMSD4'], 'day_of_week': True, 'device': device(type='cuda', index=0), 'disturb_rate': 0.5, 'dow_embedding_dim': 12, 'dropout': 0.1, 'dropout_a': 0.05, 'dyna': {'including_types': ['state'], 'state': {'entity_id': 'geo_id', 'traffic_flow': 'num', 'traffic_occupancy': 'num', 'traffic_speed': 'num'}}, 'evaluator_mode': 'single', 'geo': {'including_types': ['Point'], 'Point': {}}, 'geo_file': 'PEMSD4', 'huber_delta': 1, 'init_weight_inf_or_zero': 'zero', 'input_dim': 1, 'input_embedding_dim': 24, 'is_distributed': False, 'kernel_size': [1], 'loss_fn': 'masked_huber', 'metrics': ['MAE', 'MAPE', 'MSE', 'RMSE', 'masked_MAE', 'masked_MAPE', 'masked_MSE', 'masked_RMSE', 'R2', 'EVAR'], 'mlp_ratio': 2, 'noise_SD': [10], 'noise_mean': [5], 'noise_type': 'gaussian', 'num_heads': 4, 'num_layers': 3, 'num_workers': 0, 'output_dim': 1, 'pad_with_last_sample': True, 'rank': 0, 'rel': {'including_types': ['geo'], 'geo': {'cost': 'num'}}, 'rel_file': 'PEMSD4', 'robustness_test': False, 'save_mode': ['csv'], 'set_weight_link_or_dist': 'link', 'spatial_embedding_dim': 0, 'steps_per_day': 288, 'time_intervals': 300, 'time_of_day': True, 'tod_embedding_dim': 12, 'use_mixed_proj': True, 'weight_adj_epsilon': 0.1, 'weight_col': 'cost', 'world_size': 1, 'clip_grad_norm': False, 'epoch': 0, 'hyper_tune': False, 'learner': 'adam', 'load_best_epoch': True, 'log_every': 1, 'log_level': 'INFO', 'lr_T_max': 30, 'lr_alpha': 0.99, 'lr_beta1': 0.9, 'lr_beta2': 0.999, 'lr_decay': True, 'lr_decay_ratio': 0.1, 'lr_epsilon': 1e-08, 'lr_eta_min': 0, 'lr_momentum': 0, 'lr_patience': 10, 'lr_scheduler': 'multisteplr', 'lr_threshold': 0.0001, 'max_grad_norm': 5, 'patience': 20, 'step_size': 10, 'steps': [15, 30, 50], 'train_loss': 'none', 'use_early_stop': True, 'weight_decay': 0.001, 'data_version_id': 'dv_1779796386_854d9090', 'input_window': 12, 'output_window': 12, 'scaler': 'standard', 'load_external': False, 'normal_external': False, 'ext_scaler': 'none', 'add_time_in_day': True, 'add_day_in_week': True, 'cache_dataset': True, 'exp_id': '20260526_195549__traffic_state_pred__STGformer__PEMSD4'}
+2026-05-26 19:56:03,656 - INFO - STGformer(
+  (network): STGformer(
+    (input_proj): Linear(in_features=1, out_features=24, bias=True)
+    (tod_embedding): Embedding(288, 12)
+    (dow_embedding): Embedding(7, 12)
+    (dropout): Dropout(p=0.05, inplace=False)
+    (pooling): AvgPool2d(kernel_size=(1, 1), stride=1, padding=0)
+    (attn_layers_s): ModuleList(
+      (0): SelfAttentionLayer(
+        (locals): GraphPropagate(
+          (dropout): Dropout(p=0.2, inplace=False)
+        )
+        (attn): ModuleList(
+          (0-1): 2 x FastAttentionLayer(
+            (qkv): Linear(in_features=60, out_features=180, bias=False)
+            (out_proj): Linear(in_features=120, out_features=60, bias=True)
+          )
+        )
+        (pws): ModuleList(
+          (0-1): 2 x Linear(in_features=60, out_features=60, bias=True)
+        )
+        (fc): Mlp(
+          (fc1): Linear(in_features=60, out_features=120, bias=True)
+          (act): ReLU()
+          (drop1): Dropout(p=0.1, inplace=False)
+          (norm): Identity()
+          (fc2): Linear(in_features=120, out_features=60, bias=True)
+          (drop2): Dropout(p=0.1, inplace=False)
+        )
+        (ln1): LayerNorm((60,), eps=1e-05, elementwise_affine=True)
+        (ln2): LayerNorm((60,), eps=1e-05, elementwise_affine=True)
+        (dropout): Dropout(p=0.1, inplace=False)
+      )
+    )
+    (encoder_proj): Linear(in_features=720, out_features=60, bias=True)
+    (encoder): ModuleList(
+      (0-2): 3 x Mlp(
+        (fc1): Linear(in_features=60, out_features=120, bias=True)
+        (act): ReLU()
+        (drop1): Dropout(p=0.1, inplace=False)
+        (norm): Identity()
+        (fc2): Linear(in_features=120, out_features=60, bias=True)
+        (drop2): Dropout(p=0.1, inplace=False)
+      )
+    )
+    (output_proj): Linear(in_features=60, out_features=12, bias=True)
+    (temporal_proj): Conv2d(60, 60, kernel_size=(1, 1), stride=(1, 1))
+  )
+)
+2026-05-26 19:56:03,657 - INFO - network.adaptive_embedding	torch.Size([12, 307, 12])	cuda:0	True
+2026-05-26 19:56:03,657 - INFO - network.input_proj.weight	torch.Size([24, 1])	cuda:0	True
+2026-05-26 19:56:03,657 - INFO - network.input_proj.bias	torch.Size([24])	cuda:0	True
+2026-05-26 19:56:03,657 - INFO - network.tod_embedding.weight	torch.Size([288, 12])	cuda:0	True
+2026-05-26 19:56:03,657 - INFO - network.dow_embedding.weight	torch.Size([7, 12])	cuda:0	True
+2026-05-26 19:56:03,657 - INFO - network.attn_layers_s.0.attn.0.qkv.weight	torch.Size([180, 60])	cuda:0	True
+2026-05-26 19:56:03,657 - INFO - network.attn_layers_s.0.attn.0.out_proj.weight	torch.Size([60, 120])	cuda:0	True
+2026-05-26 19:56:03,657 - INFO - network.attn_layers_s.0.attn.0.out_proj.bias	torch.Size([60])	cuda:0	True
+2026-05-26 19:56:03,657 - INFO - network.attn_layers_s.0.attn.1.qkv.weight	torch.Size([180, 60])	cuda:0	True
+2026-05-26 19:56:03,657 - INFO - network.attn_layers_s.0.attn.1.out_proj.weight	torch.Size([60, 120])	cuda:0	True
+2026-05-26 19:56:03,657 - INFO - network.attn_layers_s.0.attn.1.out_proj.bias	torch.Size([60])	cuda:0	True
+2026-05-26 19:56:03,657 - INFO - network.attn_layers_s.0.pws.0.weight	torch.Size([60, 60])	cuda:0	True
+2026-05-26 19:56:03,657 - INFO - network.attn_layers_s.0.pws.0.bias	torch.Size([60])	cuda:0	True
+2026-05-26 19:56:03,657 - INFO - network.attn_layers_s.0.pws.1.weight	torch.Size([60, 60])	cuda:0	True
+2026-05-26 19:56:03,657 - INFO - network.attn_layers_s.0.pws.1.bias	torch.Size([60])	cuda:0	True
+2026-05-26 19:56:03,657 - INFO - network.attn_layers_s.0.fc.fc1.weight	torch.Size([120, 60])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.attn_layers_s.0.fc.fc1.bias	torch.Size([120])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.attn_layers_s.0.fc.fc2.weight	torch.Size([60, 120])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.attn_layers_s.0.fc.fc2.bias	torch.Size([60])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.attn_layers_s.0.ln1.weight	torch.Size([60])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.attn_layers_s.0.ln1.bias	torch.Size([60])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.attn_layers_s.0.ln2.weight	torch.Size([60])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.attn_layers_s.0.ln2.bias	torch.Size([60])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.encoder_proj.weight	torch.Size([60, 720])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.encoder_proj.bias	torch.Size([60])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.encoder.0.fc1.weight	torch.Size([120, 60])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.encoder.0.fc1.bias	torch.Size([120])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.encoder.0.fc2.weight	torch.Size([60, 120])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.encoder.0.fc2.bias	torch.Size([60])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.encoder.1.fc1.weight	torch.Size([120, 60])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.encoder.1.fc1.bias	torch.Size([120])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.encoder.1.fc2.weight	torch.Size([60, 120])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.encoder.1.fc2.bias	torch.Size([60])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.encoder.2.fc1.weight	torch.Size([120, 60])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.encoder.2.fc1.bias	torch.Size([120])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.encoder.2.fc2.weight	torch.Size([60, 120])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.encoder.2.fc2.bias	torch.Size([60])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.output_proj.weight	torch.Size([12, 60])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.output_proj.bias	torch.Size([12])	cuda:0	True
+2026-05-26 19:56:03,658 - INFO - network.temporal_proj.weight	torch.Size([60, 60, 1, 1])	cuda:0	True
+2026-05-26 19:56:03,659 - INFO - network.temporal_proj.bias	torch.Size([60])	cuda:0	True
+2026-05-26 19:56:03,659 - INFO - Total parameter numbers: 197448
+2026-05-26 19:56:03,659 - INFO - Enable AMP training (dtype=float16).
+2026-05-26 19:56:03,659 - INFO - You select `adam` optimizer.
+2026-05-26 19:56:03,659 - INFO - You select `multisteplr` lr_scheduler.
+2026-05-26 19:56:03,660 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-26 19:56:03,660 - INFO - Start training ...
+2026-05-26 19:56:03,660 - INFO - num_batches:638

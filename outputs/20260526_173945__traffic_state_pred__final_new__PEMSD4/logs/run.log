@@ -1,0 +1,41 @@
+2026-05-26 17:39:45,171 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260526_173945__traffic_state_pred__final_new__PEMSD4/logs
+2026-05-26 17:39:55,173 - INFO - Enable AMP training (dtype=float16).
+2026-05-26 17:39:55,174 - INFO - You select `adamw` optimizer.
+2026-05-26 17:39:55,174 - INFO - You select `cosineannealinglr` lr_scheduler.
+2026-05-26 17:39:55,174 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-26 17:39:55,174 - INFO - Start training ...
+2026-05-26 17:39:55,174 - INFO - num_batches:80
+2026-05-26 17:40:05,831 - INFO - epoch complete!
+2026-05-26 17:40:05,832 - INFO - evaluating now!
+2026-05-26 17:40:06,909 - INFO - Epoch [0/10] train_loss: 0.3824, val_loss: 0.2628, lr: 0.001995, 11.73s
+2026-05-26 17:40:06,920 - INFO - Val loss decrease from inf to 0.2628, saving to 
+2026-05-26 17:40:16,927 - INFO - epoch complete!
+2026-05-26 17:40:16,927 - INFO - evaluating now!
+2026-05-26 17:40:18,063 - INFO - Epoch [1/10] train_loss: 0.2465, val_loss: 0.2611, lr: 0.001978, 11.14s
+2026-05-26 17:40:18,075 - INFO - Val loss decrease from 0.2628 to 0.2611, saving to 
+2026-05-26 17:40:28,021 - INFO - epoch complete!
+2026-05-26 17:40:28,022 - INFO - evaluating now!
+2026-05-26 17:40:29,253 - INFO - Epoch [2/10] train_loss: 0.3018, val_loss: 0.4064, lr: 0.001951, 11.18s
+2026-05-26 17:40:39,189 - INFO - epoch complete!
+2026-05-26 17:40:39,190 - INFO - evaluating now!
+2026-05-26 17:40:40,374 - INFO - Epoch [3/10] train_loss: 0.8828, val_loss: 0.5871, lr: 0.001914, 11.12s
+2026-05-26 17:40:50,309 - INFO - epoch complete!
+2026-05-26 17:40:50,310 - INFO - evaluating now!
+2026-05-26 17:40:51,500 - INFO - Epoch [4/10] train_loss: 0.9994, val_loss: 0.5870, lr: 0.001866, 11.06s
+2026-05-26 17:41:01,340 - INFO - epoch complete!
+2026-05-26 17:41:01,340 - INFO - evaluating now!
+2026-05-26 17:41:02,633 - INFO - Epoch [5/10] train_loss: nan, val_loss: nan, lr: 0.001809, 11.13s
+2026-05-26 17:41:12,455 - INFO - epoch complete!
+2026-05-26 17:41:12,456 - INFO - evaluating now!
+2026-05-26 17:41:13,686 - INFO - Epoch [6/10] train_loss: nan, val_loss: nan, lr: 0.001743, 11.05s
+2026-05-26 17:41:23,511 - INFO - epoch complete!
+2026-05-26 17:41:23,511 - INFO - evaluating now!
+2026-05-26 17:41:24,801 - INFO - Epoch [7/10] train_loss: nan, val_loss: nan, lr: 0.001669, 11.11s
+2026-05-26 17:41:34,616 - INFO - epoch complete!
+2026-05-26 17:41:34,617 - INFO - evaluating now!
+2026-05-26 17:41:35,933 - INFO - Epoch [8/10] train_loss: nan, val_loss: nan, lr: 0.001588, 11.13s
+2026-05-26 17:41:45,755 - INFO - epoch complete!
+2026-05-26 17:41:45,755 - INFO - evaluating now!
+2026-05-26 17:41:47,066 - INFO - Epoch [9/10] train_loss: nan, val_loss: nan, lr: 0.001500, 11.13s
+2026-05-26 17:41:47,066 - INFO - Trained totally 10 epochs, average train time is 9.954s, average eval time is 1.226s
+2026-05-26 17:41:47,072 - INFO - Start evaluating ...

@@ -1,0 +1,23 @@
+2026-05-26 18:11:35,613 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260526_181135__traffic_state_pred__final_new__PEMSD4/logs
+2026-05-26 18:11:46,190 - INFO - Enable AMP training (dtype=float16).
+2026-05-26 18:11:46,191 - INFO - You select `adamw` optimizer.
+2026-05-26 18:11:46,192 - INFO - You select `cosineannealinglr` lr_scheduler.
+2026-05-26 18:11:46,192 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-26 18:11:46,192 - INFO - Start training ...
+2026-05-26 18:11:46,192 - INFO - num_batches:80
+2026-05-26 18:11:57,762 - INFO - epoch complete!
+2026-05-26 18:11:57,763 - INFO - evaluating now!
+2026-05-26 18:11:58,859 - INFO - Epoch [0/50] train_loss: 0.4829, val_loss: 0.3874, lr: 0.001995, 12.67s
+2026-05-26 18:11:58,870 - INFO - Val loss decrease from inf to 0.3874, saving to 
+2026-05-26 18:12:09,450 - INFO - epoch complete!
+2026-05-26 18:12:09,450 - INFO - evaluating now!
+2026-05-26 18:12:10,520 - INFO - Epoch [1/50] train_loss: 0.3747, val_loss: nan, lr: 0.001978, 11.65s
+2026-05-26 18:12:21,069 - INFO - epoch complete!
+2026-05-26 18:12:21,069 - INFO - evaluating now!
+2026-05-26 18:12:22,133 - INFO - Epoch [2/50] train_loss: 0.3590, val_loss: nan, lr: 0.001951, 11.61s
+2026-05-26 18:12:32,654 - INFO - epoch complete!
+2026-05-26 18:12:32,654 - INFO - evaluating now!
+2026-05-26 18:12:33,716 - INFO - Epoch [3/50] train_loss: 0.3570, val_loss: nan, lr: 0.001914, 11.58s
+2026-05-26 18:12:44,235 - INFO - epoch complete!
+2026-05-26 18:12:44,236 - INFO - evaluating now!
+2026-05-26 18:12:45,300 - INFO - Epoch [4/50] train_loss: 0.3548, val_loss: nan, lr: 0.001866, 11.58s

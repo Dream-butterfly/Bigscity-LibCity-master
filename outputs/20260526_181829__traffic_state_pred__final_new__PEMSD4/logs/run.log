@@ -1,0 +1,187 @@
+2026-05-26 18:18:29,640 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260526_181829__traffic_state_pred__final_new__PEMSD4/logs
+2026-05-26 18:18:40,097 - INFO - Enable AMP training (dtype=float16).
+2026-05-26 18:18:40,097 - INFO - You select `adamw` optimizer.
+2026-05-26 18:18:40,098 - INFO - You select `cosineannealinglr` lr_scheduler.
+2026-05-26 18:18:40,098 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-26 18:18:40,098 - INFO - Start training ...
+2026-05-26 18:18:40,098 - INFO - num_batches:80
+2026-05-26 18:18:51,407 - INFO - epoch complete!
+2026-05-26 18:18:51,407 - INFO - evaluating now!
+2026-05-26 18:18:52,473 - INFO - Epoch [0/50] train_loss: 0.4791, val_loss: 0.3971, lr: 0.000997, 12.38s
+2026-05-26 18:18:52,484 - INFO - Val loss decrease from inf to 0.3971, saving to 
+2026-05-26 18:19:03,120 - INFO - epoch complete!
+2026-05-26 18:19:03,120 - INFO - evaluating now!
+2026-05-26 18:19:04,183 - INFO - Epoch [1/50] train_loss: 0.3776, val_loss: 0.3898, lr: 0.000989, 11.69s
+2026-05-26 18:19:04,194 - INFO - Val loss decrease from 0.3971 to 0.3898, saving to 
+2026-05-26 18:19:14,819 - INFO - epoch complete!
+2026-05-26 18:19:14,820 - INFO - evaluating now!
+2026-05-26 18:19:15,892 - INFO - Epoch [2/50] train_loss: 0.3667, val_loss: 0.3911, lr: 0.000976, 11.70s
+2026-05-26 18:19:26,461 - INFO - epoch complete!
+2026-05-26 18:19:26,461 - INFO - evaluating now!
+2026-05-26 18:19:27,527 - INFO - Epoch [3/50] train_loss: 0.3606, val_loss: 0.3702, lr: 0.000957, 11.64s
+2026-05-26 18:19:27,538 - INFO - Val loss decrease from 0.3898 to 0.3702, saving to 
+2026-05-26 18:19:38,203 - INFO - epoch complete!
+2026-05-26 18:19:38,204 - INFO - evaluating now!
+2026-05-26 18:19:39,268 - INFO - Epoch [4/50] train_loss: 0.3548, val_loss: 0.3724, lr: 0.000933, 11.73s
+2026-05-26 18:19:49,841 - INFO - epoch complete!
+2026-05-26 18:19:49,841 - INFO - evaluating now!
+2026-05-26 18:19:50,938 - INFO - Epoch [5/50] train_loss: 0.3557, val_loss: 0.3738, lr: 0.000905, 11.67s
+2026-05-26 18:20:01,509 - INFO - epoch complete!
+2026-05-26 18:20:01,510 - INFO - evaluating now!
+2026-05-26 18:20:02,574 - INFO - Epoch [6/50] train_loss: 0.3528, val_loss: 0.3702, lr: 0.000872, 11.64s
+2026-05-26 18:20:02,585 - INFO - Val loss decrease from 0.3702 to 0.3702, saving to 
+2026-05-26 18:20:13,205 - INFO - epoch complete!
+2026-05-26 18:20:13,206 - INFO - evaluating now!
+2026-05-26 18:20:14,277 - INFO - Epoch [7/50] train_loss: 0.3537, val_loss: 0.3666, lr: 0.000835, 11.69s
+2026-05-26 18:20:14,287 - INFO - Val loss decrease from 0.3702 to 0.3666, saving to 
+2026-05-26 18:20:24,944 - INFO - epoch complete!
+2026-05-26 18:20:24,944 - INFO - evaluating now!
+2026-05-26 18:20:26,018 - INFO - Epoch [8/50] train_loss: 0.3523, val_loss: 0.3651, lr: 0.000794, 11.73s
+2026-05-26 18:20:26,028 - INFO - Val loss decrease from 0.3666 to 0.3651, saving to 
+2026-05-26 18:20:36,678 - INFO - epoch complete!
+2026-05-26 18:20:36,678 - INFO - evaluating now!
+2026-05-26 18:20:37,750 - INFO - Epoch [9/50] train_loss: 0.3499, val_loss: 0.3648, lr: 0.000750, 11.72s
+2026-05-26 18:20:37,761 - INFO - Val loss decrease from 0.3651 to 0.3648, saving to 
+2026-05-26 18:20:48,409 - INFO - epoch complete!
+2026-05-26 18:20:48,409 - INFO - evaluating now!
+2026-05-26 18:20:49,480 - INFO - Epoch [10/50] train_loss: 0.3492, val_loss: 0.3678, lr: 0.000703, 11.72s
+2026-05-26 18:21:00,066 - INFO - epoch complete!
+2026-05-26 18:21:00,067 - INFO - evaluating now!
+2026-05-26 18:21:01,143 - INFO - Epoch [11/50] train_loss: 0.3510, val_loss: 0.3656, lr: 0.000655, 11.66s
+2026-05-26 18:21:11,752 - INFO - epoch complete!
+2026-05-26 18:21:11,752 - INFO - evaluating now!
+2026-05-26 18:21:12,822 - INFO - Epoch [12/50] train_loss: 0.3494, val_loss: 0.3654, lr: 0.000604, 11.68s
+2026-05-26 18:21:23,727 - INFO - epoch complete!
+2026-05-26 18:21:23,727 - INFO - evaluating now!
+2026-05-26 18:21:24,823 - INFO - Epoch [13/50] train_loss: 0.3474, val_loss: nan, lr: 0.000552, 12.00s
+2026-05-26 18:21:35,486 - INFO - epoch complete!
+2026-05-26 18:21:35,487 - INFO - evaluating now!
+2026-05-26 18:21:36,557 - INFO - Epoch [14/50] train_loss: 0.3483, val_loss: 0.3622, lr: 0.000500, 11.73s
+2026-05-26 18:21:36,568 - INFO - Val loss decrease from 0.3648 to 0.3622, saving to 
+2026-05-26 18:21:47,245 - INFO - epoch complete!
+2026-05-26 18:21:47,245 - INFO - evaluating now!
+2026-05-26 18:21:48,319 - INFO - Epoch [15/50] train_loss: 0.3472, val_loss: 0.3602, lr: 0.000448, 11.75s
+2026-05-26 18:21:48,330 - INFO - Val loss decrease from 0.3622 to 0.3602, saving to 
+2026-05-26 18:21:59,012 - INFO - epoch complete!
+2026-05-26 18:21:59,012 - INFO - evaluating now!
+2026-05-26 18:22:00,083 - INFO - Epoch [16/50] train_loss: 0.3458, val_loss: 0.3594, lr: 0.000396, 11.75s
+2026-05-26 18:22:00,094 - INFO - Val loss decrease from 0.3602 to 0.3594, saving to 
+2026-05-26 18:22:10,770 - INFO - epoch complete!
+2026-05-26 18:22:10,771 - INFO - evaluating now!
+2026-05-26 18:22:11,879 - INFO - Epoch [17/50] train_loss: 0.3464, val_loss: 0.3593, lr: 0.000345, 11.78s
+2026-05-26 18:22:11,890 - INFO - Val loss decrease from 0.3594 to 0.3593, saving to 
+2026-05-26 18:22:22,553 - INFO - epoch complete!
+2026-05-26 18:22:22,553 - INFO - evaluating now!
+2026-05-26 18:22:23,623 - INFO - Epoch [18/50] train_loss: 0.3467, val_loss: 0.3594, lr: 0.000297, 11.73s
+2026-05-26 18:22:34,213 - INFO - epoch complete!
+2026-05-26 18:22:34,213 - INFO - evaluating now!
+2026-05-26 18:22:35,295 - INFO - Epoch [19/50] train_loss: 0.3446, val_loss: 0.3589, lr: 0.000250, 11.67s
+2026-05-26 18:22:35,306 - INFO - Val loss decrease from 0.3593 to 0.3589, saving to 
+2026-05-26 18:22:45,961 - INFO - epoch complete!
+2026-05-26 18:22:45,962 - INFO - evaluating now!
+2026-05-26 18:22:47,049 - INFO - Epoch [20/50] train_loss: 0.3460, val_loss: 0.3582, lr: 0.000206, 11.74s
+2026-05-26 18:22:47,059 - INFO - Val loss decrease from 0.3589 to 0.3582, saving to 
+2026-05-26 18:22:57,725 - INFO - epoch complete!
+2026-05-26 18:22:57,725 - INFO - evaluating now!
+2026-05-26 18:22:58,807 - INFO - Epoch [21/50] train_loss: 0.3461, val_loss: 0.3575, lr: 0.000165, 11.75s
+2026-05-26 18:22:58,818 - INFO - Val loss decrease from 0.3582 to 0.3575, saving to 
+2026-05-26 18:23:09,493 - INFO - epoch complete!
+2026-05-26 18:23:09,493 - INFO - evaluating now!
+2026-05-26 18:23:10,566 - INFO - Epoch [22/50] train_loss: 0.3454, val_loss: 0.3577, lr: 0.000128, 11.75s
+2026-05-26 18:23:21,183 - INFO - epoch complete!
+2026-05-26 18:23:21,183 - INFO - evaluating now!
+2026-05-26 18:23:22,268 - INFO - Epoch [23/50] train_loss: 0.3468, val_loss: 0.3576, lr: 0.000095, 11.70s
+2026-05-26 18:23:32,976 - INFO - epoch complete!
+2026-05-26 18:23:32,976 - INFO - evaluating now!
+2026-05-26 18:23:34,049 - INFO - Epoch [24/50] train_loss: 0.3428, val_loss: 0.3573, lr: 0.000067, 11.78s
+2026-05-26 18:23:34,060 - INFO - Val loss decrease from 0.3575 to 0.3573, saving to 
+2026-05-26 18:23:44,688 - INFO - epoch complete!
+2026-05-26 18:23:44,689 - INFO - evaluating now!
+2026-05-26 18:23:45,757 - INFO - Epoch [25/50] train_loss: 0.3461, val_loss: 0.3570, lr: 0.000043, 11.70s
+2026-05-26 18:23:45,767 - INFO - Val loss decrease from 0.3573 to 0.3570, saving to 
+2026-05-26 18:23:56,424 - INFO - epoch complete!
+2026-05-26 18:23:56,424 - INFO - evaluating now!
+2026-05-26 18:23:57,501 - INFO - Epoch [26/50] train_loss: 0.3446, val_loss: 0.3569, lr: 0.000024, 11.73s
+2026-05-26 18:23:57,512 - INFO - Val loss decrease from 0.3570 to 0.3569, saving to 
+2026-05-26 18:24:08,174 - INFO - epoch complete!
+2026-05-26 18:24:08,175 - INFO - evaluating now!
+2026-05-26 18:24:09,253 - INFO - Epoch [27/50] train_loss: 0.3452, val_loss: 0.3568, lr: 0.000011, 11.74s
+2026-05-26 18:24:09,264 - INFO - Val loss decrease from 0.3569 to 0.3568, saving to 
+2026-05-26 18:24:19,921 - INFO - epoch complete!
+2026-05-26 18:24:19,921 - INFO - evaluating now!
+2026-05-26 18:24:20,994 - INFO - Epoch [28/50] train_loss: 0.3434, val_loss: 0.3567, lr: 0.000003, 11.73s
+2026-05-26 18:24:21,005 - INFO - Val loss decrease from 0.3568 to 0.3567, saving to 
+2026-05-26 18:24:31,701 - INFO - epoch complete!
+2026-05-26 18:24:31,701 - INFO - evaluating now!
+2026-05-26 18:24:32,773 - INFO - Epoch [29/50] train_loss: 0.3452, val_loss: 0.3567, lr: 0.000000, 11.73s
+2026-05-26 18:24:32,784 - INFO - Val loss decrease from 0.3567 to 0.3567, saving to 
+2026-05-26 18:24:43,441 - INFO - epoch complete!
+2026-05-26 18:24:43,441 - INFO - evaluating now!
+2026-05-26 18:24:44,523 - INFO - Epoch [30/50] train_loss: 0.3439, val_loss: 0.3567, lr: 0.000003, 11.74s
+2026-05-26 18:24:55,135 - INFO - epoch complete!
+2026-05-26 18:24:55,135 - INFO - evaluating now!
+2026-05-26 18:24:56,215 - INFO - Epoch [31/50] train_loss: 0.3429, val_loss: 0.3567, lr: 0.000011, 11.69s
+2026-05-26 18:25:06,839 - INFO - epoch complete!
+2026-05-26 18:25:06,840 - INFO - evaluating now!
+2026-05-26 18:25:07,931 - INFO - Epoch [32/50] train_loss: 0.3447, val_loss: 0.3569, lr: 0.000024, 11.72s
+2026-05-26 18:25:18,556 - INFO - epoch complete!
+2026-05-26 18:25:18,556 - INFO - evaluating now!
+2026-05-26 18:25:19,635 - INFO - Epoch [33/50] train_loss: 0.3441, val_loss: 0.3568, lr: 0.000043, 11.70s
+2026-05-26 18:25:30,254 - INFO - epoch complete!
+2026-05-26 18:25:30,254 - INFO - evaluating now!
+2026-05-26 18:25:31,342 - INFO - Epoch [34/50] train_loss: 0.3461, val_loss: 0.3567, lr: 0.000067, 11.71s
+2026-05-26 18:25:31,355 - INFO - Val loss decrease from 0.3567 to 0.3567, saving to 
+2026-05-26 18:25:42,033 - INFO - epoch complete!
+2026-05-26 18:25:42,033 - INFO - evaluating now!
+2026-05-26 18:25:43,109 - INFO - Epoch [35/50] train_loss: 0.3446, val_loss: 0.3566, lr: 0.000095, 11.75s
+2026-05-26 18:25:43,120 - INFO - Val loss decrease from 0.3567 to 0.3566, saving to 
+2026-05-26 18:25:53,802 - INFO - epoch complete!
+2026-05-26 18:25:53,803 - INFO - evaluating now!
+2026-05-26 18:25:54,884 - INFO - Epoch [36/50] train_loss: 0.3456, val_loss: 0.3567, lr: 0.000128, 11.76s
+2026-05-26 18:26:05,507 - INFO - epoch complete!
+2026-05-26 18:26:05,507 - INFO - evaluating now!
+2026-05-26 18:26:06,580 - INFO - Epoch [37/50] train_loss: 0.3457, val_loss: 0.3574, lr: 0.000165, 11.70s
+2026-05-26 18:26:17,201 - INFO - epoch complete!
+2026-05-26 18:26:17,202 - INFO - evaluating now!
+2026-05-26 18:26:18,282 - INFO - Epoch [38/50] train_loss: 0.3455, val_loss: 0.3586, lr: 0.000206, 11.70s
+2026-05-26 18:26:28,907 - INFO - epoch complete!
+2026-05-26 18:26:28,907 - INFO - evaluating now!
+2026-05-26 18:26:29,992 - INFO - Epoch [39/50] train_loss: 0.3464, val_loss: 0.3563, lr: 0.000250, 11.71s
+2026-05-26 18:26:30,004 - INFO - Val loss decrease from 0.3566 to 0.3563, saving to 
+2026-05-26 18:26:40,678 - INFO - epoch complete!
+2026-05-26 18:26:40,679 - INFO - evaluating now!
+2026-05-26 18:26:41,755 - INFO - Epoch [40/50] train_loss: 0.3454, val_loss: 0.3571, lr: 0.000297, 11.75s
+2026-05-26 18:26:52,372 - INFO - epoch complete!
+2026-05-26 18:26:52,373 - INFO - evaluating now!
+2026-05-26 18:26:53,457 - INFO - Epoch [41/50] train_loss: 0.3464, val_loss: 0.3576, lr: 0.000345, 11.70s
+2026-05-26 18:27:04,088 - INFO - epoch complete!
+2026-05-26 18:27:04,089 - INFO - evaluating now!
+2026-05-26 18:27:05,182 - INFO - Epoch [42/50] train_loss: 0.3454, val_loss: 0.3569, lr: 0.000396, 11.72s
+2026-05-26 18:27:16,510 - INFO - epoch complete!
+2026-05-26 18:27:16,510 - INFO - evaluating now!
+2026-05-26 18:27:18,675 - INFO - Epoch [43/50] train_loss: 0.3456, val_loss: 0.3563, lr: 0.000448, 13.49s
+2026-05-26 18:27:29,962 - INFO - epoch complete!
+2026-05-26 18:27:29,962 - INFO - evaluating now!
+2026-05-26 18:27:31,038 - INFO - Epoch [44/50] train_loss: 0.3441, val_loss: 0.3583, lr: 0.000500, 12.36s
+2026-05-26 18:27:41,702 - INFO - epoch complete!
+2026-05-26 18:27:41,702 - INFO - evaluating now!
+2026-05-26 18:27:42,786 - INFO - Epoch [45/50] train_loss: 0.3419, val_loss: 0.3545, lr: 0.000552, 11.75s
+2026-05-26 18:27:42,797 - INFO - Val loss decrease from 0.3563 to 0.3545, saving to 
+2026-05-26 18:27:53,514 - INFO - epoch complete!
+2026-05-26 18:27:53,514 - INFO - evaluating now!
+2026-05-26 18:27:54,590 - INFO - Epoch [46/50] train_loss: 0.3459, val_loss: 0.3438, lr: 0.000604, 11.79s
+2026-05-26 18:27:54,601 - INFO - Val loss decrease from 0.3545 to 0.3438, saving to 
+2026-05-26 18:28:05,267 - INFO - epoch complete!
+2026-05-26 18:28:05,267 - INFO - evaluating now!
+2026-05-26 18:28:06,376 - INFO - Epoch [47/50] train_loss: 0.3397, val_loss: 0.3328, lr: 0.000655, 11.78s
+2026-05-26 18:28:06,387 - INFO - Val loss decrease from 0.3438 to 0.3328, saving to 
+2026-05-26 18:28:17,057 - INFO - epoch complete!
+2026-05-26 18:28:17,057 - INFO - evaluating now!
+2026-05-26 18:28:18,141 - INFO - Epoch [48/50] train_loss: 0.3247, val_loss: 0.3043, lr: 0.000703, 11.75s
+2026-05-26 18:28:18,153 - INFO - Val loss decrease from 0.3328 to 0.3043, saving to 
+2026-05-26 18:28:28,813 - INFO - epoch complete!
+2026-05-26 18:28:28,813 - INFO - evaluating now!
+2026-05-26 18:28:29,894 - INFO - Epoch [49/50] train_loss: 0.3103, val_loss: 0.2804, lr: 0.000750, 11.74s
+2026-05-26 18:28:29,905 - INFO - Val loss decrease from 0.3043 to 0.2804, saving to 
+2026-05-26 18:28:29,905 - INFO - Trained totally 50 epochs, average train time is 10.688s, average eval time is 1.099s
+2026-05-26 18:28:29,910 - INFO - Start evaluating ...

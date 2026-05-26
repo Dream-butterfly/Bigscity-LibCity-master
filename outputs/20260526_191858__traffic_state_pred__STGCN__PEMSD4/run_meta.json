@@ -1,0 +1,12 @@
+{
+  "task": "traffic_state_pred",
+  "model": "STGCN",
+  "dataset": "PEMSD4",
+  "artifact_id": "da_20260522_114124__PEMSD4__TrafficStatePointDataset__290f8f07",
+  "artifact_dir": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/data_artifacts/da_20260522_114124__PEMSD4__TrafficStatePointDataset__290f8f07",
+  "data_signature": "290f8f0746158e3f2e630c81ab954ae1f14416cb",
+  "force_reuse": false,
+  "source": "run_train_artifact",
+  "run_id": "20260526_191858__traffic_state_pred__STGCN__PEMSD4",
+  "updated_at": 1779794416.5612755
+}
