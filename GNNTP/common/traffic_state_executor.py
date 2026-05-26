@@ -135,6 +135,8 @@ class TrafficStateExecutor(AbstractExecutor):
         Args:
             cache_name(str): 保存的文件名
         """
+        if not self._is_rank0():
+            return
         ensure_dir(self.cache_dir)
         self._logger.info("Saved model at " + cache_name)
         model = self._unwrap_model()
@@ -160,6 +162,8 @@ class TrafficStateExecutor(AbstractExecutor):
         Args:
             epoch(int): 轮数
         """
+        if not self._is_rank0():
+            return ""
         ensure_dir(self.cache_dir)
         config = dict()
         model = self._unwrap_model()
@@ -504,5 +508,11 @@ class TrafficStateExecutor(AbstractExecutor):
                 self._logger.debug(loss.item())
                 losses.append(loss.item())
             mean_loss = np.mean(losses)
+            # DDP: all_reduce 求全局平均损失，保证所有 rank 的 val_loss 一致
+            if self.is_distributed:
+                import torch.distributed as dist
+                loss_tensor = torch.tensor([mean_loss], device=self.device)
+                dist.all_reduce(loss_tensor, op=dist.ReduceOp.AVG)
+                mean_loss = loss_tensor.item()
             self._writer.add_scalar('eval loss', mean_loss, epoch_idx)
             return mean_loss

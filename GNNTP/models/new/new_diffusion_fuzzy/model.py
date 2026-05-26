@@ -799,7 +799,7 @@ class NewDiffusion(AbstractTrafficStateModel):
             predicted_noise = self.noise_predictor(
                 noisy_future, timesteps, condition_features, adjacency_matrix, return_last_adjacency=False
             )
-        loss_per_element = F.mse_loss(predicted_noise, true_noise, reduction='none')
+        loss_per_element = F.l1_loss(predicted_noise, true_noise, reduction='none')
         alpha_bar_t = self.diffusion_scheduler._extract(
             self.diffusion_scheduler.alphas_cumprod, timesteps, true_noise.shape
         )
