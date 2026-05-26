@@ -192,9 +192,15 @@ class FuzzyRelationalGraphLearner(nn.Module):
             nn.Linear(hidden_dim // 2, num_fuzzy_sets),
         )
 
-        # ── Fuzzy set prototypes (for FCM regularization) ──
-        self.fuzzy_prototypes = nn.Parameter(
-            torch.randn(num_fuzzy_sets, hidden_dim) * 0.02
+        # ── Fuzzy set prototypes (for FCM regularization — future use) ──
+        # NOTE: Registered as buffer (not Parameter) because prototypes are not
+        # yet wired into any loss in the current forward pass.  DDP with
+        # find_unused_parameters=False requires every nn.Parameter to receive
+        # gradients.  When FCM regularization is implemented, convert this back
+        # to nn.Parameter and wire it into the loss.
+        self.register_buffer(
+            "fuzzy_prototypes",
+            torch.randn(num_fuzzy_sets, hidden_dim) * 0.02,
         )
 
         # ── Static adjacency (optional, for fuzzy union) ──
