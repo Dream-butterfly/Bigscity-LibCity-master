@@ -4,7 +4,8 @@
 
 ## 更改（change）
 
-1. `更改 19` | 2026-05-07 | 修复问题/架构变更 | [new_diffusion_fuzzy 条件前置融合 — 架构修复](change/2026-05/2026-05-07_new-diffusion-fuzzy-condition-fusion.md)
+1. `更改 20` | 2026-05-26 | 修复问题 | [DDP val_loss 同步 + 模型保存竞态修复 + 扩散损失 MSE→MAE](change/2026-05/2026-05-26_ddp-validator-save-plus-mae-loss.md)
+2. `更改 19` | 2026-05-07 | 修复问题/架构变更 | [new_diffusion_fuzzy 条件前置融合 — 架构修复](change/2026-05/2026-05-07_new-diffusion-fuzzy-condition-fusion.md)
 2. `更改 18` | 2026-05-07 | 修复问题/实验流程变更 | [new_diffusion_fuzzy 训练修复 — 配置变更（4项）](change/2026-05/2026-05-07_new-diffusion-fuzzy-training-fix.md)
 2. `更改 17` | 2026-05-07 12:31:14 +08:00 | 新增功能/结构重构 | [多卡训练 DDP 支持（18文件，含 Web 控制台适配）](change/2026-05/2026-05-07_1231_ddp-support.md)
 2. `更改 16` | 2026-05-07 10:58:01 +08:00 | 修复问题 | [train_web_v2 基础任务选项修复](change/2026-04/2026-04-23_0058_train-web-v2-task-options-fix.md)
