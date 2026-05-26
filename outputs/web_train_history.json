@@ -3,17 +3,21 @@
     "task": "traffic_state_pred",
     "model": "final_new",
     "dataset": "PEMSD4",
-    "status": "running",
+    "status": "finished",
     "run_id": "20260526_213534__traffic_state_pred__final_new__PEMSD4",
     "started_at": 1779802530.8632965,
-    "ended_at": null,
-    "duration_sec": null,
-    "major_metrics": {},
-    "output_dir": "",
+    "ended_at": 1779802938.9237921,
+    "duration_sec": 408.0604956150055,
+    "major_metrics": {
+      "MAE": 43.37387212117513,
+      "RMSE": 92.84823417663574,
+      "MAPE": 1.561227818330129
+    },
+    "output_dir": "/home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260526_213534__traffic_state_pred__final_new__PEMSD4",
     "error": null,
     "record_id": "tr_1779802530_552b949626",
     "created_at": 1779802530.8572445,
-    "updated_at": 1779802534.8176768
+    "updated_at": 1779802938.9244692
   },
   {
     "task": "traffic_state_pred",
