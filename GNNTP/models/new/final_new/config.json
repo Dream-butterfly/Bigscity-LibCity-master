@@ -1,7 +1,7 @@
 {
   "input_window": 12,
   "output_window": 12,
-  "hidden_dim": 64,
+  "hidden_dim": 96,
   "num_heads": 2,
   "encoder_layers": 2,
   "decoder_layers": 2,
@@ -9,7 +9,7 @@
   "graph_k_hop": 2,
   "fuzzy_num_sets": 4,
   "num_cells": 8,
-  "cell_blend_init": 0.3,
+  "cell_blend_init": 0.0,
   "band_center_init": 1.1,
   "band_width_init": 0.7,
   "region_transformer_layers": 1,
@@ -39,7 +39,7 @@
   "clip_grad_norm": true,
   "max_grad_norm": 3,
   "use_early_stop": true,
-  "patience": 30,
+  "patience": 10,
   "batch_size": 64,
   "eval_batch_size": 64
 }
