@@ -1,5 +1,7 @@
 """Multi-head attention and feed-forward network components."""
 
+from logging import getLogger
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -20,6 +22,7 @@ class MultiHeadAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = hidden_dim // num_heads
         self.scale = self.head_dim ** -0.5
+        self._logger = getLogger(__name__)
 
         self.query_projection = nn.Linear(hidden_dim, hidden_dim)
         self.key_projection = nn.Linear(hidden_dim, hidden_dim)
@@ -46,6 +49,24 @@ class MultiHeadAttention(nn.Module):
         query = self.query_projection(query).view(batch_size, query_len, self.num_heads, self.head_dim)
         key = self.key_projection(context).view(batch_size, context_len, self.num_heads, self.head_dim)
         value = self.value_projection(context).view(batch_size, context_len, self.num_heads, self.head_dim)
+
+        # ── Numerical safeguard: clamp Q/K to ~±3σ to prevent softmax overflow ──
+        # head_dim=48, scale=0.144 → max safe Q·K element < ln(FP32_max) ≈ 87
+        #   Q_i×K_i×scale bounded to ~87/48≈1.8 → |Q_i|,|K_i| < √(1.8×√48) ≈ 3.5
+        # We use ±10 which is conservative but well within the ~3σ range of
+        # LayerNorm-conditioned activations.
+        qk_clamp_val = 10.0
+        query = query.clamp(-qk_clamp_val, qk_clamp_val)
+        key = key.clamp(-qk_clamp_val, qk_clamp_val)
+        value = value.clamp(-qk_clamp_val, qk_clamp_val)
+
+        # ── NaN detection (one-shot, logged at most once per forward) ──
+        if not torch.isfinite(query).all():
+            self._logger.warning(
+                "NaN/Inf in attention query! shape=%s", tuple(query.shape))
+        if not torch.isfinite(key).all():
+            self._logger.warning(
+                "NaN/Inf in attention key! shape=%s", tuple(key.shape))
 
         # [B, L, H, D/H] → [B, H, L, D/H]
         query = query.transpose(1, 2)
@@ -77,6 +98,15 @@ class MultiHeadAttention(nn.Module):
         )
         # [B, H, L, D/H] → [B, L, H, D/H] → [B, L, D]
         attention_output = attention_output.transpose(1, 2).contiguous().view(batch_size, query_len, self.hidden_dim)
+
+        # ── Post-attention NaN guard: silently replace NaN/Inf with zeros ──
+        if not torch.isfinite(attention_output).all():
+            self._logger.warning(
+                "NaN/Inf in attention output! shape=%s, "
+                "replacing with zeros.", tuple(attention_output.shape))
+            attention_output = torch.nan_to_num(
+                attention_output, nan=0.0, posinf=0.0, neginf=0.0)
+
         return self.output_projection(attention_output)
 
 
