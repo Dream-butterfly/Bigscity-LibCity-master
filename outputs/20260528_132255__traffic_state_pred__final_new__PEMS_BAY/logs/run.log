@@ -1,0 +1,14 @@
+2026-05-28 13:22:55,528 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260528_132255__traffic_state_pred__final_new__PEMS_BAY/logs
+2026-05-28 13:22:55,529 - INFO - Begin data artifact pipeline, task=traffic_state_pred, model_name=final_new, dataset_name=PEMS_BAY, exp_id=20260528_132255__traffic_state_pred__final_new__PEMS_BAY
+2026-05-28 13:22:55,532 - INFO - Loaded file PEMS_BAY.geo, num_nodes=325
+2026-05-28 13:22:55,547 - INFO - set_weight_link_or_dist: dist
+2026-05-28 13:22:55,547 - INFO - init_weight_inf_or_zero: inf
+2026-05-28 13:22:55,556 - INFO - Loaded file PEMS_BAY.rel, shape=(325, 325)
+2026-05-28 13:22:55,556 - INFO - Start Calculate the weight by Gauss kernel!
+2026-05-28 13:22:55,557 - INFO - Loading /home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/dataset_cache/point_based_PEMS_BAY_12_12_0.6_0.2_standard_64_False_True_True_False.npz
+2026-05-28 13:23:34,447 - INFO - train	x: (31256, 12, 325, 9), y: (31256, 12, 325, 9)
+2026-05-28 13:23:34,447 - INFO - eval	x: (10418, 12, 325, 9), y: (10418, 12, 325, 9)
+2026-05-28 13:23:34,447 - INFO - test	x: (10419, 12, 325, 9), y: (10419, 12, 325, 9)
+2026-05-28 13:23:52,960 - INFO - StandardScaler mean: 62.749230748721885, std: 9.365329988749146
+2026-05-28 13:23:52,960 - INFO - NoneScaler
+2026-05-28 13:26:51,021 - INFO - Data artifact ready: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/cache/data_artifacts/da_20260528_132358__PEMS_BAY__TrafficStatePointDataset__3bec95c6

@@ -1,0 +1,6 @@
+2026-05-28 13:32:32,991 - INFO - Log directory: /home/lizhuoxuan/lzq/Bigscity-LibCity-master/outputs/20260528_133232__traffic_state_pred__final_new__PEMS_BAY/logs
+2026-05-28 13:33:14,096 - INFO - Enable AMP training (dtype=float16).
+2026-05-28 13:33:14,096 - INFO - You select `adamw` optimizer.
+2026-05-28 13:33:14,097 - INFO - You select `reducelronplateau` lr_scheduler.
+2026-05-28 13:33:14,097 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-05-28 13:40:40,027 - INFO - Start evaluating ...

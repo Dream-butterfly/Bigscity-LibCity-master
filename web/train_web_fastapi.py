@@ -1679,12 +1679,12 @@ def _run_training_background(
         _remove_runtime_config(runtime_config_path)
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/old", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse(request=request, name="train_web_fastapi.html")
 
 
-@app.get("/v2", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse)
 async def index_v2(request: Request):
     """GNNTP Console v2 — sidebar 布局新版本"""
     return templates.TemplateResponse(request=request, name="train_web_v2.html")
