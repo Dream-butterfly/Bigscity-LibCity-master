@@ -1,0 +1,11 @@
+{
+  "task": "traffic_state_pred",
+  "model": "final_2",
+  "model_entry": "GNNTP.models.new.final_2.model:NewFuzzyCellAttention2",
+  "dataset_class": "TrafficStatePointDataset",
+  "dataset_entry": "GNNTP.data.dataset.traffic_state_point_dataset:TrafficStatePointDataset",
+  "executor": "FinalNewExecutor2",
+  "executor_entry": "GNNTP.models.new.final_2.executor:FinalNewExecutor2",
+  "evaluator": "TrafficStateEvaluator",
+  "evaluator_entry": "GNNTP.common.traffic_state_evaluator:TrafficStateEvaluator"
+}
