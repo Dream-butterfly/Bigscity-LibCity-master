@@ -1,0 +1,17 @@
+2026-06-04 15:11:44,529 - INFO - Log directory: D:\a_code\A_Agent\projects\LibCity\outputs\20260604_151144__traffic_state_pred__STGCN__PEMSD7\logs
+2026-06-04 15:11:44,529 - INFO - Begin data artifact pipeline, task=traffic_state_pred, model_name=STGCN, dataset_name=PEMSD7, exp_id=20260604_151144__traffic_state_pred__STGCN__PEMSD7
+2026-06-04 15:11:44,534 - INFO - Loaded file PEMSD7.geo, num_nodes=883
+2026-06-04 15:11:44,534 - INFO - set_weight_link_or_dist: link
+2026-06-04 15:11:44,534 - INFO - init_weight_inf_or_zero: zero
+2026-06-04 15:11:44,537 - INFO - Loaded file PEMSD7.rel, shape=(883, 883)
+2026-06-04 15:11:44,537 - INFO - Loading file PEMSD7.dyna
+2026-06-04 15:11:57,741 - INFO - Loaded file PEMSD7.dyna, shape=(28224, 883, 1)
+2026-06-04 15:11:58,985 - INFO - Dataset created
+2026-06-04 15:11:58,985 - INFO - x shape: (28201, 12, 883, 1), y shape: (28201, 12, 883, 1)
+2026-06-04 15:11:58,992 - INFO - train	x: (16921, 12, 883, 1), y: (16921, 12, 883, 1)
+2026-06-04 15:11:58,992 - INFO - eval	x: (5640, 12, 883, 1), y: (5640, 12, 883, 1)
+2026-06-04 15:11:58,994 - INFO - test	x: (5640, 12, 883, 1), y: (5640, 12, 883, 1)
+2026-06-04 15:17:34,507 - INFO - Saved at D:\a_code\A_Agent\projects\LibCity\cache\dataset_cache\point_based_PEMSD7_12_12_0.6_0.2_standard_64_False_False_False_False.npz
+2026-06-04 15:17:37,518 - INFO - StandardScaler mean: 309.5414726371829, std: 189.50746108430664
+2026-06-04 15:17:37,518 - INFO - NoneScaler
+2026-06-04 15:19:36,686 - INFO - Data artifact ready: D:\a_code\A_Agent\projects\LibCity\cache\data_artifacts\da_20260604_151741__PEMSD7__TrafficStatePointDataset__0cf57510

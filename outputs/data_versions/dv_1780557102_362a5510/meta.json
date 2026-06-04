@@ -1,0 +1,44 @@
+{
+  "status": "ready",
+  "task": "traffic_state_pred",
+  "model": "STGCN",
+  "dataset": "PEMSD7",
+  "seed": 42,
+  "train_rate": 0.6,
+  "eval_rate": 0.2,
+  "test_rate": 0.2,
+  "cli_options": {
+    "seed": "42",
+    "train_rate": "0.6",
+    "eval_rate": "0.2",
+    "batch_size": "64",
+    "dataset_class": "TrafficStatePointDataset"
+  },
+  "config_payload": {},
+  "created_at": 1780557102.446804,
+  "version_id": "dv_1780557102_362a5510",
+  "updated_at": 1780557577.4709642,
+  "error": null,
+  "script_meta": {
+    "task": "traffic_state_pred",
+    "model": "STGCN",
+    "dataset": "PEMSD7",
+    "exp_id": "20260604_151144__traffic_state_pred__STGCN__PEMSD7",
+    "artifact_id": "da_20260604_151741__PEMSD7__TrafficStatePointDataset__0cf57510",
+    "artifact_dir": "D:\\a_code\\A_Agent\\projects\\LibCity\\cache\\data_artifacts\\da_20260604_151741__PEMSD7__TrafficStatePointDataset__0cf57510",
+    "data_signature": "0cf57510fd5e6f740746e16474c63b02a24e4d37",
+    "train_batches": 265,
+    "valid_batches": 89,
+    "test_batches": 89,
+    "cache_file_name": "D:\\a_code\\A_Agent\\projects\\LibCity\\cache\\dataset_cache\\point_based_PEMSD7_12_12_0.6_0.2_standard_64_False_False_False_False.npz",
+    "data_feature_keys": [
+      "adj_mx",
+      "ext_dim",
+      "feature_dim",
+      "num_batches",
+      "num_nodes",
+      "output_dim",
+      "scaler"
+    ]
+  }
+}

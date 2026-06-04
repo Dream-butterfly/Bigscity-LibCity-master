@@ -1,0 +1,8 @@
+2026-06-04 13:24:38,799 - INFO - Log directory: D:\a_code\A_Agent\projects\LibCity\outputs\20260604_132438__traffic_state_pred__STGCN__PEMSD4\logs
+2026-06-04 13:24:38,799 - INFO - Begin data artifact pipeline, task=traffic_state_pred, model_name=STGCN, dataset_name=PEMSD4, exp_id=20260604_132438__traffic_state_pred__STGCN__PEMSD4
+2026-06-04 13:24:38,802 - INFO - Loaded file PEMSD4.geo, num_nodes=307
+2026-06-04 13:24:38,802 - INFO - set_weight_link_or_dist: dist
+2026-06-04 13:24:38,802 - INFO - init_weight_inf_or_zero: inf
+2026-06-04 13:24:38,803 - INFO - Loaded file PEMSD4.rel, shape=(307, 307)
+2026-06-04 13:24:38,803 - INFO - Start Calculate the weight by Gauss kernel!
+2026-06-04 13:24:38,803 - INFO - Loading D:\a_code\A_Agent\projects\LibCity\cache\dataset_cache\point_based_PEMSD4_12_12_0.6_0.2_standard_64_False_False_False_False.npz

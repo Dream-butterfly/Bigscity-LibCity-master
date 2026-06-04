@@ -1,0 +1,22 @@
+{
+  "task": "traffic_state_pred",
+  "model": "STGCN",
+  "dataset": "METR_LA",
+  "exp_id": "20260604_150401__traffic_state_pred__STGCN__METR_LA",
+  "artifact_id": "da_20260604_150404__METR_LA__TrafficStatePointDataset__794db269",
+  "artifact_dir": "D:\\a_code\\A_Agent\\projects\\LibCity\\cache\\data_artifacts\\da_20260604_150404__METR_LA__TrafficStatePointDataset__794db269",
+  "data_signature": "794db269563e50467d50d341b771785362e842d4",
+  "train_batches": 322,
+  "valid_batches": 108,
+  "test_batches": 108,
+  "cache_file_name": "D:\\a_code\\A_Agent\\projects\\LibCity\\cache\\dataset_cache\\point_based_METR_LA_12_12_0.6_0.2_standard_64_False_False_False_False.npz",
+  "data_feature_keys": [
+    "adj_mx",
+    "ext_dim",
+    "feature_dim",
+    "num_batches",
+    "num_nodes",
+    "output_dim",
+    "scaler"
+  ]
+}

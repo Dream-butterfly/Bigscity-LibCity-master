@@ -1,0 +1,451 @@
+2026-06-04 14:12:20,963 - INFO - Log directory: D:\a_code\A_Agent\projects\LibCity\outputs\20260604_141220__traffic_state_pred__final_3_type2__METR_LA\logs
+2026-06-04 14:12:20,963 - INFO - Begin artifact training pipeline, task=traffic_state_pred, model_name=final_3_type2, dataset_name=METR_LA, exp_id=20260604_141220__traffic_state_pred__final_3_type2__METR_LA
+2026-06-04 14:12:20,963 - INFO - {'task': 'traffic_state_pred', 'model': 'final_3_type2', 'dataset': 'METR_LA', 'saved_model': True, 'train': True, 'seed': 42, 'gpu': True, 'gpu_id': 0, 'train_rate': 0.6, 'eval_rate': 0.2, 'batch_size': 64, 'learning_rate': 0.0005, 'max_epoch': 10, 'dataset_class': 'TrafficStatePointDataset', 'executor': 'FinalNewExecutor3_Type2', 'evaluator': 'TrafficStateEvaluator', 'band_center_init': 1.1, 'band_width_init': 0.7, 'calculate_weight_adj': True, 'cell_blend_init': 0, 'conservation_loss_weight': 0.1, 'conservation_steps_per_epoch': 80, 'conservation_warmup_epochs': 5, 'data_col': ['traffic_speed'], 'data_files': ['METR_LA'], 'decoder_layers': 2, 'device': device(type='cuda', index=0), 'disturb_rate': 0.5, 'dropout': 0.1, 'dyna': {'including_types': ['state'], 'state': {'entity_id': 'geo_id', 'traffic_speed': 'num'}}, 'encoder_layers': 2, 'entropy_scale': 0.1, 'eval_batch_size': 64, 'evaluator_mode': 'single', 'ffn_hidden_dim': 128, 'fir_mode': 'lukasiewicz', 'fou_entropy_align_weight': 0.01, 'fuzzy_num_sets': 4, 'geo': {'including_types': ['Point'], 'Point': {}}, 'geo_file': 'METR_LA', 'graph_k_hop': 2, 'hidden_dim': 96, 'init_weight_inf_or_zero': 'inf', 'is_distributed': False, 'metrics': ['MAE', 'MAPE', 'MSE', 'RMSE', 'masked_MAE', 'masked_MAPE', 'masked_MSE', 'masked_RMSE', 'R2', 'EVAR'], 'noise_SD': [10], 'noise_mean': [5], 'noise_type': 'gaussian', 'num_cells': 8, 'num_heads': 2, 'num_workers': 0, 'output_dim': 1, 'pad_with_last_sample': True, 'physics_channel_idx': 0, 'rank': 0, 'region_transformer_layers': 1, 'rel': {'including_types': ['geo'], 'geo': {'cost': 'num'}}, 'rel_file': 'METR_LA', 'robustness_test': False, 'save_mode': ['csv'], 'semantic_closure_hops': 3, 'set_weight_link_or_dist': 'dist', 'sparsification_epsilon': 0.05, 'time_intervals': 300, 'type2_fou_gate_scale': 1, 'type2_graph_mode': 'mid', 'use_amp': True, 'use_entropy_dynamic_graph': True, 'use_entropy_fir_weight': True, 'use_fou_entropy_modulation': True, 'use_fuzzy_routing': True, 'use_fuzzy_sparsification': True, 'use_gradient_checkpointing': False, 'use_semantic_closure': True, 'use_temporal_position_embedding': True, 'use_type2_fuzzy': True, 'weight_adj_epsilon': 0.1, 'weight_col': 'cost', 'world_size': 1, 'clip_grad_norm': True, 'epoch': 0, 'learner': 'adamw', 'load_best_epoch': True, 'log_every': 1, 'lr_decay': True, 'lr_decay_ratio': 0.5, 'lr_patience': 5, 'lr_scheduler': 'reducelronplateau', 'lr_threshold': 0.001, 'max_grad_norm': 3, 'patience': 10, 'train_loss': 'none', 'use_early_stop': True, 'weight_decay': 0.0001, 'data_version_id': 'dv_1780553231_f62e5baa', 'input_window': 12, 'output_window': 12, 'scaler': 'standard', 'load_external': False, 'normal_external': False, 'add_time_in_day': True, 'add_day_in_week': True, 'cache_dataset': True, 'ext_scaler': 'none', 'exp_id': '20260604_141220__traffic_state_pred__final_3_type2__METR_LA'}
+2026-06-04 14:12:44,487 - INFO - NewFuzzyCellAttention3_Type2(
+  (fuzzy_graph): FuzzyRelationalGraphLearner(
+    (raw_projection): Linear(in_features=9, out_features=96, bias=True)
+    (feature_to_membership): Sequential(
+      (0): Linear(in_features=96, out_features=48, bias=True)
+      (1): GELU(approximate='none')
+      (2): Linear(in_features=48, out_features=4, bias=True)
+    )
+  )
+  (condition_encoder): STEncoder(
+    (input_projection): Linear(in_features=9, out_features=96, bias=True)
+    (blocks): ModuleList(
+      (0-1): 2 x STEncoderBlock(
+        (temporal_attention): MultiHeadAttention(
+          (query_projection): Linear(in_features=96, out_features=96, bias=True)
+          (key_projection): Linear(in_features=96, out_features=96, bias=True)
+          (value_projection): Linear(in_features=96, out_features=96, bias=True)
+          (output_projection): Linear(in_features=96, out_features=96, bias=True)
+          (dropout): Dropout(p=0.1, inplace=False)
+        )
+        (graph_convolution): FuzzyGraphConvolution(
+          (projections): ModuleList(
+            (0-2): 3 x Linear(in_features=96, out_features=96, bias=True)
+          )
+        )
+        (feed_forward): FeedForwardNetwork(
+          (network): Sequential(
+            (0): Linear(in_features=96, out_features=128, bias=True)
+            (1): GELU(approximate='none')
+            (2): Dropout(p=0.1, inplace=False)
+            (3): Linear(in_features=128, out_features=96, bias=True)
+            (4): Dropout(p=0.1, inplace=False)
+          )
+        )
+        (norm_temporal): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+        (norm_graph): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+        (norm_ffn): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+        (dropout): Dropout(p=0.1, inplace=False)
+        (cell_attention): FuzzyCellAttention(
+          (cell_transform): Linear(in_features=96, out_features=96, bias=True)
+          (output_projection): Linear(in_features=96, out_features=96, bias=True)
+          (region_transformer): RegionTransformer(
+            (self_attn): MultiHeadAttention(
+              (query_projection): Linear(in_features=96, out_features=96, bias=True)
+              (key_projection): Linear(in_features=96, out_features=96, bias=True)
+              (value_projection): Linear(in_features=96, out_features=96, bias=True)
+              (output_projection): Linear(in_features=96, out_features=96, bias=True)
+              (dropout): Dropout(p=0.1, inplace=False)
+            )
+            (ffn): FeedForwardNetwork(
+              (network): Sequential(
+                (0): Linear(in_features=96, out_features=192, bias=True)
+                (1): GELU(approximate='none')
+                (2): Dropout(p=0.1, inplace=False)
+                (3): Linear(in_features=192, out_features=96, bias=True)
+                (4): Dropout(p=0.1, inplace=False)
+              )
+            )
+            (norm1): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+            (norm2): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+            (dropout): Dropout(p=0.1, inplace=False)
+          )
+          (fuzzy_to_cell): Linear(in_features=4, out_features=8, bias=True)
+        )
+        (norm_cell): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+      )
+    )
+    (final_norm): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+  )
+  (future_decoder): FutureDecoder(
+    (blocks): ModuleList(
+      (0-1): 2 x DecoderBlock(
+        (temporal_attention): MultiHeadAttention(
+          (query_projection): Linear(in_features=96, out_features=96, bias=True)
+          (key_projection): Linear(in_features=96, out_features=96, bias=True)
+          (value_projection): Linear(in_features=96, out_features=96, bias=True)
+          (output_projection): Linear(in_features=96, out_features=96, bias=True)
+          (dropout): Dropout(p=0.1, inplace=False)
+        )
+        (graph_convolution): FuzzyGraphConvolution(
+          (projections): ModuleList(
+            (0-2): 3 x Linear(in_features=96, out_features=96, bias=True)
+          )
+        )
+        (cross_attention): MultiHeadAttention(
+          (query_projection): Linear(in_features=96, out_features=96, bias=True)
+          (key_projection): Linear(in_features=96, out_features=96, bias=True)
+          (value_projection): Linear(in_features=96, out_features=96, bias=True)
+          (output_projection): Linear(in_features=96, out_features=96, bias=True)
+          (dropout): Dropout(p=0.1, inplace=False)
+        )
+        (feed_forward): FeedForwardNetwork(
+          (network): Sequential(
+            (0): Linear(in_features=96, out_features=128, bias=True)
+            (1): GELU(approximate='none')
+            (2): Dropout(p=0.1, inplace=False)
+            (3): Linear(in_features=128, out_features=96, bias=True)
+            (4): Dropout(p=0.1, inplace=False)
+          )
+        )
+        (norm_temporal): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+        (norm_graph): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+        (norm_cross): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+        (norm_ffn): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+        (dropout): Dropout(p=0.1, inplace=False)
+        (cell_attention): FuzzyCellAttention(
+          (cell_transform): Linear(in_features=96, out_features=96, bias=True)
+          (output_projection): Linear(in_features=96, out_features=96, bias=True)
+          (region_transformer): RegionTransformer(
+            (self_attn): MultiHeadAttention(
+              (query_projection): Linear(in_features=96, out_features=96, bias=True)
+              (key_projection): Linear(in_features=96, out_features=96, bias=True)
+              (value_projection): Linear(in_features=96, out_features=96, bias=True)
+              (output_projection): Linear(in_features=96, out_features=96, bias=True)
+              (dropout): Dropout(p=0.1, inplace=False)
+            )
+            (ffn): FeedForwardNetwork(
+              (network): Sequential(
+                (0): Linear(in_features=96, out_features=192, bias=True)
+                (1): GELU(approximate='none')
+                (2): Dropout(p=0.1, inplace=False)
+                (3): Linear(in_features=192, out_features=96, bias=True)
+                (4): Dropout(p=0.1, inplace=False)
+              )
+            )
+            (norm1): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+            (norm2): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+            (dropout): Dropout(p=0.1, inplace=False)
+          )
+          (fuzzy_to_cell): Linear(in_features=4, out_features=8, bias=True)
+        )
+        (norm_cell): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+      )
+    )
+    (final_norm): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+    (output_projection): Linear(in_features=96, out_features=1, bias=True)
+  )
+)
+2026-06-04 14:12:44,489 - INFO - fuzzy_graph.base_membership_lower	torch.Size([207, 4])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - fuzzy_graph.base_membership_delta	torch.Size([207, 4])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - fuzzy_graph.blend_logit	torch.Size([])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - fuzzy_graph.raw_projection.weight	torch.Size([96, 9])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - fuzzy_graph.raw_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - fuzzy_graph.feature_to_membership.0.weight	torch.Size([48, 96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - fuzzy_graph.feature_to_membership.0.bias	torch.Size([48])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - fuzzy_graph.feature_to_membership.2.weight	torch.Size([4, 48])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - fuzzy_graph.feature_to_membership.2.bias	torch.Size([4])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.temporal_position_embedding	torch.Size([1, 12, 1, 96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.input_projection.weight	torch.Size([96, 9])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.input_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.temporal_attention.query_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.temporal_attention.query_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.temporal_attention.key_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.temporal_attention.key_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.temporal_attention.value_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.temporal_attention.value_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.temporal_attention.output_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.temporal_attention.output_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.graph_convolution.projections.0.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.graph_convolution.projections.0.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.graph_convolution.projections.1.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.graph_convolution.projections.1.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.graph_convolution.projections.2.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.graph_convolution.projections.2.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.feed_forward.network.0.weight	torch.Size([128, 96])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.feed_forward.network.0.bias	torch.Size([128])	cuda:0	True
+2026-06-04 14:12:44,489 - INFO - condition_encoder.blocks.0.feed_forward.network.3.weight	torch.Size([96, 128])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.feed_forward.network.3.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.norm_temporal.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.norm_temporal.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.norm_graph.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.norm_graph.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.norm_ffn.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.norm_ffn.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.region_mu	torch.Size([8, 96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.region_log_sigma	torch.Size([8])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.log_sigma_sq	torch.Size([1])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.cell_blend	torch.Size([])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.band_center	torch.Size([])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.band_width_raw	torch.Size([])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.cell_transform.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.cell_transform.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.output_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.output_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.self_attn.query_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.self_attn.query_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.self_attn.key_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.self_attn.key_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.self_attn.value_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.self_attn.value_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,491 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.self_attn.output_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.self_attn.output_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.ffn.network.0.weight	torch.Size([192, 96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.ffn.network.0.bias	torch.Size([192])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.ffn.network.3.weight	torch.Size([96, 192])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.ffn.network.3.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.norm1.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.norm1.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.norm2.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.0.cell_attention.region_transformer.norm2.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.0.cell_attention.fuzzy_to_cell.weight	torch.Size([8, 4])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.0.cell_attention.fuzzy_to_cell.bias	torch.Size([8])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.0.norm_cell.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.0.norm_cell.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.1.temporal_attention.query_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.1.temporal_attention.query_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.1.temporal_attention.key_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.1.temporal_attention.key_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.1.temporal_attention.value_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.1.temporal_attention.value_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.1.temporal_attention.output_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.1.temporal_attention.output_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.1.graph_convolution.projections.0.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.1.graph_convolution.projections.0.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,492 - INFO - condition_encoder.blocks.1.graph_convolution.projections.1.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.graph_convolution.projections.1.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.graph_convolution.projections.2.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.graph_convolution.projections.2.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.feed_forward.network.0.weight	torch.Size([128, 96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.feed_forward.network.0.bias	torch.Size([128])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.feed_forward.network.3.weight	torch.Size([96, 128])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.feed_forward.network.3.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.norm_temporal.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.norm_temporal.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.norm_graph.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.norm_graph.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.norm_ffn.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.norm_ffn.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.cell_attention.region_mu	torch.Size([8, 96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.cell_attention.region_log_sigma	torch.Size([8])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.cell_attention.log_sigma_sq	torch.Size([1])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.cell_attention.cell_blend	torch.Size([])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.cell_attention.band_center	torch.Size([])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.cell_attention.band_width_raw	torch.Size([])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.cell_attention.cell_transform.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.cell_attention.cell_transform.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.cell_attention.output_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.cell_attention.output_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.self_attn.query_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,494 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.self_attn.query_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.self_attn.key_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.self_attn.key_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.self_attn.value_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.self_attn.value_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.self_attn.output_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.self_attn.output_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.ffn.network.0.weight	torch.Size([192, 96])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.ffn.network.0.bias	torch.Size([192])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.ffn.network.3.weight	torch.Size([96, 192])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.ffn.network.3.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.norm1.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.norm1.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.norm2.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.region_transformer.norm2.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.fuzzy_to_cell.weight	torch.Size([8, 4])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.cell_attention.fuzzy_to_cell.bias	torch.Size([8])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.norm_cell.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.blocks.1.norm_cell.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,496 - INFO - condition_encoder.final_norm.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - condition_encoder.final_norm.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.future_queries	torch.Size([1, 12, 207, 96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.temporal_attention.query_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.temporal_attention.query_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.temporal_attention.key_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.temporal_attention.key_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.temporal_attention.value_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.temporal_attention.value_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.temporal_attention.output_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.temporal_attention.output_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.graph_convolution.projections.0.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.graph_convolution.projections.0.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.graph_convolution.projections.1.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.graph_convolution.projections.1.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.graph_convolution.projections.2.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.graph_convolution.projections.2.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.cross_attention.query_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.cross_attention.query_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.cross_attention.key_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.cross_attention.key_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.cross_attention.value_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.cross_attention.value_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.cross_attention.output_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.cross_attention.output_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.feed_forward.network.0.weight	torch.Size([128, 96])	cuda:0	True
+2026-06-04 14:12:44,497 - INFO - future_decoder.blocks.0.feed_forward.network.0.bias	torch.Size([128])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.feed_forward.network.3.weight	torch.Size([96, 128])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.feed_forward.network.3.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.norm_temporal.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.norm_temporal.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.norm_graph.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.norm_graph.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.norm_cross.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.norm_cross.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.norm_ffn.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.norm_ffn.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.region_mu	torch.Size([8, 96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.region_log_sigma	torch.Size([8])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.log_sigma_sq	torch.Size([1])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.cell_blend	torch.Size([])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.band_center	torch.Size([])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.band_width_raw	torch.Size([])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.cell_transform.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.cell_transform.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.output_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.output_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.self_attn.query_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.self_attn.query_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.self_attn.key_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.self_attn.key_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.self_attn.value_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,499 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.self_attn.value_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.self_attn.output_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.self_attn.output_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.ffn.network.0.weight	torch.Size([192, 96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.ffn.network.0.bias	torch.Size([192])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.ffn.network.3.weight	torch.Size([96, 192])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.ffn.network.3.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.norm1.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.norm1.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.norm2.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.0.cell_attention.region_transformer.norm2.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.0.cell_attention.fuzzy_to_cell.weight	torch.Size([8, 4])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.0.cell_attention.fuzzy_to_cell.bias	torch.Size([8])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.0.norm_cell.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.0.norm_cell.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.1.temporal_attention.query_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.1.temporal_attention.query_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.1.temporal_attention.key_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.1.temporal_attention.key_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.1.temporal_attention.value_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.1.temporal_attention.value_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.1.temporal_attention.output_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.1.temporal_attention.output_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.1.graph_convolution.projections.0.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.1.graph_convolution.projections.0.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,500 - INFO - future_decoder.blocks.1.graph_convolution.projections.1.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.graph_convolution.projections.1.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.graph_convolution.projections.2.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.graph_convolution.projections.2.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.cross_attention.query_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.cross_attention.query_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.cross_attention.key_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.cross_attention.key_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.cross_attention.value_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.cross_attention.value_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.cross_attention.output_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.cross_attention.output_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.feed_forward.network.0.weight	torch.Size([128, 96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.feed_forward.network.0.bias	torch.Size([128])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.feed_forward.network.3.weight	torch.Size([96, 128])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.feed_forward.network.3.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.norm_temporal.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.norm_temporal.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.norm_graph.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.norm_graph.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.norm_cross.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.norm_cross.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.norm_ffn.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.norm_ffn.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.cell_attention.region_mu	torch.Size([8, 96])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.cell_attention.region_log_sigma	torch.Size([8])	cuda:0	True
+2026-06-04 14:12:44,502 - INFO - future_decoder.blocks.1.cell_attention.log_sigma_sq	torch.Size([1])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.cell_blend	torch.Size([])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.band_center	torch.Size([])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.band_width_raw	torch.Size([])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.cell_transform.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.cell_transform.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.output_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.output_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.self_attn.query_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.self_attn.query_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.self_attn.key_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.self_attn.key_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.self_attn.value_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.self_attn.value_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.self_attn.output_projection.weight	torch.Size([96, 96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.self_attn.output_projection.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.ffn.network.0.weight	torch.Size([192, 96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.ffn.network.0.bias	torch.Size([192])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.ffn.network.3.weight	torch.Size([96, 192])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.ffn.network.3.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.norm1.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.norm1.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.norm2.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.region_transformer.norm2.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.fuzzy_to_cell.weight	torch.Size([8, 4])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.cell_attention.fuzzy_to_cell.bias	torch.Size([8])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.norm_cell.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,503 - INFO - future_decoder.blocks.1.norm_cell.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,505 - INFO - future_decoder.final_norm.weight	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,505 - INFO - future_decoder.final_norm.bias	torch.Size([96])	cuda:0	True
+2026-06-04 14:12:44,505 - INFO - future_decoder.output_projection.weight	torch.Size([1, 96])	cuda:0	True
+2026-06-04 14:12:44,505 - INFO - future_decoder.output_projection.bias	torch.Size([1])	cuda:0	True
+2026-06-04 14:12:44,505 - INFO - Total parameter numbers: 1063326
+2026-06-04 14:12:44,505 - INFO - Enable AMP training (dtype=float16).
+2026-06-04 14:12:44,505 - INFO - You select `adamw` optimizer.
+2026-06-04 14:12:46,175 - INFO - You select `reducelronplateau` lr_scheduler.
+2026-06-04 14:12:46,175 - WARNING - Received none train loss func and will use the loss func defined in the model.
+2026-06-04 14:12:46,176 - INFO - Start training ...
+2026-06-04 14:12:46,176 - INFO - num_batches:323
+2026-06-04 14:14:07,492 - INFO - Epoch [0/10] train_loss: 0.4929, val_loss: 0.4931, lr: 0.000500, 81.32s
+2026-06-04 14:14:07,613 - INFO - Saved model at 0
+2026-06-04 14:14:07,614 - INFO - Val loss decrease from inf to 0.4931, saving to D:\a_code\A_Agent\projects\LibCity\outputs\20260604_141220__traffic_state_pred__final_3_type2__METR_LA\model_cache/final_3_type2_METR_LA_epoch0.tar
+2026-06-04 14:15:27,466 - INFO - Epoch [1/10] train_loss: 0.4558, val_loss: 0.4796, lr: 0.000500, 79.85s
+2026-06-04 14:15:27,585 - INFO - Saved model at 1
+2026-06-04 14:15:27,585 - INFO - Val loss decrease from 0.4931 to 0.4796, saving to D:\a_code\A_Agent\projects\LibCity\outputs\20260604_141220__traffic_state_pred__final_3_type2__METR_LA\model_cache/final_3_type2_METR_LA_epoch1.tar
+2026-06-04 14:16:47,563 - INFO - Epoch [2/10] train_loss: 0.4398, val_loss: 0.4058, lr: 0.000500, 79.98s
+2026-06-04 14:16:47,682 - INFO - Saved model at 2
+2026-06-04 14:16:47,682 - INFO - Val loss decrease from 0.4796 to 0.4058, saving to D:\a_code\A_Agent\projects\LibCity\outputs\20260604_141220__traffic_state_pred__final_3_type2__METR_LA\model_cache/final_3_type2_METR_LA_epoch2.tar
+2026-06-04 14:18:08,205 - INFO - Epoch [3/10] train_loss: 0.3249, val_loss: 0.3048, lr: 0.000500, 80.52s
+2026-06-04 14:18:08,324 - INFO - Saved model at 3
+2026-06-04 14:18:08,324 - INFO - Val loss decrease from 0.4058 to 0.3048, saving to D:\a_code\A_Agent\projects\LibCity\outputs\20260604_141220__traffic_state_pred__final_3_type2__METR_LA\model_cache/final_3_type2_METR_LA_epoch3.tar
+2026-06-04 14:19:28,527 - INFO - Epoch [4/10] train_loss: 0.2557, val_loss: 0.2464, lr: 0.000500, 80.20s
+2026-06-04 14:19:28,650 - INFO - Saved model at 4
+2026-06-04 14:19:28,651 - INFO - Val loss decrease from 0.3048 to 0.2464, saving to D:\a_code\A_Agent\projects\LibCity\outputs\20260604_141220__traffic_state_pred__final_3_type2__METR_LA\model_cache/final_3_type2_METR_LA_epoch4.tar
+2026-06-04 14:20:48,412 - INFO - Epoch [5/10] train_loss: 0.2444, val_loss: 0.2353, lr: 0.000500, 79.76s
+2026-06-04 14:20:48,538 - INFO - Saved model at 5
+2026-06-04 14:20:48,539 - INFO - Val loss decrease from 0.2464 to 0.2353, saving to D:\a_code\A_Agent\projects\LibCity\outputs\20260604_141220__traffic_state_pred__final_3_type2__METR_LA\model_cache/final_3_type2_METR_LA_epoch5.tar
+2026-06-04 14:22:08,411 - INFO - Epoch [6/10] train_loss: 0.2385, val_loss: 0.2312, lr: 0.000500, 79.87s
+2026-06-04 14:22:08,536 - INFO - Saved model at 6
+2026-06-04 14:22:08,536 - INFO - Val loss decrease from 0.2353 to 0.2312, saving to D:\a_code\A_Agent\projects\LibCity\outputs\20260604_141220__traffic_state_pred__final_3_type2__METR_LA\model_cache/final_3_type2_METR_LA_epoch6.tar
+2026-06-04 14:23:30,205 - INFO - Epoch [7/10] train_loss: 0.2367, val_loss: 0.2336, lr: 0.000500, 81.67s
+2026-06-04 14:24:50,344 - INFO - Epoch [8/10] train_loss: 0.2348, val_loss: 0.2316, lr: 0.000500, 80.14s
+2026-06-04 14:26:10,269 - INFO - Epoch [9/10] train_loss: 0.2338, val_loss: 0.2303, lr: 0.000500, 79.93s
+2026-06-04 14:26:10,399 - INFO - Saved model at 9
+2026-06-04 14:26:10,399 - INFO - Val loss decrease from 0.2312 to 0.2303, saving to D:\a_code\A_Agent\projects\LibCity\outputs\20260604_141220__traffic_state_pred__final_3_type2__METR_LA\model_cache/final_3_type2_METR_LA_epoch9.tar
+2026-06-04 14:26:10,399 - INFO - Trained totally 10 epochs, average train time is 71.460s, average eval time is 8.864s
+2026-06-04 14:26:10,399 - INFO - Loading best model state from epoch 9
+2026-06-04 14:26:10,409 - INFO - Saved model at D:\a_code\A_Agent\projects\LibCity\outputs\20260604_141220__traffic_state_pred__final_3_type2__METR_LA\model_cache\final_3_type2_METR_LA.m
+2026-06-04 14:26:10,500 - INFO - Start evaluating ...
+2026-06-04 14:26:24,136 - INFO - Note that you select the single mode to evaluate!
+2026-06-04 14:26:24,150 - INFO - Evaluate result is saved at D:\a_code\A_Agent\projects\LibCity\outputs\20260604_141220__traffic_state_pred__final_3_type2__METR_LA\evaluate_cache\2026_06_04_14_26_24_final_3_type2_METR_LA.csv
+2026-06-04 14:26:24,161 - INFO - 
+         MAE      MAPE         MSE  ...  masked_RMSE        R2      EVAR
+1   3.081871  0.071967   51.975029  ...     5.825972  0.899330  0.900459
+2   3.626665  0.084454   76.848595  ...     7.195249  0.851156  0.852299
+3   4.074418  0.094461   98.422379  ...     8.198255  0.809362  0.810539
+4   4.488295  0.103449  118.978012  ...     9.042083  0.769578  0.770776
+5   4.890831  0.112057  139.359451  ...     9.795371  0.730071  0.731316
+6   5.295034  0.120595  159.249863  ...    10.472891  0.691460  0.692771
+7   5.637326  0.127905  176.809631  ...    11.036740  0.657538  0.658859
+8   5.967858  0.135229  193.318039  ...    11.539552  0.625553  0.626948
+9   6.254872  0.141756  207.298950  ...    11.944279  0.598509  0.599961
+10  6.524948  0.147953  220.240219  ...    12.320212  0.573495  0.575004
+11  6.793200  0.154036  232.946686  ...    12.685349  0.548908  0.550479
+12  7.055435  0.159924  245.592117  ...    13.039815  0.524427  0.526024
+
+[12 rows x 10 columns]

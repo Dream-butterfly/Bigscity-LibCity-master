@@ -1,0 +1,10 @@
+2026-06-04 15:41:10,882 - INFO - Log directory: D:\a_code\A_Agent\projects\LibCity\outputs\20260604_154110__traffic_state_pred__final_3_type2__PEMSD7\logs
+2026-06-04 15:41:10,882 - INFO - Begin data artifact pipeline, task=traffic_state_pred, model_name=final_3_type2, dataset_name=PEMSD7, exp_id=20260604_154110__traffic_state_pred__final_3_type2__PEMSD7
+2026-06-04 15:41:10,887 - INFO - Loaded file PEMSD7.geo, num_nodes=883
+2026-06-04 15:41:10,887 - INFO - set_weight_link_or_dist: link
+2026-06-04 15:41:10,887 - INFO - init_weight_inf_or_zero: zero
+2026-06-04 15:41:10,889 - INFO - Loaded file PEMSD7.rel, shape=(883, 883)
+2026-06-04 15:41:10,889 - INFO - Loading D:\a_code\A_Agent\projects\LibCity\cache\dataset_cache\point_based_PEMSD7_12_12_0.6_0.2_standard_64_False_True_True_False.npz
+2026-06-04 15:42:11,212 - INFO - train	x: (16921, 12, 883, 9), y: (16921, 12, 883, 9)
+2026-06-04 15:42:11,212 - INFO - eval	x: (5640, 12, 883, 9), y: (5640, 12, 883, 9)
+2026-06-04 15:42:11,212 - INFO - test	x: (5640, 12, 883, 9), y: (5640, 12, 883, 9)

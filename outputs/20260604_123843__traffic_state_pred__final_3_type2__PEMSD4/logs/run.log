@@ -1,0 +1,14 @@
+2026-06-04 12:38:43,772 - INFO - Log directory: D:\a_code\A_Agent\projects\LibCity\outputs\20260604_123843__traffic_state_pred__final_3_type2__PEMSD4\logs
+2026-06-04 12:38:43,772 - INFO - Begin data artifact pipeline, task=traffic_state_pred, model_name=final_3_type2, dataset_name=PEMSD4, exp_id=20260604_123843__traffic_state_pred__final_3_type2__PEMSD4
+2026-06-04 12:38:43,776 - INFO - Loaded file PEMSD4.geo, num_nodes=307
+2026-06-04 12:38:43,776 - INFO - set_weight_link_or_dist: dist
+2026-06-04 12:38:43,776 - INFO - init_weight_inf_or_zero: inf
+2026-06-04 12:38:43,778 - INFO - Loaded file PEMSD4.rel, shape=(307, 307)
+2026-06-04 12:38:43,778 - INFO - Start Calculate the weight by Gauss kernel!
+2026-06-04 12:38:43,779 - INFO - Loading D:\a_code\A_Agent\projects\LibCity\cache\dataset_cache\point_based_PEMSD4_12_12_0.6_0.2_standard_64_False_True_True_False.npz
+2026-06-04 12:38:56,042 - INFO - train	x: (10181, 12, 307, 9), y: (10181, 12, 307, 9)
+2026-06-04 12:38:56,042 - INFO - eval	x: (3394, 12, 307, 9), y: (3394, 12, 307, 9)
+2026-06-04 12:38:56,042 - INFO - test	x: (3394, 12, 307, 9), y: (3394, 12, 307, 9)
+2026-06-04 12:39:00,434 - INFO - StandardScaler mean: 63.47405735503351, std: 8.103517239188694
+2026-06-04 12:39:00,434 - INFO - NoneScaler
+2026-06-04 12:40:06,584 - INFO - Data artifact ready: D:\a_code\A_Agent\projects\LibCity\cache\data_artifacts\da_20260604_123902__PEMSD4__TrafficStatePointDataset__1e7272c2

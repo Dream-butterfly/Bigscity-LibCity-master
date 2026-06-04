@@ -1,0 +1,14 @@
+2026-06-04 15:04:01,066 - INFO - Log directory: D:\a_code\A_Agent\projects\LibCity\outputs\20260604_150401__traffic_state_pred__STGCN__METR_LA\logs
+2026-06-04 15:04:01,066 - INFO - Begin data artifact pipeline, task=traffic_state_pred, model_name=STGCN, dataset_name=METR_LA, exp_id=20260604_150401__traffic_state_pred__STGCN__METR_LA
+2026-06-04 15:04:01,069 - INFO - Loaded file METR_LA.geo, num_nodes=207
+2026-06-04 15:04:01,075 - INFO - set_weight_link_or_dist: dist
+2026-06-04 15:04:01,075 - INFO - init_weight_inf_or_zero: inf
+2026-06-04 15:04:01,083 - INFO - Loaded file METR_LA.rel, shape=(207, 207)
+2026-06-04 15:04:01,083 - INFO - Start Calculate the weight by Gauss kernel!
+2026-06-04 15:04:01,085 - INFO - Loading D:\a_code\A_Agent\projects\LibCity\cache\dataset_cache\point_based_METR_LA_12_12_0.6_0.2_standard_64_False_False_False_False.npz
+2026-06-04 15:04:02,409 - INFO - train	x: (20549, 12, 207, 1), y: (20549, 12, 207, 1)
+2026-06-04 15:04:02,409 - INFO - eval	x: (6850, 12, 207, 1), y: (6850, 12, 207, 1)
+2026-06-04 15:04:02,409 - INFO - test	x: (6850, 12, 207, 1), y: (6850, 12, 207, 1)
+2026-06-04 15:04:03,209 - INFO - StandardScaler mean: 54.10160182214715, std: 19.841298117393098
+2026-06-04 15:04:03,209 - INFO - NoneScaler
+2026-06-04 15:04:15,367 - INFO - Data artifact ready: D:\a_code\A_Agent\projects\LibCity\cache\data_artifacts\da_20260604_150404__METR_LA__TrafficStatePointDataset__794db269

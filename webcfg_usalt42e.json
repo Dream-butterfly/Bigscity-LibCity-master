@@ -1,0 +1,131 @@
+{
+  "band_center_init": 1.1,
+  "band_width_init": 0.7,
+  "batch_size": 64,
+  "calculate_weight_adj": true,
+  "cell_blend_init": 0,
+  "conservation_loss_weight": 0.1,
+  "conservation_steps_per_epoch": 80,
+  "conservation_warmup_epochs": 5,
+  "data_col": [
+    "traffic_speed"
+  ],
+  "data_files": [
+    "PEMSD4"
+  ],
+  "decoder_layers": 2,
+  "device": "cuda:0",
+  "disturb_rate": 0.5,
+  "dropout": 0.1,
+  "dyna": {
+    "including_types": [
+      "state"
+    ],
+    "state": {
+      "entity_id": "geo_id",
+      "traffic_speed": "num"
+    }
+  },
+  "encoder_layers": 2,
+  "entropy_scale": 0.1,
+  "eval_batch_size": 64,
+  "evaluator": "TrafficStateEvaluator",
+  "evaluator_mode": "single",
+  "executor": "FinalNewExecutor3_Type2",
+  "ffn_hidden_dim": 128,
+  "fir_mode": "lukasiewicz",
+  "fou_entropy_align_weight": 0.01,
+  "fuzzy_num_sets": 4,
+  "geo": {
+    "including_types": [
+      "Point"
+    ],
+    "Point": {}
+  },
+  "geo_file": "PEMSD4",
+  "graph_k_hop": 2,
+  "hidden_dim": 96,
+  "init_weight_inf_or_zero": "inf",
+  "is_distributed": false,
+  "max_epoch": 10,
+  "metrics": [
+    "MAE",
+    "MAPE",
+    "MSE",
+    "RMSE",
+    "masked_MAE",
+    "masked_MAPE",
+    "masked_MSE",
+    "masked_RMSE",
+    "R2",
+    "EVAR"
+  ],
+  "noise_SD": [
+    10
+  ],
+  "noise_mean": [
+    5
+  ],
+  "noise_type": "gaussian",
+  "num_cells": 8,
+  "num_heads": 2,
+  "num_workers": 0,
+  "output_dim": 1,
+  "pad_with_last_sample": true,
+  "physics_channel_idx": 0,
+  "rank": 0,
+  "region_transformer_layers": 1,
+  "rel": {
+    "including_types": [
+      "geo"
+    ],
+    "geo": {
+      "cost": "num"
+    }
+  },
+  "rel_file": "PEMSD4",
+  "robustness_test": false,
+  "save_mode": [
+    "csv"
+  ],
+  "semantic_closure_hops": 3,
+  "set_weight_link_or_dist": "dist",
+  "sparsification_epsilon": 0.05,
+  "time_intervals": 300,
+  "train": true,
+  "type2_fou_gate_scale": 1,
+  "type2_graph_mode": "mid",
+  "use_amp": true,
+  "use_entropy_dynamic_graph": true,
+  "use_entropy_fir_weight": true,
+  "use_fou_entropy_modulation": true,
+  "use_fuzzy_routing": true,
+  "use_fuzzy_sparsification": true,
+  "use_gradient_checkpointing": false,
+  "use_semantic_closure": true,
+  "use_temporal_position_embedding": true,
+  "use_type2_fuzzy": true,
+  "weight_adj_epsilon": 0.1,
+  "weight_col": "cost",
+  "world_size": 1,
+  "clip_grad_norm": true,
+  "epoch": 0,
+  "gpu": true,
+  "gpu_id": 0,
+  "learner": "adamw",
+  "learning_rate": 0.0005,
+  "load_best_epoch": true,
+  "log_every": 1,
+  "lr_decay": true,
+  "lr_decay_ratio": 0.5,
+  "lr_patience": 5,
+  "lr_scheduler": "reducelronplateau",
+  "lr_threshold": 0.001,
+  "max_grad_norm": 3,
+  "patience": 10,
+  "saved_model": true,
+  "train_loss": "none",
+  "use_early_stop": true,
+  "weight_decay": 0.0001,
+  "data_version_id": "dv_1780547921_ad37021a"
+}

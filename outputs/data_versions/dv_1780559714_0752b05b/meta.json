@@ -1,0 +1,22 @@
+{
+  "status": "failed",
+  "task": "traffic_state_pred",
+  "model": "final_3_type2",
+  "dataset": "PEMSD7",
+  "seed": 42,
+  "train_rate": 0.6,
+  "eval_rate": 0.2,
+  "test_rate": 0.2,
+  "cli_options": {
+    "seed": "42",
+    "train_rate": "0.6",
+    "eval_rate": "0.2",
+    "batch_size": "64",
+    "dataset_class": "TrafficStatePointDataset"
+  },
+  "config_payload": {},
+  "created_at": 1780559714.325426,
+  "version_id": "dv_1780559714_0752b05b",
+  "updated_at": 1780559743.1323702,
+  "error": "Data processing failed with return code 1."
+}

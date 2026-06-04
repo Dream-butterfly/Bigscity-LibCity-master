@@ -1,0 +1,11 @@
+2026-06-04 13:32:32,684 - INFO - Log directory: D:\a_code\A_Agent\projects\LibCity\outputs\20260604_133232__traffic_state_pred__final_3_type2__PEMS_BAY\logs
+2026-06-04 13:32:32,684 - INFO - Begin data artifact pipeline, task=traffic_state_pred, model_name=final_3_type2, dataset_name=PEMS_BAY, exp_id=20260604_133232__traffic_state_pred__final_3_type2__PEMS_BAY
+2026-06-04 13:32:32,687 - INFO - Loaded file PEMS_BAY.geo, num_nodes=325
+2026-06-04 13:32:32,692 - INFO - set_weight_link_or_dist: dist
+2026-06-04 13:32:32,692 - INFO - init_weight_inf_or_zero: inf
+2026-06-04 13:32:32,697 - INFO - Loaded file PEMS_BAY.rel, shape=(325, 325)
+2026-06-04 13:32:32,697 - INFO - Start Calculate the weight by Gauss kernel!
+2026-06-04 13:32:32,698 - INFO - Loading D:\a_code\A_Agent\projects\LibCity\cache\dataset_cache\point_based_PEMS_BAY_12_12_0.6_0.2_standard_64_False_True_True_False.npz
+2026-06-04 13:33:13,901 - INFO - train	x: (31256, 12, 325, 9), y: (31256, 12, 325, 9)
+2026-06-04 13:33:13,901 - INFO - eval	x: (10418, 12, 325, 9), y: (10418, 12, 325, 9)
+2026-06-04 13:33:13,901 - INFO - test	x: (10419, 12, 325, 9), y: (10419, 12, 325, 9)
