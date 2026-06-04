@@ -773,6 +773,11 @@ th {
     word-break: break-word;
 }
 
+.compare-best {
+    color: var(--accent, #1a73e8);
+    font-weight: 700;
+}
+
 .value-input {
     box-sizing: border-box;
 }

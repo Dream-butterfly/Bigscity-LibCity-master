@@ -139,6 +139,7 @@ tr.is-selected td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
 /* ═══ CHART CONTAINERS ═══ */
 .chart-container{width:100%;height:320px}
 .chart-container-sm{height:260px}
+.chart-container-md{height:320px}
 .chart-container-lg{height:380px}
 
 /* ═══ PARAM SPLIT TABLE ═══ */
@@ -148,6 +149,7 @@ tr.is-selected td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
 .param-localized{min-width:130px}
 .param-value{min-width:180px}
 .param-desc{max-width:320px;font-size:.75rem;color:var(--text-muted);line-height:1.45;white-space:normal;word-break:break-word}
+.compare-best{color:var(--accent);font-weight:700}
 .value-input-json{min-width:280px;white-space:pre;resize:vertical}
 .param-type{min-width:110px}
 .section-caption{margin:2px 0 6px 2px}

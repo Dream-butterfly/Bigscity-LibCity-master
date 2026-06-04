@@ -19,14 +19,14 @@ class TrafficStateExternalFeatureMixin:
         is_time_nan = np.isnan(self.timesolts).any()
         data_list = [df]
         if self.add_time_in_day and not is_time_nan:
-            time_ind = (self.timesolts - self.timesolts.astype("datetime64[D]")) / np.timedelta64(1, "D")
+            time_ind = ((self.timesolts - self.timesolts.astype("datetime64[D]")) / np.timedelta64(1, "D")).astype(np.float32)
             time_in_day = np.tile(time_ind, [1, num_nodes, 1]).transpose((2, 1, 0))
             data_list.append(time_in_day)
         if self.add_day_in_week and not is_time_nan:
             dayofweek = []
             for day in self.timesolts.astype("datetime64[D]"):
                 dayofweek.append(datetime.datetime.strptime(str(day), "%Y-%m-%d").weekday())
-            day_in_week = np.zeros(shape=(num_samples, num_nodes, 7))
+            day_in_week = np.zeros(shape=(num_samples, num_nodes, 7), dtype=np.float32)
             day_in_week[np.arange(num_samples), :, dayofweek] = 1
             data_list.append(day_in_week)
         # 外部数据集
@@ -49,6 +49,9 @@ class TrafficStateExternalFeatureMixin:
                         data_ind = np.tile(data_ind, [1, num_nodes, 1]).transpose((2, 1, 0))
                         data_list.append(data_ind)
         data = np.concatenate(data_list, axis=-1)
+        # 确保输出为 float32，防止上游 float64 污染
+        if data.dtype != np.float32:
+            data = data.astype(np.float32, copy=False)
         return data
 
     def _add_external_information_4d(self, df, ext_data=None):

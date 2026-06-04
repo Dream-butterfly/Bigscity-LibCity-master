@@ -394,7 +394,7 @@ function updatePageHeaderI18n() {
 }
 
 /* ── ECharts 实例池 ── */
-const CHART_IDS = ['chartModelParams','chartLoss','chartPred','chartEval','chartCompare'];
+const CHART_IDS = ['chartModelParams','chartLoss','chartPred','chartEval','chartCompare','chartCompareMetrics'];
 
 /* ═══════════════════════ TAB SWITCHING ═══════════════════════ */
 function switchTab(name) {
@@ -706,15 +706,25 @@ function renderParamCell(section, idx) {
   `;
 }
 
+function matchParamFilter(row, filter) {
+  if (!filter) return true;
+  const haystack = [
+    getParamDisplayName(row.key),
+    row.key,
+    getParamDescription(row.key),
+  ].join('\0').toLowerCase();
+  return haystack.includes(filter);
+}
+
 function renderParamTable() {
   const filter = document.getElementById('param_filter')?.value.trim().toLowerCase() || '';
   const configIds = _state.paramRowsConfig
     .map((r, i) => ({r, i}))
-    .filter(x => !filter || x.r.key.toLowerCase().includes(filter))
+    .filter(x => matchParamFilter(x.r, filter))
     .map(x => x.i);
   const executorIds = _state.paramRowsExecutor
     .map((r, i) => ({r, i}))
-    .filter(x => !filter || x.r.key.toLowerCase().includes(filter))
+    .filter(x => matchParamFilter(x.r, filter))
     .map(x => x.i);
   const countEl = document.getElementById('param_count');
   if (countEl) countEl.textContent = String(configIds.length + executorIds.length);
@@ -1751,31 +1761,175 @@ async function loadCompareRuns() {
   }
 }
 
+/* ── 核心指标（默认只显示这些，避免图表过密）── */
+const CORE_METRICS = ['masked_MAE', 'masked_RMSE', 'masked_MAPE'];
+const LOWER_IS_BETTER = new Set(['MAE','MSE','RMSE','MAPE','masked_MAE','masked_MSE','masked_RMSE','masked_MAPE']);
+let _lastCompareItems = [];
+let _showAllMetrics = false;
+
+function toggleCompareMetrics() {
+  _showAllMetrics = document.getElementById('compare_show_all_metrics')?.checked || false;
+  renderCompareMetrics(_lastCompareItems);
+}
+
+function buildCompareChartOption(items, metricList, normalize) {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const textColor = isDark ? '#9ba3b0' : '#4a4f5a';
+  const gridColor = isDark ? '#1e2430' : '#e8eaed';
+
+  const categories = [];
+  metricList.forEach(m => {
+    categories.push(m + ' (h1)', m + ' (avg)');
+  });
+
+  // 如果归一化，计算每个 metric/dim 的 best 值
+  const normRef = {};
+  if (normalize) {
+    metricList.forEach(m => {
+      const vals = items.map(it => it.metrics_summary?.[m]).filter(Boolean);
+      if (!vals.length) return;
+      if (LOWER_IS_BETTER.has(m)) {
+        normRef[m + '_h1'] = Math.min(...vals.map(v => Number(v.h1)));
+        normRef[m + '_avg'] = Math.min(...vals.map(v => Number(v.avg)));
+      } else {
+        normRef[m + '_h1'] = Math.max(...vals.map(v => Number(v.h1)));
+        normRef[m + '_avg'] = Math.max(...vals.map(v => Number(v.avg)));
+      }
+    });
+  }
+
+  const xAxisName = normalize ? '相对值（最佳=1.00）' : '指标值（越低越好）';
+
+  const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666'];
+  const series = items.map((it, idx) => {
+    const data = [];
+    metricList.forEach(m => {
+      const x = it.metrics_summary?.[m];
+      if (!x) { data.push(null, null); return; }
+      let vH1 = Number(x.h1), vAvg = Number(x.avg);
+      if (normalize) {
+        const refH1 = normRef[m + '_h1'] || 1;
+        const refAvg = normRef[m + '_avg'] || 1;
+        if (LOWER_IS_BETTER.has(m)) {
+          vH1 = refH1 / vH1;
+          vAvg = refAvg / vAvg;
+        } else {
+          vH1 = vH1 / refH1;
+          vAvg = vAvg / refAvg;
+        }
+      }
+      data.push(vH1, vAvg);
+    });
+    const label = it.run_id || ('模型' + (idx + 1));
+    const shortLabel = label.length > 28 ? '…' + label.slice(-24) : label;
+    return { name: shortLabel, type: 'bar', data, color: colors[idx % colors.length],
+      label: { show: true, position: 'right', fontSize: 10,
+        formatter: p => p.value != null ? Number(p.value).toFixed(3) : ''
+      }
+    };
+  });
+
+  return {
+    tooltip: {
+      trigger: 'axis', axisPointer: { type: 'shadow' },
+      backgroundColor: isDark ? 'rgba(14,18,26,.94)' : 'rgba(255,255,255,.94)',
+      borderColor: gridColor,
+      textStyle: { color: isDark ? '#e2e6ed' : '#1a1d23', fontSize: 12 },
+      formatter: function(params) {
+        let s = '<b>' + params[0].axisValue + '</b><br/>';
+        params.forEach(p => {
+          if (p.value != null) s += p.marker + ' ' + p.seriesName + ': <b>' + Number(p.value).toFixed(4) + '</b><br/>';
+        });
+        return s;
+      }
+    },
+    legend: { data: series.map(s => s.name), bottom: 0, textStyle: { color: textColor, fontSize: 11 } },
+    grid: { left: '3%', right: '8%', top: '3%', bottom: '12%', containLabel: true },
+    xAxis: { type: 'value', name: xAxisName, nameTextStyle: { color: textColor, fontSize: 11 },
+      axisLabel: { color: textColor, fontSize: 10 }, splitLine: { lineStyle: { color: gridColor } }
+    },
+    yAxis: { type: 'category', data: categories, axisLabel: { color: textColor, fontSize: 10 }, inverse: true },
+    series,
+  };
+}
+
 function renderCompareMetrics(items) {
-  const table = document.getElementById('compare_metrics');
-  if (!table) return;
+  _lastCompareItems = items || [];
+  const wrap = document.getElementById('compare_metrics_wrap');
+  if (!wrap) return;
   if (!items || !items.length) {
-    table.innerHTML = `<tr><td>${escHtml(t('compare_no_data', '无可对比数据'))}</td></tr>`;
+    wrap.innerHTML = `<div class="small" style="padding:1.5em;text-align:center;color:var(--text-muted)">${escHtml(t('compare_no_data', '无可对比数据'))}</div>`;
     return;
   }
   const metrics = new Set();
   items.forEach(it => Object.keys(it.metrics_summary || {}).forEach(k => metrics.add(k)));
-  const metricList = Array.from(metrics);
-  let html = `<tr><th>${escHtml(t('compare_run_header', 'run'))}</th>`;
+  let metricList = Array.from(metrics).sort();
+  if (!_showAllMetrics) {
+    metricList = metricList.filter(m => CORE_METRICS.includes(m));
+    if (!metricList.length) metricList = Array.from(metrics).sort().slice(0, 3);
+  }
+  const lowerMetrics = metricList.filter(m => LOWER_IS_BETTER.has(m));
+  const higherMetrics = metricList.filter(m => !LOWER_IS_BETTER.has(m));
+  metricList = [...lowerMetrics, ...higherMetrics];
+  const normalize = document.getElementById('compare_normalize')?.checked || false;
+
+  // 截短 run_id
+  const labels = items.map((it, i) => {
+    const s = it.run_id || ('模型' + (i + 1));
+    return s.length > 24 ? '…' + s.slice(-20) : s;
+  });
+
+  // 表头
+  let html = '<table><thead><tr><th>指标</th>';
+  labels.forEach(l => { html += `<th class="mono">${escHtml(l)}</th>`; });
+  if (normalize) html += '<th>说明</th>';
+  html += '</tr></thead><tbody>';
+
+  // 每个指标生成两行：h1 和 avg
   metricList.forEach(m => {
-    html += `<th>${escHtml(m)}(${escHtml(t('compare_h1', 'h1'))})</th><th>${escHtml(m)}(${escHtml(t('compare_avg', 'avg'))})</th><th>${escHtml(m)}(${escHtml(t('compare_best', 'best'))})</th>`;
-  });
-  html += '</tr>';
-  items.forEach(it => {
-    html += `<tr><td class="mono">${escHtml(it.run_id)}</td>`;
-    metricList.forEach(m => {
+    const vals = items.map(it => {
       const x = it.metrics_summary?.[m];
-      if (!x) html += '<td>-</td><td>-</td><td>-</td>';
-      else html += `<td>${Number(x.h1).toFixed(4)}</td><td>${Number(x.avg).toFixed(4)}</td><td>${Number(x.best).toFixed(4)}</td>`;
+      return x ? { h1: Number(x.h1), avg: Number(x.avg) } : null;
     });
-    html += '</tr>';
+    // 找最优
+    let bestH1, bestAvg;
+    if (LOWER_IS_BETTER.has(m)) {
+      bestH1 = Math.min(...vals.filter(Boolean).map(v => v.h1));
+      bestAvg = Math.min(...vals.filter(Boolean).map(v => v.avg));
+    } else {
+      bestH1 = Math.max(...vals.filter(Boolean).map(v => v.h1));
+      bestAvg = Math.max(...vals.filter(Boolean).map(v => v.avg));
+    }
+
+    const renderRow = (dim, dimLabel) => {
+      html += '<tr>';
+      html += `<td class="param-localized" style="padding-left:${dim === 'avg' ? '20px' : '8px'}">${dim === 'h1' ? escHtml(m) : ''} ${dimLabel}</td>`;
+      vals.forEach((v, i) => {
+        if (!v) { html += '<td>-</td>'; return; }
+        const raw = v[dim];
+        const isBest = Math.abs(raw - (dim === 'h1' ? bestH1 : bestAvg)) < 1e-8;
+        let display;
+        if (normalize) {
+          const ref = dim === 'h1' ? bestH1 : bestAvg;
+          const norm = LOWER_IS_BETTER.has(m) ? ref / raw : raw / ref;
+          display = Number(norm).toFixed(3);
+        } else {
+          // MAPE 类显示为百分比
+          display = m.includes('MAPE') || m.includes('mape')
+            ? (raw * 100).toFixed(2) + '%'
+            : Number(raw).toFixed(4);
+        }
+        html += `<td class="mono${isBest ? ' compare-best' : ''}">${display}${isBest ? ' ✓' : ''}</td>`;
+      });
+      if (normalize) html += '<td class="small">最佳=1.00</td>';
+      html += '</tr>';
+    };
+    renderRow('h1', '(h1)');
+    renderRow('avg', '(avg)');
   });
-  table.innerHTML = html;
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
 }
 
 async function loadComparison() {
@@ -2100,6 +2254,71 @@ function initCharts() {
   });
 }
 
+/* ═══════════════════════ 页面刷新状态恢复 ═══════════════════════ */
+async function restoreRunningState() {
+  // 恢复训练状态
+  try {
+    const trainData = await apiGet('/api/status');
+    if (trainData.running) {
+      console.log('[restore] 检测到正在运行的训练，恢复日志和图表');
+      trainLogIndex = 0;
+      _trainLogLines = [];
+      pollTrainLogs();
+    } else if (trainData.return_code === 0 && trainData.log_count > 0) {
+      // 训练已完成，直接渲染全部日志和结果
+      console.log('[restore] 检测到已完成的训练，恢复日志');
+      _trainLogLines = trainData.logs_tail || [];
+      trainLogIndex = trainData.log_count || 0;
+      renderFilteredLogs('logs', _trainLogLines);
+      _state.modelPlot = trainData.model_plot || {};
+      _state.modelPlotOptionPie = trainData.model_plot_option_pie || {};
+      _state.modelPlotOptionBar = trainData.model_plot_option_bar || {};
+      drawModelParamChart(_state.modelPlot, _state.modelPlotOptionPie, _state.modelPlotOptionBar);
+      _state.lossPlot = trainData.loss_plot || {};
+      drawLossChart(trainData.loss_plot_option || {}, trainData.loss_plot || {});
+      const badge = document.getElementById('status');
+      if (badge) { badge.className = 'badge badge-done'; badge.textContent = 'done'; }
+      // 获取指标和预测
+      if (trainData.result_ready) {
+        try {
+          const result = await apiGet('/api/result');
+          renderMetrics(result);
+          applyPredictionSelectorMeta(result);
+          refreshPredictionSeries();
+        } catch (_) {}
+      }
+    }
+  } catch (e) {
+    console.warn('[restore] 训练状态恢复失败:', e);
+  }
+
+  // 恢复评估状态
+  try {
+    const evalData = await apiGet('/api/eval/status');
+    if (evalData.running) {
+      console.log('[restore] 检测到正在运行的评估，恢复日志和图表');
+      evalLogIndex = 0;
+      _evalLogLines = [];
+      pollEvalLogs();
+    } else if (evalData.return_code === 0 && evalData.log_count > 0) {
+      console.log('[restore] 检测到已完成的评估，恢复日志');
+      _evalLogLines = evalData.logs_tail || [];
+      evalLogIndex = evalData.log_count || 0;
+      renderEvalLogs();
+      if (evalData.result_ready) {
+        try {
+          const result = await apiGet('/api/eval/result');
+          renderEvalMetrics(result);
+          applyEvalPredictionSelectorMeta(result);
+          refreshEvalPredictionSeries();
+        } catch (_) {}
+      }
+    }
+  } catch (e) {
+    console.warn('[restore] 评估状态恢复失败:', e);
+  }
+}
+
 /* ═══════════════════════ INIT ═══════════════════════ */
 function init() {
   // Tab 切换绑定（含按需加载）
@@ -2167,6 +2386,9 @@ function init() {
 
   // Charts（含绑定）
   initCharts();
+
+  // 页面刷新后恢复正在运行的训练/评估状态
+  restoreRunningState();
 }
 
 document.addEventListener('DOMContentLoaded', init);

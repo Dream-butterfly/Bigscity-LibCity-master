@@ -427,15 +427,25 @@ function renderParamCell(section, idx) {
   `;
 }
 
+function matchParamFilter(row, filter) {
+    if (!filter) return true;
+    const haystack = [
+        getParamDisplayName(row.key),
+        row.key,
+        getParamDescription(row.key),
+    ].join('\0').toLowerCase();
+    return haystack.includes(filter);
+}
+
 function renderParamTable() {
     const filter = byId('param_filter').value.trim().toLowerCase();
     const configIds = state.paramRowsConfig
         .map((r, i) => ({r, i}))
-        .filter(x => !filter || x.r.key.toLowerCase().includes(filter))
+        .filter(x => matchParamFilter(x.r, filter))
         .map(x => x.i);
     const executorIds = state.paramRowsExecutor
         .map((r, i) => ({r, i}))
-        .filter(x => !filter || x.r.key.toLowerCase().includes(filter))
+        .filter(x => matchParamFilter(x.r, filter))
         .map(x => x.i);
     byId('param_count').innerText = String(configIds.length + executorIds.length);
     byId('param_count_config').innerText = String(configIds.length);
@@ -1777,30 +1787,169 @@ async function loadCompareRuns() {
     renderCompareRunOptions();
 }
 
+/* ── 核心指标（默认只显示这些，避免图表过密）── */
+const CORE_METRICS = ['masked_MAE', 'masked_RMSE', 'masked_MAPE'];
+const LOWER_IS_BETTER = new Set(['MAE','MSE','RMSE','MAPE','masked_MAE','masked_MSE','masked_RMSE','masked_MAPE']);
+let _lastCompareItems = [];
+let _showAllMetrics = false;
+
+function toggleCompareMetrics() {
+    _showAllMetrics = byId('compare_show_all_metrics')?.checked || false;
+    renderCompareMetrics(_lastCompareItems);
+}
+
+function buildCompareChartOption(items, metricList, normalize) {
+    const isDark = state.theme === 'dark';
+    const textColor = isDark ? '#9ba3b0' : '#4a4f5a';
+    const gridColor = isDark ? '#1e2430' : '#e8eaed';
+
+    const categories = [];
+    metricList.forEach(m => {
+        categories.push(m + ' (h1)', m + ' (avg)');
+    });
+
+    const normRef = {};
+    if (normalize) {
+        metricList.forEach(m => {
+            const vals = items.map(it => it.metrics_summary?.[m]).filter(Boolean);
+            if (!vals.length) return;
+            if (LOWER_IS_BETTER.has(m)) {
+                normRef[m + '_h1'] = Math.min(...vals.map(v => Number(v.h1)));
+                normRef[m + '_avg'] = Math.min(...vals.map(v => Number(v.avg)));
+            } else {
+                normRef[m + '_h1'] = Math.max(...vals.map(v => Number(v.h1)));
+                normRef[m + '_avg'] = Math.max(...vals.map(v => Number(v.avg)));
+            }
+        });
+    }
+
+    const xAxisName = normalize ? '相对值（最佳=1.00）' : '指标值（越低越好）';
+
+    const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666'];
+    const series = items.map((it, idx) => {
+        const data = [];
+        metricList.forEach(m => {
+            const x = it.metrics_summary?.[m];
+            if (!x) { data.push(null, null); return; }
+            let vH1 = Number(x.h1), vAvg = Number(x.avg);
+            if (normalize) {
+                const refH1 = normRef[m + '_h1'] || 1;
+                const refAvg = normRef[m + '_avg'] || 1;
+                if (LOWER_IS_BETTER.has(m)) {
+                    vH1 = refH1 / vH1;
+                    vAvg = refAvg / vAvg;
+                } else {
+                    vH1 = vH1 / refH1;
+                    vAvg = vAvg / refAvg;
+                }
+            }
+            data.push(vH1, vAvg);
+        });
+        const label = it.run_id || ('模型' + (idx + 1));
+        const shortLabel = label.length > 28 ? '…' + label.slice(-24) : label;
+        return { name: shortLabel, type: 'bar', data, color: colors[idx % colors.length],
+            label: { show: true, position: 'right', fontSize: 10,
+                formatter: p => p.value != null ? Number(p.value).toFixed(3) : ''
+            }
+        };
+    });
+
+    return {
+        tooltip: {
+            trigger: 'axis', axisPointer: { type: 'shadow' },
+            backgroundColor: isDark ? 'rgba(14,18,26,.94)' : 'rgba(255,255,255,.94)',
+            borderColor: gridColor,
+            textStyle: { color: isDark ? '#e2e6ed' : '#1a1d23', fontSize: 12 },
+            formatter: function(params) {
+                let s = '<b>' + params[0].axisValue + '</b><br/>';
+                params.forEach(p => {
+                    if (p.value != null) s += p.marker + ' ' + p.seriesName + ': <b>' + Number(p.value).toFixed(4) + '</b><br/>';
+                });
+                return s;
+            }
+        },
+        legend: { data: series.map(s => s.name), bottom: 0, textStyle: { color: textColor, fontSize: 11 } },
+        grid: { left: '3%', right: '8%', top: '3%', bottom: '12%', containLabel: true },
+        xAxis: { type: 'value', name: xAxisName, nameTextStyle: { color: textColor, fontSize: 11 },
+            axisLabel: { color: textColor, fontSize: 10 }, splitLine: { lineStyle: { color: gridColor } }
+        },
+        yAxis: { type: 'category', data: categories, axisLabel: { color: textColor, fontSize: 10 }, inverse: true },
+        series,
+    };
+}
+
 function renderCompareMetrics(items) {
-    const table = byId('compare_metrics');
+    _lastCompareItems = items || [];
+    const wrap = byId('compare_metrics_wrap');
+    if (!wrap) return;
     if (!items || !items.length) {
-        table.innerHTML = `<tr><td>${esc(t('compare_no_data', '无可对比数据'))}</td></tr>`;
+        wrap.innerHTML = '<div class="small" style="padding:1.5em;text-align:center;color:var(--text-muted)">' + esc(t('compare_no_data', '无可对比数据')) + '</div>';
         return;
     }
     const metrics = new Set();
     items.forEach((it) => Object.keys(it.metrics_summary || {}).forEach((k) => metrics.add(k)));
-    const metricList = Array.from(metrics);
-    let html = `<tr><th>${esc(t('compare_run_header', 'run'))}</th>`;
-    metricList.forEach((m) => {
-        html += `<th>${esc(m)}(${esc(t('compare_h1', 'h1'))})</th><th>${esc(m)}(${esc(t('compare_avg', 'avg'))})</th><th>${esc(m)}(${esc(t('compare_best', 'best'))})</th>`;
+    let metricList = Array.from(metrics).sort();
+    if (!_showAllMetrics) {
+        metricList = metricList.filter(m => CORE_METRICS.includes(m));
+        if (!metricList.length) metricList = Array.from(metrics).sort().slice(0, 3);
+    }
+    const lowerMetrics = metricList.filter(m => LOWER_IS_BETTER.has(m));
+    const higherMetrics = metricList.filter(m => !LOWER_IS_BETTER.has(m));
+    metricList = [...lowerMetrics, ...higherMetrics];
+    const normalize = byId('compare_normalize')?.checked || false;
+
+    const labels = items.map((it, i) => {
+        const s = it.run_id || ('模型' + (i + 1));
+        return s.length > 24 ? '…' + s.slice(-20) : s;
     });
-    html += '</tr>';
-    items.forEach((it) => {
-        html += `<tr><td class="mono">${esc(it.run_id)}</td>`;
-        metricList.forEach((m) => {
+
+    let html = '<table><thead><tr><th>指标</th>';
+    labels.forEach(l => { html += '<th class="mono">' + esc(l) + '</th>'; });
+    if (normalize) html += '<th>说明</th>';
+    html += '</tr></thead><tbody>';
+
+    metricList.forEach(m => {
+        const vals = items.map(it => {
             const x = it.metrics_summary?.[m];
-            if (!x) html += '<td>-</td><td>-</td><td>-</td>';
-            else html += `<td>${Number(x.h1).toFixed(4)}</td><td>${Number(x.avg).toFixed(4)}</td><td>${Number(x.best).toFixed(4)}</td>`;
+            return x ? { h1: Number(x.h1), avg: Number(x.avg) } : null;
         });
-        html += '</tr>';
+        let bestH1, bestAvg;
+        if (LOWER_IS_BETTER.has(m)) {
+            bestH1 = Math.min(...vals.filter(Boolean).map(v => v.h1));
+            bestAvg = Math.min(...vals.filter(Boolean).map(v => v.avg));
+        } else {
+            bestH1 = Math.max(...vals.filter(Boolean).map(v => v.h1));
+            bestAvg = Math.max(...vals.filter(Boolean).map(v => v.avg));
+        }
+
+        const renderRow = (dim, dimLabel) => {
+            html += '<tr>';
+            html += '<td class="param-localized" style="padding-left:' + (dim === 'avg' ? '20px' : '8px') + '">' + (dim === 'h1' ? esc(m) : '') + ' ' + dimLabel + '</td>';
+            vals.forEach((v) => {
+                if (!v) { html += '<td>-</td>'; return; }
+                const raw = v[dim];
+                const isBest = Math.abs(raw - (dim === 'h1' ? bestH1 : bestAvg)) < 1e-8;
+                let display;
+                if (normalize) {
+                    const ref = dim === 'h1' ? bestH1 : bestAvg;
+                    const norm = LOWER_IS_BETTER.has(m) ? ref / raw : raw / ref;
+                    display = Number(norm).toFixed(3);
+                } else {
+                    display = m.includes('MAPE') || m.includes('mape')
+                        ? (raw * 100).toFixed(2) + '%'
+                        : Number(raw).toFixed(4);
+                }
+                html += '<td class="mono' + (isBest ? ' compare-best' : '') + '">' + display + (isBest ? ' ✓' : '') + '</td>';
+            });
+            if (normalize) html += '<td class="small">最佳=1.00</td>';
+            html += '</tr>';
+        };
+        renderRow('h1', '(h1)');
+        renderRow('avg', '(avg)');
     });
-    table.innerHTML = html;
+
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
 }
 
 async function loadComparison() {

@@ -400,8 +400,18 @@
       </div>
     </div>
     <div class="card">
-        <div class="card-header"><strong>指标对比</strong></div>
-        <div class="table-wrap table-wrap-200"><table id="compare_metrics"></table></div>
+        <div class="card-header">
+          <strong>指标对比</strong>
+          <div class="card-controls">
+            <label class="small" style="display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none">
+              <input type="checkbox" id="compare_show_all_metrics" onchange="toggleCompareMetrics()"> 显示全部指标
+            </label>
+            <label class="small" style="display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none">
+              <input type="checkbox" id="compare_normalize" onchange="toggleCompareMetrics()"> 相对缩放
+            </label>
+          </div>
+        </div>
+        <div class="table-wrap table-wrap-200" id="compare_metrics_wrap"></div>
       </div>
       <div class="card">
         <div class="card-header"><strong>预测曲线对比</strong></div>

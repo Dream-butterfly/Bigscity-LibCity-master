@@ -24,20 +24,20 @@ class TrafficStatePipelineMixin:
             else:
                 x_train, y_train, x_val, y_val, x_test, y_test = self._generate_train_val_test()
             self.data = {
-                "x_train": np.array(x_train, copy=True),
-                "y_train": np.array(y_train, copy=True),
-                "x_val": np.array(x_val, copy=True),
-                "y_val": np.array(y_val, copy=True),
-                "x_test": np.array(x_test, copy=True),
-                "y_test": np.array(y_test, copy=True),
+                "x_train": np.asarray(x_train, dtype=np.float32),
+                "y_train": np.asarray(y_train, dtype=np.float32),
+                "x_val": np.asarray(x_val, dtype=np.float32),
+                "y_val": np.asarray(y_val, dtype=np.float32),
+                "x_test": np.asarray(x_test, dtype=np.float32),
+                "y_test": np.asarray(y_test, dtype=np.float32),
             }
         return (
-            np.array(self.data["x_train"], copy=True),
-            np.array(self.data["y_train"], copy=True),
-            np.array(self.data["x_val"], copy=True),
-            np.array(self.data["y_val"], copy=True),
-            np.array(self.data["x_test"], copy=True),
-            np.array(self.data["y_test"], copy=True),
+            np.asarray(self.data["x_train"], dtype=np.float32),
+            np.asarray(self.data["y_train"], dtype=np.float32),
+            np.asarray(self.data["x_val"], dtype=np.float32),
+            np.asarray(self.data["y_val"], dtype=np.float32),
+            np.asarray(self.data["x_test"], dtype=np.float32),
+            np.asarray(self.data["y_test"], dtype=np.float32),
         )
 
     def _generate_input_data(self, df):
@@ -126,6 +126,11 @@ class TrafficStatePipelineMixin:
         # -------- logging（避免字符串拼接开销）--------
         self._logger.info("Dataset created")
         self._logger.info("x shape: %s, y shape: %s", x.shape, y.shape)
+
+        # 转为 float32 以节省内存（float64 → float32 省 50%）
+        # 在 concat 后立即转换，让原始 float64 尽快被 GC 回收
+        x = np.asarray(x, dtype=np.float32)
+        y = np.asarray(y, dtype=np.float32)
 
         return x, y
 
