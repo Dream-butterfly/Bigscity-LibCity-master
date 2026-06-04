@@ -166,12 +166,14 @@ class FuzzyRelationalGraphLearner(nn.Module):
         num_fuzzy_sets: int = 3,
         static_adjacency: torch.Tensor | None = None,
         input_dim: int | None = None,
+        sparsification_epsilon: float = 0.0,
     ):
         super().__init__()
         if num_fuzzy_sets < 2:
             raise ValueError("num_fuzzy_sets must be >= 2.")
         self.num_nodes = num_nodes
         self.num_fuzzy_sets = num_fuzzy_sets
+        self.sparsification_epsilon = sparsification_epsilon
 
         # ── Base node membership vectors μ ∈ [0,1]^K ──
         self.base_memberships = nn.Parameter(
@@ -245,6 +247,34 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
     # ── Forward ─────────────────────────────────────────────────
 
+    def _sparsify_relation(self, R):
+        """ε-threshold sparsification: suppress noise-level fuzzy relations.
+
+        Soft approach (preserves gradients):
+            R' = ReLU(R - ε) / (1 - ε)
+
+        Physical intuition: fuzzy tolerance relations should only be
+        non-zero when nodes genuinely share functional features.
+        Noise-level values (e.g. R[i,j] = 0.001 from incidental
+        membership overlap) are suppressed, keeping only semantically
+        meaningful relations.
+
+        Args:
+            R: [N, N] dense fuzzy relation, values ∈ [0,1].
+
+        Returns:
+            [N, N] sparsified relation, values ∈ [0,1].
+        """
+        if self.sparsification_epsilon <= 0:
+            return R
+        eps = self.sparsification_epsilon
+        # Soft-threshold (gradient-preserving): ReLU(R - ε) re-scaled
+        R_sp = F.relu(R - eps) / (1.0 - eps)
+        # Re-enforce reflexivity (diagonal unaffected by sparsification)
+        diag = torch.eye(self.num_nodes, device=R_sp.device, dtype=R_sp.dtype)
+        R_sp = R_sp + diag * (1.0 - R_sp.diag().unsqueeze(-1))
+        return R_sp.clamp(0.0, 1.0)
+
     def forward(self, node_features=None):
         """Build fuzzy relational graph R ∈ [0,1]^(N×N).
 
@@ -266,9 +296,10 @@ class FuzzyRelationalGraphLearner(nn.Module):
             # Re-enforce reflexivity after union
             diag = torch.eye(self.num_nodes, device=R_union.device, dtype=R_union.dtype)
             R_union = R_union + diag * (1.0 - R_union.diag().unsqueeze(-1))
-            return R_union.clamp(0.0, 1.0)
+            R_union = R_union.clamp(0.0, 1.0)
+            return self._sparsify_relation(R_union)
 
-        return R_fuzzy
+        return self._sparsify_relation(R_fuzzy)
 
     # ── Accessors ───────────────────────────────────────────────
 

@@ -44,11 +44,18 @@ class RegionTransformer(nn.Module):
         self.norm2 = nn.LayerNorm(hidden_dim)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, region_tokens: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        region_tokens: torch.Tensor,
+        region_relation: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         """Pre-LN Transformer on region tokens.
 
         Args:
             region_tokens: [K, D] or [T×K, D].
+            region_relation: [K, K] optional fuzzy region-region relation.
+                            Used as additive attention bias — strongly
+                            related region pairs receive boosted attention.
 
         Returns:
             Same shape as input.
@@ -58,8 +65,23 @@ class RegionTransformer(nn.Module):
         if need_squeeze:
             region_tokens = region_tokens.unsqueeze(0)      # [1, L, D]
 
+        # Build additive attention bias from fuzzy region relation
+        attn_bias = None
+        if region_relation is not None:
+            L = region_tokens.size(1)
+            K = region_relation.size(0)
+            if L == K:
+                # Static mode: [1, K, K]
+                attn_bias = region_relation.unsqueeze(0)
+            else:
+                # Temporal mode: L = T×K → block-repeat [K,K] T times
+                T = L // K
+                attn_bias = region_relation.repeat(T, T).unsqueeze(0)
+            attn_bias = attn_bias.to(device=region_tokens.device,
+                                     dtype=region_tokens.dtype)
+
         x = self.norm1(region_tokens + self.dropout(
-            self.self_attn(region_tokens)))
+            self.self_attn(region_tokens, mask=attn_bias)))
         x = self.norm2(x + self.dropout(self.ffn(x)))
 
         if need_squeeze:
@@ -80,13 +102,19 @@ class FuzzyCellAttention(nn.Module):
     GCN handles local topology propagation.  FRR provides global
     functional routing through a low-rank region bottleneck.
 
+    Two routing modes (controlled by use_fuzzy_routing):
+      - GMM mode (False):  softmax assignment → probabilistic routing
+      - Fuzzy mode (True): exp(-||x-c||²/2σ²) → true fuzzy membership,
+                           no normalization, plus region-region
+                           fuzzy relations as attention bias.
+
     Architecture (static mode, [N, D]):
-      ① Soft region assignment via learnable prototypes
+      ① Fuzzy region membership via prototypes
       ② sqrt routing weights
       ③ Message encoding
       ④ Region token aggregation  [N, D] → [K, D]
       ⑤ Topology-aware band-pass gate
-      ⑥ Region Transformer (self-attn among region tokens)
+      ⑥ Region Transformer (self-attn with fuzzy region-relation bias)
       ⑦ Node readback  [K, D] → [N, D]
       ⑧ Output projection + residual blend
     """
@@ -101,6 +129,7 @@ class FuzzyCellAttention(nn.Module):
         region_transformer_layers: int = 1,
         num_heads: int = 2,
         dropout: float = 0.1,
+        use_fuzzy_routing: bool = False,
     ):
         """
         Args:
@@ -112,17 +141,28 @@ class FuzzyCellAttention(nn.Module):
             region_transformer_layers: 1 → RegionTransformer, 0 → identity.
             num_heads: MHA heads for RegionTransformer.
             dropout: Dropout rate.
+            use_fuzzy_routing: True → fuzzy membership (no softmax) +
+                               per-region fuzziness + region-region relations.
         """
         super().__init__()
         if num_cells < 2:
             raise ValueError("num_cells must be >= 2.")
         self.num_cells = num_cells
         self.hidden_dim = hidden_dim
+        self.use_fuzzy_routing = use_fuzzy_routing
 
-        # ── Region prototypes ──
-        self.centers = nn.Parameter(torch.randn(num_cells, hidden_dim) * 0.1)
+        if use_fuzzy_routing:
+            # ── Fuzzy region definitions (mu + spread per region) ──
+            self.region_mu = nn.Parameter(
+                torch.randn(num_cells, hidden_dim) * 0.1)
+            self.region_log_sigma = nn.Parameter(
+                torch.zeros(num_cells))  # per-region fuzziness
+        else:
+            # ── GMM region prototypes ──
+            self.centers = nn.Parameter(
+                torch.randn(num_cells, hidden_dim) * 0.1)
 
-        # ── Assignment variance (controls fuzziness) ──
+        # ── Assignment variance (global fuzziness, used in both modes) ──
         self.log_sigma_sq = nn.Parameter(torch.zeros(1))
 
         # ── Message encoding / decoding ──
@@ -130,11 +170,14 @@ class FuzzyCellAttention(nn.Module):
         self.output_projection = nn.Linear(hidden_dim, hidden_dim)
 
         # ── Learnable blend weight λ₂  ──
-        self.cell_blend = nn.Parameter(torch.tensor(cell_blend_init, dtype=torch.float32))
+        self.cell_blend = nn.Parameter(
+            torch.tensor(cell_blend_init, dtype=torch.float32))
 
         # ── Topological band-pass gate ──
-        self.band_center = nn.Parameter(torch.tensor(band_center_init, dtype=torch.float32))
-        self.band_width_raw = nn.Parameter(torch.tensor(band_width_init, dtype=torch.float32))
+        self.band_center = nn.Parameter(
+            torch.tensor(band_center_init, dtype=torch.float32))
+        self.band_width_raw = nn.Parameter(
+            torch.tensor(band_width_init, dtype=torch.float32))
 
         # ── Region Transformer ──
         self.region_transformer = None
@@ -146,30 +189,85 @@ class FuzzyCellAttention(nn.Module):
         # ── Fuzzy graph conditioning (set externally by model.py) ──
         self.fuzzy_to_cell: nn.Module | None = None
 
-    # ── ① Soft region assignment ─────────────────────────────
+        # ── Region-region fuzzy relation (computed on first forward) ──
+        self._cached_region_relation: torch.Tensor | None = None
+
+    # ── ① Region membership assignment ───────────────────────
 
     def _compute_membership(
         self, x: torch.Tensor, mu_fuzzy: torch.Tensor | None = None
     ) -> torch.Tensor:
-        """Soft region assignment via learnable prototypes.
+        """Region membership: fuzzy or probabilistic depending on mode.
 
-        u_ik = softmax( -||x_i - c_k||² / 2σ²  [+ Linear(μ_fuzzy_i)_k] )
+        GMM mode (use_fuzzy_routing=False):
+            u_ik = softmax( -||x_i - c_k||² / 2σ²  + bias )
+
+        Fuzzy mode (use_fuzzy_routing=True):
+            u_ik = exp( -||x_i - region_mu_k||² / 2σ_k² )
+                 × sigmoid( fuzzy_to_cell(μ_fuzzy_i)_k )
+            → values in [0,1], NO row normalization
+            → a node can simultaneously "strongly belong" to many regions
 
         Args:
             x: [N, D] node features.
             mu_fuzzy: [N, K_f] optional fuzzy memberships for conditioning.
 
         Returns:
-            u: [N, K] region membership, rows sum to 1.
+            u: [N, K] region membership.
+               GMM mode: rows sum to 1 (probability).
+               Fuzzy mode: values in [0,1] (no sum constraint).
         """
-        dist_sq = torch.cdist(x, self.centers).pow(2)           # [N, K]
-        sigma_sq = F.softplus(self.log_sigma_sq) + 0.01
-        logits = -dist_sq / (2 * sigma_sq)
+        if self.use_fuzzy_routing:
+            # ── Fuzzy mode: per-region spread, no normalization ──
+            diff = x.unsqueeze(1) - self.region_mu.unsqueeze(0)  # [N, K, D]
+            dist_sq = (diff.pow(2)).sum(dim=-1)                   # [N, K]
+            # Per-region fuzziness σ_k²
+            sigma_k = F.softplus(self.region_log_sigma).unsqueeze(0) + 0.05  # [1, K]
+            u = torch.exp(-dist_sq / (2 * sigma_k.pow(2)))        # [N, K]
 
-        if mu_fuzzy is not None and self.fuzzy_to_cell is not None:
-            logits = logits + self.fuzzy_to_cell(mu_fuzzy)
+            if mu_fuzzy is not None and self.fuzzy_to_cell is not None:
+                gate = torch.sigmoid(self.fuzzy_to_cell(mu_fuzzy))  # [N, K]
+                u = u * gate
 
-        return F.softmax(logits, dim=-1)
+            return u.clamp(0.0, 1.0)
+        else:
+            # ── GMM mode: softmax over global variance ──
+            dist_sq = torch.cdist(x, self.centers).pow(2)        # [N, K]
+            sigma_sq = F.softplus(self.log_sigma_sq) + 0.01
+            logits = -dist_sq / (2 * sigma_sq)
+
+            if mu_fuzzy is not None and self.fuzzy_to_cell is not None:
+                logits = logits + self.fuzzy_to_cell(mu_fuzzy)
+
+            return F.softmax(logits, dim=-1)
+
+    # ── Region-region fuzzy relation (Route 4) ───────────────
+
+    def _compute_region_relations(self) -> torch.Tensor:
+        """Compute fuzzy relations among region definitions.
+
+        R_region[k,l] = exp( -||region_mu_k - region_mu_l||² / 2τ² )
+
+        This expresses functional "proximity" between urban region
+        prototypes — e.g. CBD and commercial corridors are semantically
+        close, while CBD and remote residential areas are distant.
+
+        Used as additive attention bias in RegionTransformer,
+        boosting attention between functionally related regions.
+
+        Returns:
+            [K, K] region-region fuzzy relation, values ∈ [0,1].
+        """
+        if not self.use_fuzzy_routing:
+            return None
+        # Global fuzziness τ as the distance scale
+        tau = F.softplus(self.log_sigma_sq) + 0.1
+        diff = self.region_mu.unsqueeze(0) - self.region_mu.unsqueeze(1)
+        dist_sq = (diff.pow(2)).sum(dim=-1)                      # [K, K]
+        R_region = torch.exp(-dist_sq / (2 * tau.pow(2)))
+        # Self-relation = 1.0
+        R_region.fill_diagonal_(1.0)
+        return R_region.clamp(0.0, 1.0)
 
     # ── ⑤ Topological band-pass gate ─────────────────────────
 
@@ -218,10 +316,17 @@ class FuzzyCellAttention(nn.Module):
         """Full FRR pipeline for static [N, D] input."""
         N, D = x.shape
 
-        # ① Soft region assignment
+        # ① Fuzzy/GMM region membership
         u = self._compute_membership(x, mu_fuzzy)                # [N, K]
-        # ② Routing weights (sqrt preserves simplex geometry)
-        B = u.sqrt().clamp(min=1e-8)                             # [N, K]
+
+        # ② Routing weights
+        if self.use_fuzzy_routing:
+            # Fuzzy mode: L2-normalize per region for stable aggregation
+            B = u.sqrt().clamp(min=1e-8)                         # [N, K]
+            B = B / B.norm(p=2, dim=0, keepdim=True).clamp_min(1e-8)
+        else:
+            # GMM mode: sqrt preserves simplex geometry
+            B = u.sqrt().clamp(min=1e-8)                         # [N, K]
 
         # ③ Message encoding
         X_tilde = self.cell_transform(x)                         # [N, D]
@@ -237,9 +342,10 @@ class FuzzyCellAttention(nn.Module):
             gw = (gw_num / gw_den).unsqueeze(-1)                # [K, 1]
             M = M * gw                                         # [K, D]
 
-        # ⑥ Region Transformer
+        # ⑥ Region Transformer (with fuzzy region-relation bias)
         if self.region_transformer is not None:
-            M = self.region_transformer(M)                       # [K, D]
+            region_rel = self._compute_region_relations()
+            M = self.region_transformer(M, region_relation=region_rel)
 
         # ⑦ Node readback
         H = B @ M                                                # [N, D]
@@ -270,7 +376,13 @@ class FuzzyCellAttention(nn.Module):
         # ① Stable region assignment (time-averaged)
         x_static = x.mean(dim=0)                                 # [N, D]
         u = self._compute_membership(x_static, mu_fuzzy)         # [N, K]
-        B = u.sqrt().clamp(min=1e-8)                             # [N, K]
+
+        # ② Routing weights
+        if self.use_fuzzy_routing:
+            B = u.sqrt().clamp(min=1e-8)
+            B = B / B.norm(p=2, dim=0, keepdim=True).clamp_min(1e-8)
+        else:
+            B = u.sqrt().clamp(min=1e-8)
 
         # ③④ Per-timestep aggregation → time-aware region tokens
         X_tilde = self.cell_transform(x)                         # [T, N, D]
@@ -287,7 +399,8 @@ class FuzzyCellAttention(nn.Module):
         # ⑥ Region Transformer on flattened [T×K, D]
         if self.region_transformer is not None:
             M = M.reshape(T * self.num_cells, D)
-            M = self.region_transformer(M)
+            region_rel = self._compute_region_relations()
+            M = self.region_transformer(M, region_relation=region_rel)
             M = M.reshape(T, self.num_cells, D)
 
         # ⑦ Per-timestep readback → temporal mean

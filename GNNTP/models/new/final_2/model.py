@@ -1,33 +1,26 @@
 """final_2 — Fuzzy Relational Reasoning System for traffic forecasting.
 
-Enhanced from final_new with fuzzy-first inductive biases:
-  Route 1 — Fuzzy Semantic Closure:  R → S = max(R, R², R³)
-           max-min composition models transitive relational reasoning.
-  Route 3 — Entropy-Driven Dynamic Graph:
-           fuzzy entropy H(i) modulates relation strengths in real time.
+Enhanced from final_new with fuzzy-first inductive biases (6 routes):
+  Route 1 — Fuzzy Semantic Closure:       R → S = max(R, R², R³)
+  Route 3 — Entropy-Driven Dynamic Graph: H(i) modulates relation strengths
+  Route 3b— Entropy-Weighted FIR:         boundary nodes get higher penalty
+  Route 4 — Fuzzy Hierarchical Routing:   true fuzzy membership (no softmax)
+                                          + region-region fuzzy relations
+  Route 6 — Fuzzy Relation Sparsification:  ε-threshold noise suppression
 
 Local-Global Spatial Dual architecture:
   Spatial-Local:  FuzzyGCN (K-hop topology propagation via fuzzy closure S)
-  Spatial-Global: FRR  (Fuzzy Region Routing, replaces spatial self-attention)
+  Spatial-Global: FHR (Fuzzy Hierarchical Routing, replaces spatial self-attn)
   Temporal:       Per-node Transformer
 
-Core contributions (inherited from final_new):
-1. Fuzzy Region Routing (FRR): node → region token aggregation
-   → Region Transformer (self-attn in latent region space) → node readback
-2. Topology-aware band-pass gate: hop-distance gate focuses FRR on
-   medium-range functional connections beyond GCN coverage.
-3. Fuzzy Interaction Regularization (FIR): Łukasiewicz T-norm
-   interaction consistency prior on the learned fuzzy relation.
-
-New contributions in final_2:
-4. Fuzzy Semantic Closure: explicit transitive inference via max-min
-   composition → transforms the fuzzy graph into a relational reasoning system.
-5. Entropy-Driven Dynamic Graph: fuzzy entropy H(i) = -Σ_k μ_k log μ_k
-   modulates relation strengths → high-entropy (phase-transition) nodes
-   receive amplified connectivity.
-6. Entropy-Weighted FIR: traffic phase-transition boundary nodes receive
-   higher FIR penalties, enforcing stronger physical consistency where
-   the model is most uncertain.
+Core innovations:
+1. Fuzzy Region Routing → Fuzzy Hierarchical Routing (Route 4)
+2. Topology-aware band-pass gate
+3. FIR: Łukasiewicz T-norm interaction consistency
+4. Fuzzy Semantic Closure via max-min composition (Route 1)
+5. Entropy-Driven Dynamic Graph (Route 3)
+6. Entropy-Weighted FIR (Route 3b)
+7. Fuzzy Relation Sparsification (Route 6)
 """
 
 from logging import getLogger
@@ -48,18 +41,19 @@ from .utils import compute_hop_distance
 class NewFuzzyCellAttention2(AbstractTrafficStateModel):
     """Fuzzy Relational Reasoning System for traffic forecasting.
 
-    Key distinction from final_new: the fuzzy relation is NOT just a
-    similarity matrix — it forms a relational reasoning system:
+    The fuzzy relation forms a complete reasoning pipeline:
 
-        μ → R → S = max(R, R², R³) → modulated by H(μ) → prediction
+        μ → R → sparsify(R) → S = closure(R) → S_dyn(S, H) → FHR → FIR(H)
+
+    Not just "fuzzy adjacency" — a fuzzy relational reasoning system.
 
     Training: forward() → calculate_loss() → scalar.
     Inference: forward() → predict() → [B, T_out, N, C_out].
 
     Architecture:
-        H' = λ₁·FuzzyGCN(H, S_dyn) + λ₂·FRR(H, C)
-        S_dyn = SemanticClosure(R) + α·EntropyModulation(R, H)
-        R = FuzzyRelationalGraph(X), C = learnable region prototypes
+        H' = λ₁·FuzzyGCN(H, S_dyn) + λ₂·FHR(H, C)
+        S_dyn = sparsify(closure(R)) + α·EntropyModulation
+        R = FuzzyRelationalGraph(X), C = fuzzy region prototypes
     """
 
     def __init__(self, config, data_feature):
@@ -120,6 +114,16 @@ class NewFuzzyCellAttention2(AbstractTrafficStateModel):
         self.use_entropy_fir_weight = config.get(
             "use_entropy_fir_weight", True)
 
+        # ── Route 4: Fuzzy Hierarchical Routing ──────────────────
+        self.use_fuzzy_routing = config.get(
+            "use_fuzzy_routing", True)
+
+        # ── Route 6: Fuzzy Relation Sparsification ───────────────
+        self.use_fuzzy_sparsification = config.get(
+            "use_fuzzy_sparsification", True)
+        self.sparsification_epsilon = config.get(
+            "sparsification_epsilon", 0.05)
+
         # ── Device ────────────────────────────────────────────
         self.device = config.get("device", torch.device("cpu"))
 
@@ -139,6 +143,8 @@ class NewFuzzyCellAttention2(AbstractTrafficStateModel):
             num_fuzzy_sets=self.fuzzy_num_sets,
             static_adjacency=adjacency_matrix,
             input_dim=self.feature_dim,
+            sparsification_epsilon=(
+                self.sparsification_epsilon if self.use_fuzzy_sparsification else 0.0),
         )
 
         # ── Submodules ────────────────────────────────────────
@@ -150,6 +156,7 @@ class NewFuzzyCellAttention2(AbstractTrafficStateModel):
             band_center_init=self.band_center_init,
             band_width_init=self.band_width_init,
             region_transformer_layers=self.region_transformer_layers,
+            use_fuzzy_routing=self.use_fuzzy_routing,
         )
         self.condition_encoder = STEncoder(
             input_dim=self.feature_dim,

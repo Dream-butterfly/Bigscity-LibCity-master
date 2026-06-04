@@ -37,6 +37,7 @@ class STEncoderBlock(nn.Module):
         band_center_init=1.1,
         band_width_init=0.7,
         region_transformer_layers=1,
+        use_fuzzy_routing=False,
     ):
         super().__init__()
         self.use_cell_attention = use_cell_attention
@@ -64,6 +65,7 @@ class STEncoderBlock(nn.Module):
                 region_transformer_layers=region_transformer_layers,
                 num_heads=num_heads,
                 dropout=dropout,
+                use_fuzzy_routing=use_fuzzy_routing,
             )
             self.norm_cell = nn.LayerNorm(hidden_dim)
 
@@ -133,6 +135,7 @@ class STEncoder(nn.Module):
         band_center_init=1.1,
         band_width_init=0.7,
         region_transformer_layers=1,
+        use_fuzzy_routing=False,
     ):
         super().__init__()
         self.max_time_steps = max_time_steps
@@ -149,6 +152,7 @@ class STEncoder(nn.Module):
                 band_center_init=band_center_init,
                 band_width_init=band_width_init,
                 region_transformer_layers=region_transformer_layers,
+                use_fuzzy_routing=use_fuzzy_routing,
             )
             for _ in range(num_layers)
         ])
