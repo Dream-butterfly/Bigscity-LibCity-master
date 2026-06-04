@@ -90,6 +90,16 @@
                 <div><label>seed</label><input id="data_seed" placeholder="0"/></div>
                 <div><label>batch_size</label><input id="data_batch_size" placeholder="64"/></div>
                 <div><label>dataset_class</label><input id="data_dataset_class" placeholder="TrafficStatePointDataset"/></div>
+                <div><label>exp_id</label><input id="data_exp_id" placeholder="可选，自动生成"/></div>
+                <div>
+                    <label>gpu</label>
+                    <select id="data_gpu">
+                        <option value=""></option>
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                    </select>
+                </div>
+                <div><label>gpu_id</label><input id="data_gpu_id" placeholder="0"/></div>
                 <div class="span-all">
                     <label>split(train/eval/test)</label>
                     <div class="split-input-grid">
@@ -102,8 +112,8 @@
                             <input id="data_eval_rate" value="0.2" placeholder="0.2"/>
                         </div>
                         <div>
-                            <label class="small">test</label>
-                            <input id="data_test_rate" value="0.2" placeholder="0.2"/>
+                            <label class="small">test（自动计算）</label>
+                            <input id="data_test_rate" value="0.2" placeholder="0.2" readonly style="background:#e9ecef;cursor:not-allowed;"/>
                         </div>
                         <div class="span-all">
                             <label class="small">预设</label>

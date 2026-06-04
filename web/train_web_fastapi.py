@@ -126,7 +126,7 @@ DATA_LOCKED_CONFIG_KEYS = {
     "cache_dataset",
     "cache_file_name",
 }
-DATA_LOCKED_CLI_KEYS = {"config_file", "seed", "dataset_class", "train_rate", "eval_rate"}
+DATA_LOCKED_CLI_KEYS = {"config_file", "seed", "dataset_class", "train_rate", "eval_rate", "batch_size"}
 
 app = FastAPI(title="GNNTP Web Trainer")
 app.mount("/static", StaticFiles(directory=str(WEB_ROOT / "static")), name="static")

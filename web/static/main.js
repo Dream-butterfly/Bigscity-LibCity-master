@@ -533,11 +533,10 @@ function parseSplitRate(raw, name) {
 function getDataSplitValues() {
     const train = parseSplitRate(byId('data_train_rate')?.value, 'train');
     const evalR = parseSplitRate(byId('data_eval_rate')?.value, 'eval');
-    const test = parseSplitRate(byId('data_test_rate')?.value, 'test');
-    const sum = train + evalR + test;
-    if (Math.abs(sum - 1) > 1e-6) {
-        throw new Error(`train+eval+test 必须等于 1（当前 ${sum.toFixed(6)}）`);
+    if (train + evalR > 1) {
+        throw new Error(`train+eval 必须 ≤ 1（当前 ${(train + evalR).toFixed(6)}）`);
     }
+    const test = Math.round((1 - train - evalR) * 1e6) / 1e6;
     return {train, eval: evalR, test};
 }
 
@@ -633,6 +632,9 @@ function collectDataCliOptions() {
         seed: 'data_seed',
         batch_size: 'data_batch_size',
         dataset_class: 'data_dataset_class',
+        exp_id: 'data_exp_id',
+        gpu: 'data_gpu',
+        gpu_id: 'data_gpu_id',
     };
     for (const [k, id] of Object.entries(mappings)) {
         const el = byId(id);
@@ -853,7 +855,7 @@ function applyTrainDataVersionSelection() {
     const v = (state.dataVersions || []).find((x) => x.version_id === vid);
     const hintEl = byId('train_data_version_hint');
     const contextEl = byId('train_data_context');
-    const lockIds = ['seed', 'train_rate', 'eval_rate', 'dataset_class', 'config_file'];
+    const lockIds = ['seed', 'train_rate', 'eval_rate', 'dataset_class', 'config_file', 'batch_size'];
     if (!v) {
         if (hintEl) hintEl.innerText = '';
         if (contextEl) contextEl.innerText = '-';
@@ -864,7 +866,7 @@ function applyTrainDataVersionSelection() {
         return;
     }
     if (hintEl) {
-        hintEl.innerText = '已锁定数据相关参数（seed/train_rate/eval_rate/dataset_class/config_file 等）为所选 data_version 配置，训练页修改不会触发重新生成。';
+        hintEl.innerText = '已锁定数据相关参数（seed/train_rate/eval_rate/dataset_class/config_file/batch_size）为所选 data_version 配置，训练页修改不会触发重新生成。';
     }
     if (contextEl) {
         const p = getDataVersionProfile(v);
