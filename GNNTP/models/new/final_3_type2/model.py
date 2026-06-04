@@ -147,6 +147,10 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         self.sparsification_epsilon = config.get(
             "sparsification_epsilon", 0.05)
 
+        # ── FOU-Entropy Alignment (Type-2 regularisation) ──────
+        self.fou_entropy_align_weight = config.get(
+            "fou_entropy_align_weight", 0.0)
+
         # ── Device ────────────────────────────────────────────
         self.device = config.get("device", torch.device("cpu"))
 
@@ -228,7 +232,7 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
     #  Route 2: Type-2 Fuzzy Graph Construction
     # ═══════════════════════════════════════════════════════════
 
-    def _build_type2_effective_graph(self, device=None):
+    def _build_type2_effective_graph(self, device=None, node_features=None):
         """Build effective graph from Type-2 interval relation.
 
         Pipeline:
@@ -240,20 +244,29 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
           - mid/high/low: static blend strategies
           - fou_gated: FOU inversely gates relation strength
 
+        Args:
+            device: target device for tensors.
+            node_features: Optional [B,T,N,D] for dynamic membership.
+
         Returns:
             S_eff: [N, N] effective graph for GCN propagation.
             FOU:   [N, N] structural Footprint of Uncertainty.
         """
-        if not self.use_type2_fuzzy or not self.use_semantic_closure:
+        if not self.use_type2_fuzzy:
             # Fallback to Type-1 midpoint closure
             fuzzy_relation = self.fuzzy_graph.get_semantic_closure(
                 max_hops=self.semantic_closure_hops)
             return fuzzy_relation, None
 
+        # Type-2 enabled: closures hops depend on semantic_closure switch.
+        #   use_semantic_closure=True  → full transitive closure (default 3 hops)
+        #   use_semantic_closure=False → no closure, S_eff from raw interval relation
+        closure_hops = self.semantic_closure_hops if self.use_semantic_closure else 1
         S_eff, FOU = self.fuzzy_graph.get_effective_graph(
-            max_hops=self.semantic_closure_hops,
+            max_hops=closure_hops,
             mode=self.type2_graph_mode,
             fou_gate_scale=self.type2_fou_gate_scale,
+            node_features=node_features,
         )
 
         if device is not None:
@@ -279,7 +292,7 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
     #  Route 3: Entropy-Driven Dynamic Graph (Type-2 aware)
     # ═══════════════════════════════════════════════════════════
 
-    def _apply_entropy_dynamic_graph(self, fuzzy_R, FOU=None):
+    def _apply_entropy_dynamic_graph(self, fuzzy_R, FOU=None, node_features=None):
         """Modulate fuzzy relation by Type-2 fuzzy entropy.
 
         H_t2(i) = H_mid(i) · (1 + FOU_avg(i))
@@ -298,12 +311,14 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         Args:
             fuzzy_R: [N, N] base effective graph (S_eff).
             FOU:     [N, N] optional structural Footprint of Uncertainty.
+            node_features: Optional [B,T,N,D] for dynamic membership.
 
         Returns:
             [N, N] entropy-modulated relation, values in [0, 1].
         """
-        H = self.fuzzy_graph.get_cell_entropy().to(device=fuzzy_R.device,
-                                                    dtype=fuzzy_R.dtype)
+        H = self.fuzzy_graph.get_cell_entropy(
+            node_features=node_features).to(device=fuzzy_R.device,
+                                            dtype=fuzzy_R.dtype)
         H_max = H.max().clamp_min(1e-8)
         H_norm = H / H_max                                       # [N], ∈ [0, 1]
 
@@ -320,7 +335,8 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         S_dyn = (fuzzy_R + self.entropy_scale * H_outer).clamp(0.0, 1.0)
         return S_dyn
 
-    def _apply_entropy_weighted_fir(self, temporal_delta, net_pressure):
+    def _apply_entropy_weighted_fir(self, temporal_delta, net_pressure,
+                                      node_features=None):
         """Weight FIR residual by Type-2 fuzzy entropy.
 
         Boundary nodes (high Type-2 entropy) receive higher FIR penalty.
@@ -331,11 +347,13 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         Args:
             temporal_delta: [B, T-1, N] state change.
             net_pressure:   [B, T-1, N] FIR net pressure.
+            node_features: Optional [B,T,N,D] for dynamic membership.
 
         Returns:
             scalar weighted MSE loss.
         """
-        H = self.fuzzy_graph.get_cell_entropy().to(
+        H = self.fuzzy_graph.get_cell_entropy(
+            node_features=node_features).to(
             device=temporal_delta.device, dtype=temporal_delta.dtype)
         H_weight = 1.0 + H / H.max().clamp_min(1e-8)             # [N], ∈ [1, 2]
 
@@ -369,7 +387,8 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         device = history_sequence.device
 
         # ── Route 2 + Route 1: Type-2 Semantic Closure ──────────
-        S_eff, FOU = self._build_type2_effective_graph(device=device)
+        S_eff, FOU = self._build_type2_effective_graph(
+            device=device, node_features=history_sequence)
         fuzzy_relation = S_eff
 
         # Cache FOU for downstream use (entropy, FIR)
@@ -378,10 +397,11 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         # ── Route 3: Entropy-Driven Dynamic Graph (Type-2 aware) ─
         if self.use_entropy_dynamic_graph:
             fuzzy_relation = self._apply_entropy_dynamic_graph(
-                fuzzy_relation, FOU=FOU)
+                fuzzy_relation, FOU=FOU, node_features=history_sequence)
 
         # Midpoint memberships for FRR conditioning
-        mu_fuzzy = self.fuzzy_graph.get_memberships().to(device)
+        mu_fuzzy = self.fuzzy_graph.get_memberships(
+            node_features=history_sequence).to(device)
 
         condition_features = self.condition_encoder(
             history_sequence, fuzzy_relation,
@@ -417,7 +437,7 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
     # ═══════════════════════════════════════════════════════════
 
     def calculate_loss(self, batch):
-        """Compute L1 loss + optional FIR regularization."""
+        """Compute L1 loss + FIR + FOU-entropy alignment."""
         history_sequence = batch["X"]
         future_sequence = batch["y"][..., :self.output_dim]
 
@@ -425,19 +445,24 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         pred = self.future_decoder(
             condition, fuzzy_R, graph_dist=self.graph_dist, mu_fuzzy=mu)
 
-        regression_loss = F.l1_loss(pred, future_sequence)
+        total = F.l1_loss(pred, future_sequence)
 
         eff_weight = self._get_effective_reg_weight()
         if eff_weight > 0 and self.fir_mode != "none":
             if self.fir_mode == "lukasiewicz":
                 reg_loss = self._fuzzy_interaction_regularization(
-                    pred, fuzzy_R)
+                    pred, fuzzy_R, node_features=history_sequence)
             elif self.fir_mode == "simple":
                 reg_loss = self._simple_consistency_loss(pred, fuzzy_R)
             else:
                 reg_loss = 0.0
-            return regression_loss + eff_weight * reg_loss
-        return regression_loss
+            total = total + eff_weight * reg_loss
+
+        # FOU-Entropy alignment: width ∝ uncertainty
+        if self.use_type2_fuzzy and self.fou_entropy_align_weight > 0:
+            total = total + self.fou_entropy_align_weight * self._fou_entropy_alignment()
+
+        return total
 
     # ═══════════════════════════════════════════════════════════
     #  FIR: Fuzzy Interaction Regularization
@@ -456,7 +481,8 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
             return self.conservation_loss_weight
         return self.conservation_loss_weight * (self._train_step_count / total)
 
-    def _fuzzy_interaction_regularization(self, future, fuzzy_relation):
+    def _fuzzy_interaction_regularization(self, future, fuzzy_relation,
+                                            node_features=None):
         """FIR via Łukasiewicz T-norm.
 
         FlowPressure[i→j] = max(0, congestion[i] + R[i,j] − 1)
@@ -470,6 +496,11 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         the residual is weighted by Type-2 fuzzy entropy
         H_t2(i) = H_mid(i)·(1+FOU_avg(i)), additionally
         modulated by structural FOU.
+
+        Args:
+            future: [B, T, N, C] prediction.
+            fuzzy_relation: [N, N] effective graph (S_dyn).
+            node_features: Optional [B,T,N,D] for dynamic membership.
         """
         if future.size(1) < 2:
             return future.new_tensor(0.0)
@@ -496,7 +527,7 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         # ── Entropy-weighted FIR (Type-2 aware) ─────────────────
         if self.use_entropy_fir_weight:
             return self._apply_entropy_weighted_fir(
-                temporal_delta, net_pressure)
+                temporal_delta, net_pressure, node_features=node_features)
         return (temporal_delta - net_pressure).pow(2).mean()
 
     def _simple_consistency_loss(self, future, fuzzy_relation):
@@ -511,6 +542,33 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         diff = (delta.unsqueeze(-2) - delta.unsqueeze(-3)).pow(2).mean(dim=-1)
         R = fuzzy_relation.unsqueeze(0).unsqueeze(0)          # [1, 1, N, N]
         return (R * diff).mean()
+
+    # ═══════════════════════════════════════════════════════════
+    #  FOU-Entropy Alignment (Type-2 regularisation)
+    # ═══════════════════════════════════════════════════════════
+
+    def _fou_entropy_alignment(self):
+        """Align interval width with membership uncertainty.
+
+        L_fou = |FOU_node − Normalize(H_node)|²
+
+        Principle: a node's interval width (FOU) should be proportional
+        to its membership entropy (H).  High-entropy boundary nodes
+        (ambiguous functional role) are allowed larger uncertainty
+        intervals;  low-entropy core nodes are constrained to tight
+        memberships.
+
+        Uses static membership (no node_features) to regularise the
+        parameter space rather than batch-conditioned outputs.
+
+        Returns:
+            scalar alignment loss, ≥ 0.  Zero when FOU ∝ H perfectly.
+        """
+        mu_low, mu_high, _ = self.fuzzy_graph._compute_memberships()
+        FOU_node = (mu_high - mu_low).mean(dim=-1)                # [N]
+        H = self.fuzzy_graph.get_cell_entropy()                   # [N]
+        H_norm = H / H.max().clamp_min(1e-8)                      # [N] ∈ [0,1]
+        return (FOU_node - H_norm).pow(2).mean()
 
     # ═══════════════════════════════════════════════════════════
     #  Stability Diagnostics

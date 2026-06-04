@@ -421,7 +421,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
             S = torch.max(S, current)
         return S.clamp(0.0, 1.0)
 
-    def get_semantic_closure_t2(self, max_hops: int = 3):
+    def get_semantic_closure_t2(self, max_hops: int = 3, node_features=None):
         """Compute Type-2 interval semantic closure.
 
         Pipeline:
@@ -441,13 +441,14 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
         Args:
             max_hops: maximum transitive depth (K). Default 3.
+            node_features: Optional [B,T,N,D] for dynamic membership conditioning.
 
         Returns:
             S_low:  [N, N] pessimistic closure.
             S_high: [N, N] optimistic closure.
             FOU:    [N, N] structural Footprint of Uncertainty.
         """
-        mu_low, mu_high, _ = self._compute_memberships()
+        mu_low, mu_high, _ = self._compute_memberships(node_features)
         R_low, R_high = self._build_fuzzy_relation_t2(mu_low, mu_high)
 
         # Sparsify noise
@@ -474,6 +475,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         max_hops: int = 3,
         mode: str = "mid",
         fou_gate_scale: float = 1.0,
+        node_features=None,
     ):
         """Combine interval bounds into a single effective graph.
 
@@ -493,12 +495,14 @@ class FuzzyRelationalGraphLearner(nn.Module):
             max_hops: transitive depth for semantic closure.
             mode: combination strategy (see above).
             fou_gate_scale: scaling factor for FOU gating (mode="fou_gated").
+            node_features: Optional [B,T,N,D] for dynamic membership.
 
         Returns:
             S_eff: [N, N] effective graph for GCN propagation.
             FOU:   [N, N] structural Footprint of Uncertainty.
         """
-        S_low, S_high, FOU = self.get_semantic_closure_t2(max_hops)
+        S_low, S_high, FOU = self.get_semantic_closure_t2(
+            max_hops, node_features=node_features)
 
         if mode == "low":
             S_eff = S_low
@@ -556,13 +560,16 @@ class FuzzyRelationalGraphLearner(nn.Module):
     #  Accessors
     # ═══════════════════════════════════════════════════════════════
 
-    def get_memberships(self):
+    def get_memberships(self, node_features=None):
         """Return midpoint memberships for FRR conditioning.
 
         Uses the midpoint μ_mid = (μ_low + μ_high) / 2 —
         the most representative single-valued membership.
+
+        Args:
+            node_features: Optional [B,T,N,D] for dynamic membership.
         """
-        _, _, mu_mid = self._compute_memberships()
+        _, _, mu_mid = self._compute_memberships(node_features)
         return mu_mid  # [N, K]
 
     def get_interval_memberships(self):
@@ -580,7 +587,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
     #  Stability Diagnostics (Type-2 aware)
     # ═══════════════════════════════════════════════════════════════
 
-    def get_cell_entropy(self):
+    def get_cell_entropy(self, node_features=None):
         """Type-2 fuzzy cell entropy.
 
         H(i) = H_mid(i) · (1 + FOU_avg(i))
@@ -594,10 +601,13 @@ class FuzzyRelationalGraphLearner(nn.Module):
         intervals receive higher entropy, reflecting genuine epistemic
         uncertainty about their functional zone.
 
+        Args:
+            node_features: Optional [B,T,N,D] for dynamic membership.
+
         Returns:
             [N] Type-2 entropy. High → boundary node with uncertain membership.
         """
-        mu_low, mu_high, _ = self._compute_memberships()
+        mu_low, mu_high, _ = self._compute_memberships(node_features)
         mu_mid = (mu_low + mu_high) / 2.0
         # Normalize to probability-like
         p = mu_mid / mu_mid.sum(dim=-1, keepdim=True).clamp_min(1e-8)

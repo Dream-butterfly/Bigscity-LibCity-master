@@ -34,6 +34,7 @@
   "use_fuzzy_routing": true,
   "use_fuzzy_sparsification": true,
   "sparsification_epsilon": 0.05,
+  "fou_entropy_align_weight": 0.01,
   "scaler": "standard",
   "load_external": false,
   "normal_external": false,

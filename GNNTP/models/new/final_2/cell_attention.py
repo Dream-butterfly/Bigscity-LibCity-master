@@ -265,8 +265,10 @@ class FuzzyCellAttention(nn.Module):
         diff = self.region_mu.unsqueeze(0) - self.region_mu.unsqueeze(1)
         dist_sq = (diff.pow(2)).sum(dim=-1)                      # [K, K]
         R_region = torch.exp(-dist_sq / (2 * tau.pow(2)))
-        # Self-relation = 1.0
-        R_region.fill_diagonal_(1.0)
+        # Self-relation = 1.0 (out-of-place to preserve autograd graph)
+        K = R_region.size(0)
+        eye = torch.eye(K, device=R_region.device, dtype=R_region.dtype)
+        R_region = R_region * (1 - eye) + eye
         return R_region.clamp(0.0, 1.0)
 
     # ── ⑤ Topological band-pass gate ─────────────────────────
