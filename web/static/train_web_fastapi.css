@@ -764,6 +764,15 @@ th {
     min-width: 180px
 }
 
+.param-desc {
+    max-width: 320px;
+    font-size: .75rem;
+    color: var(--text-sidebar);
+    line-height: 1.45;
+    white-space: normal;
+    word-break: break-word;
+}
+
 .value-input {
     box-sizing: border-box;
 }

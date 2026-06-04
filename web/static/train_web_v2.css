@@ -147,6 +147,7 @@ tr.is-selected td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
 .param-key{vertical-align:middle!important}
 .param-localized{min-width:130px}
 .param-value{min-width:180px}
+.param-desc{max-width:320px;font-size:.75rem;color:var(--text-muted);line-height:1.45;white-space:normal;word-break:break-word}
 .value-input-json{min-width:280px;white-space:pre;resize:vertical}
 .param-type{min-width:110px}
 .section-caption{margin:2px 0 6px 2px}

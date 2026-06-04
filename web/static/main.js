@@ -40,6 +40,167 @@ const state = {
 const byId = (id) => document.getElementById(id);
 const esc = (s) => String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 const CLI_FIELDS = ["config_file", "exp_id", "seed", "gpu", "gpu_id", "train_rate", "eval_rate", "batch_size", "learning_rate", "max_epoch", "dataset_class", "executor", "evaluator"];
+
+/* ── 参数说明（含用途、可选值、推荐值）── */
+const PARAM_DESCRIPTIONS = {
+  max_epoch:           '最大训练轮数。推荐: 100-200(小模型), 50-100(大模型)。可选: 任意正整数',
+  batch_size:          '每批样本数。受GPU显存限制。推荐: 64(METR-LA), 32(PEMS大图)。可选: 8/16/32/64/128',
+  eval_batch_size:     '评估时批大小，可大于训练batch。推荐: 与batch_size相同或更大。可选: 同batch_size',
+  learning_rate:       '初始学习率。推荐: 0.001(Adam), 0.0005(AdamW)。可选: 1e-5 ~ 1e-2',
+  base_lr:             '基础学习率(NEW_MODEL用)。推荐: 0.001。可选: 1e-5 ~ 1e-2',
+  learner:             '优化器类型。推荐: adamw(最佳泛化), adam(快速收敛)。可选: adam/adamw/sgd/adagrad/rmsprop/sparseadam',
+  weight_decay:        '权重衰减(L2正则化)。推荐: 1e-4。可选: 1e-5 ~ 1e-2',
+  clip_grad_norm:      '是否裁剪梯度范数，防止梯度爆炸。推荐: true。可选: true/false',
+  max_grad_norm:       '梯度裁剪最大范数。推荐: 3。可选: 1/3/5/10',
+  lr_scheduler:        '学习率调度器类型。推荐: reducelronplateau(自适应), cosineannealinglr(SGD风格)。可选: multisteplr/steplr/exponentiallr/cosineannealinglr/lambdalr/reduceonplateau',
+  lr_decay:            '是否启用学习率衰减。推荐: true。可选: true/false',
+  lr_decay_ratio:      '学习率衰减系数(每次衰减乘以此值)。推荐: 0.5。可选: 0.1~0.9',
+  lr_patience:         'ReduceLROnPlateau 耐心轮数。推荐: 5。可选: 3/5/10',
+  lr_threshold:        'ReduceLROnPlateau 改善阈值。推荐: 0.001。可选: 1e-4 ~ 1e-2',
+  lr_T_max:            'CosineAnnealing 周期长度(epochs)。推荐: =max_epoch。可选: 50/100/200',
+  lr_eta_min:          'CosineAnnealing 最小学习率。推荐: 1e-5。可选: 1e-6 ~ 1e-4',
+  lr_warmup_epoch:     '学习率预热轮数。推荐: 5。可选: 0~20',
+  lr_warmup_init:      '预热初始学习率比例。推荐: 0.1。可选: 0.01~0.5',
+  lr_epsilon:          'Adam epsilon，防除零。推荐: 1e-8。可选: 1e-9~1e-6',
+  lr_beta1:            'Adam β1(一阶动量)。推荐: 0.9。可选: 0.5~0.99',
+  lr_beta2:            'Adam β2(二阶动量)。推荐: 0.999。可选: 0.9~0.9999',
+  lr_alpha:            'RMSProp alpha。推荐: 0.99。可选: 0.9~0.999',
+  lr_momentum:         'SGD动量。推荐: 0.9。可选: 0.5~0.99',
+  lr_lambda:           'LambdaLR衰减函数系数。推荐: 0.1。可选: 0.01~1.0',
+  scale_lr:            '是否按batch_size缩放学习率。推荐: false。可选: true/false',
+  steps:               'MultiStepLR 衰减节点(epoch列表)。推荐: [50,80]。可选: 逗号分隔epoch',
+  step_size:           'StepLR 衰减步长(epoch)。推荐: 30。可选: 10/20/30/50',
+  use_early_stop:      '是否启用早停。推荐: true(防止过拟合)。可选: true/false',
+  patience:            '早停耐心轮数(连续N轮不改善则停)。推荐: 10(final_new), 30(diffusion)。可选: 5~50',
+  scaler:              '主数据归一化方法。推荐: standard(零均值单位方差)。可选: standard/normal/minmax01/minmax11/log/none',
+  ext_scaler:          '外部特征归一化方法。推荐: none(不处理)或standard。可选: none/standard/normal/minmax01/minmax11/log',
+  load_external:       '是否加载外部特征(天气/POI等)。推荐: false(纯交通数据)。可选: true/false',
+  normal_external:     '是否对外部特征归一化。推荐: false(已在ext_scaler处理)。可选: true/false',
+  add_time_in_day:     '是否添加日内时间编码(0-23时)。推荐: true(提升周期性建模)。可选: true/false',
+  add_day_in_week:     '是否添加周内日编码(1-7)。推荐: true。可选: true/false',
+  time_of_day:         '是否使用日内时间特征(STGformer风格)。推荐: true。可选: true/false',
+  day_of_week:         '是否使用周内日特征(STGformer风格)。推荐: true。可选: true/false',
+  steps_per_day:       '每日时间步数(如5分钟间隔=288)。推荐: 数据集自动推断。可选: 288/144/96',
+  input_window:        '输入历史时间窗口(步数)。推荐: 12(1小时@5min)。可选: 6/12/24',
+  output_window:       '预测未来时间窗口(步数)。推荐: 12(=input_window)。可选: 1/3/6/12',
+  input_dim:           '输入特征维度(每节点特征数)。推荐: 1(速度)或3(速度+时间)。可选: 1~N',
+  output_dim:          '输出维度。推荐: 1(单步速度)。可选: 1~N',
+  hidden_dim:          '主隐藏维度。推荐: 96(final_new/final_2)。可选: 64/96/128/256',
+  d_model:             'Transformer模型维度(NEW_MODEL/PDFormer用)。推荐: 64。可选: 32/64/128/256',
+  ffn_hidden_dim:      '前馈网络隐藏维度(通常=hidden_dim×4)。推荐: 128(当hidden_dim=96)。可选: 128/256/512',
+  embed_dim:           '嵌入维度(NEW_MODEL)。推荐: 64。可选: 32/64/128',
+  external_dim:        '外部特征维度。推荐: 0(不使用外部特征)。可选: 0~N',
+  skip_dim:            '跳连接维度(PDFormer)。推荐: 256。可选: 128/256/512',
+  num_heads:           '多头注意力头数。推荐: 2(hidden_dim=96时)。可选: 2/4/8(需整除hidden_dim)',
+  num_layers:          '网络层数。推荐: 2-4。可选: 1/2/3/4/6',
+  encoder_layers:      '编码器层数。推荐: 2。可选: 1/2/3/4',
+  decoder_layers:      '解码器层数。推荐: 2。可选: 1/2/3/4',
+  region_transformer_layers: '区域Transformer层数(final_new专用)。推荐: 1。可选: 1/2',
+  dropout:             '通用Dropout率。推荐: 0.1。可选: 0.0/0.1/0.2/0.3/0.5',
+  attn_drop:           '注意力Dropout率(PDFormer)。推荐: 0.1。可选: 0.0~0.3',
+  drop_path:           'DropPath率(Stochastic Depth, PDFormer用)。推荐: 0.1。可选: 0.0~0.3',
+  dropout_rate:        'Dropout率(STTN用)。推荐: 0.1。可选: 0.0~0.5',
+  output_attention:    '是否输出注意力权重(调试用)。推荐: false。可选: true/false',
+  use_mixed_proj:      '是否使用混合投影(STGformer)。推荐: true。可选: true/false',
+  qkv_bias:            'QKV投影是否加偏置(PDFormer)。推荐: true。可选: true/false',
+  graph_k_hop:         '图卷积K跳邻域。推荐: 2。可选: 1/2/3',
+  filter_type:         '图滤波类型(DCRNN)。推荐: dual_random_walk。可选: laplacian/random_walk/dual_random_walk',
+  max_diffusion_step:  '最大扩散步数(图上的)。推荐: 2。可选: 1/2/3',
+  cheb_order:          '切比雪夫多项式阶数(NEW_MODEL)。推荐: 3。可选: 1/2/3',
+  bidir_adj_mx:        '是否双向邻接矩阵。推荐: true。可选: true/false',
+  support_len:         '支持矩阵数量(NEW_MODEL)。推荐: 1。可选: 1/2/3',
+  graph_conv_type:     '图卷积类型(STGCN)。推荐: chebconv。可选: gcnconv/chebconv/gatconv',
+  fuzzy_num_sets:      '每个节点的模糊集合数(隶属函数个数)。推荐: 4。可选: 2/3/4/6/8',
+  num_cells:           '模糊区域单元数(空间聚类数)。推荐: 8。可选: 4/8/12/16',
+  cell_blend_init:     '区域混合初始化值(0=硬划分,>0=软划分)。推荐: 0.0。可选: 0.0~0.5',
+  band_center_init:    '模糊带中心初始化值(GMM均值缩放)。推荐: 1.1。可选: 0.5~2.0',
+  band_width_init:     '模糊带宽度初始化值(GMM标准差缩放)。推荐: 0.7。可选: 0.3~1.5',
+  fir_mode:            '模糊推理模式。推荐: lukasiewicz(Łukasiewicz逻辑)。可选: lukasiewicz/godel/product',
+  use_cell_attention:  '是否使用区域注意力(new_fuzzy_cellattention)。推荐: true。可选: true/false',
+  use_hollow_kernel:   '是否使用空心核(new_fuzzy_cellattention)。推荐: false。可选: true/false',
+  use_semantic_closure:      '是否对模糊关系做语义闭包(传递闭包增强推理)。推荐: true。可选: true/false',
+  semantic_closure_hops:     '语义闭包最大跳数。推荐: 3。可选: 1/2/3/5',
+  use_entropy_dynamic_graph: '是否用熵驱动动态图(区域不确定性调制)。推荐: true。可选: true/false',
+  entropy_scale:             '熵驱动缩放系数(越大动态越强)。推荐: 0.1。可选: 0.01/0.05/0.1/0.2/0.5',
+  use_entropy_fir_weight:    '是否用熵加权FIR(高熵区域降低推理权重)。推荐: true。可选: true/false',
+  use_fuzzy_routing:           '是否启用模糊层级路由(区域→区域关系传递)。推荐: true。可选: true/false',
+  use_fuzzy_sparsification:    '是否对模糊关系做稀疏化(去噪声边)。推荐: true。可选: true/false',
+  sparsification_epsilon:      '稀疏化阈值(低于此值的关系边被裁剪)。推荐: 0.05。可选: 0.01/0.05/0.1/0.2',
+  use_type2_fuzzy:             '是否启用Type-2模糊(区间隶属度)。推荐: true(final_3_type2)。可选: true/false',
+  type2_graph_mode:            'Type-2图模式。推荐: product。可选: product/min/max',
+  type2_fou_gate_scale:        'Type-2 FOU门控缩放。推荐: 1.0。可选: 0.5~2.0',
+  use_fou_entropy_modulation:  '是否用FOU熵调制。推荐: true。可选: true/false',
+  fou_entropy_align_weight:    'FOU熵对齐权重。推荐: 0.1。可选: 0.01~1.0',
+  use_adaptive_graph:          '是否使用自适应邻接矩阵(端到端学习)。推荐: true(图结构未知时)。可选: true/false',
+  adaptive_graph_embed_dim:    '自适应图节点嵌入维度。推荐: 32。可选: 16/32/64',
+  adaptive_graph_topk:         '自适应图稀疏化TopK。推荐: 12。可选: 5/10/12/20',
+  adaptive_graph_blend_init:   '自适应图与静态图混合比例初始值。推荐: 0.5。可选: 0.0~1.0',
+  use_fuzzy_graph:             '是否使用模糊图(高斯隶属函数构造边权重)。推荐: true(fuzzy系列)。可选: true/false',
+  fuzzy_graph_num_sets:        '模糊图集合数。推荐: 3。可选: 2/3/4',
+  fuzzy_graph_sigma_init:      '模糊图高斯sigma初始值。推荐: 0.7。可选: 0.3~1.5',
+  use_diffusion:               '是否使用扩散模型。推荐: true(diffusion系列)。可选: true/false',
+  diffusion_steps:             '扩散过程总步数(训练时)。推荐: 200。可选: 50/100/200/500',
+  diffusion_schedule:          '扩散噪声调度。推荐: linear。可选: linear/cosine',
+  beta_start:                  '噪声调度起始beta。推荐: 1e-4。可选: 1e-5 ~ 1e-3',
+  beta_end:                    '噪声调度终止beta。推荐: 0.01。可选: 0.005~0.05',
+  num_sampling_steps:          '推理时采样步数(DDIM加速)。推荐: 50。可选: 10/25/50/200',
+  num_prediction_samples:      '预测时采样次数(取均值)。推荐: 1。可选: 1/5/10',
+  sampling_method:             '采样方法。推荐: ddim(加速推理)。可选: ddim/ddpm',
+  ddim_eta:                    'DDIM噪声系数(0=确定性,1=随机)。推荐: 0.0。可选: 0.0/0.5/1.0',
+  prediction_clamp_min:        '预测值下界裁剪(标准化后)。推荐: -3.0。可选: -5.0~0.0',
+  prediction_clamp_max:        '预测值上界裁剪(标准化后)。推荐: 3.0。可选: 1.0~10.0',
+  use_spatiotemporal_attention: '是否使用时空分离注意力。推荐: true(diffusion_fuzzy系列)。可选: true/false',
+  use_temporal_position_embedding: '是否使用时序位置编码。推荐: true。可选: true/false',
+  conservation_loss_weight:    '守恒损失权重(控制物理约束强度)。推荐: 0.1。可选: 0.0~1.0',
+  conservation_warmup_epochs:  '守恒损失预热轮数(前N轮逐渐增加权重)。推荐: 5。可选: 0~20',
+  conservation_steps_per_epoch:'每轮守恒计算步数(随机采样次数)。推荐: 80。可选: 40/80/160',
+  physics_channel_idx:         '物理约束作用的特征通道索引。推荐: 0(第0通道=速度)。可选: 0~N-1',
+  physics_loss_weight:         '物理损失权重(diffusion系列)。推荐: 0.0(关闭)或0.01。可选: 0.0~1.0',
+  physics_warmup_steps:        '物理损失预热步数(diffusion系列)。推荐: 3000。可选: 1000~10000',
+  physics_warmup_start_ratio:  '物理损失预热起始比例。推荐: 0.2。可选: 0.0~0.5',
+  physics_warmup_mode:         '物理预热调度模式。推荐: linear。可选: linear/cosine',
+  flow_conservation_coeff:     '流守恒系数(diffusion系列)。推荐: 1.0。可选: 0.1~2.0',
+  use_fuzzy_conservation:      '是否用模糊守恒(diffusion_fuzzy系列)。推荐: true。可选: true/false',
+  fuzzy_conservation_threshold:'模糊守恒隶属度阈值。推荐: 0.6。可选: 0.3~0.9',
+  fuzzy_conservation_temperature:'模糊守恒温度(soft程度)。推荐: 8.0。可选: 1.0~20.0',
+  diffusion_conservation_enabled:'是否启用扩散守恒(new_fuzzy_3)。推荐: true。可选: true/false',
+  fcm_loss_weight:             'FCM(模糊认知图)损失权重。推荐: 0.1。可选: 0.0~1.0',
+  fcm_warmup_epochs:           'FCM预热轮次。推荐: 5。可选: 0~20',
+  fcm_steps_per_epoch:         'FCM每轮计算步数。推荐: 80。可选: 40/80/160',
+  use_gradient_checkpointing: '是否用梯度检查点(省显存,稍慢)。推荐: false(显存够时), true(显存紧张时)。可选: true/false',
+  use_amp:                    '是否用AMP混合精度训练(fp16加速)。推荐: true。可选: true/false',
+  amp_dtype:                  'AMP数据类型。推荐: float16。可选: float16/bfloat16',
+  num_workers:                'DataLoader工作线程数。推荐: 4。可选: 0/2/4/8',
+  loss_fn:              '损失函数类型。推荐: masked_mae(交通预测标配)。可选: masked_mae/masked_mse/masked_rmse/masked_mape/masked_huber/log_cosh/r2/evar',
+  train_loss:           '训练损失(可不同于评估损失)。推荐: none(=loss_fn)或masked_mse。可选: none/masked_mae/masked_mse/huber/log_cosh',
+  huber_delta:          'Huber损失阈值。推荐: 1.0。可选: 0.5/1.0/2.0/5.0',
+  set_loss:             '损失函数(PDFormer用)。推荐: masked_mae。可选: 同loss_fn',
+  grad_accmu_steps:     '梯度累积步数(模拟大batch)。推荐: 1(不累积)。可选: 1/2/4/8',
+  use_curriculum_learning: '是否用课程学习(逐步增加预测难度,DCRNN用)。推荐: true。可选: true/false',
+  cl_decay_steps:          '课程学习衰减步数(DCRNN)。推荐: 2000。可选: 500~5000',
+  task_level:              '课程学习起始级别(PDFormer)。推荐: 0。可选: 0/1/2',
+  evaluator:            '评估器类名。推荐: TrafficStateEvaluator。可选: TrafficStateEvaluator',
+  evaluator_mode:       '评估模式。推荐: single。可选: single/multi',
+  metrics:              '评估指标列表。推荐: ["MAE","RMSE","MAPE"]。可选: MAE/MSE/RMSE/MAPE/WMAPE/R2/EVAR',
+  seed:                 '随机种子(数据划分+模型初始化)。推荐: 42(主实验)或0/1/2(多跑)。可选: 任意整数',
+  dataset_class:        '数据集加载类。推荐: TrafficStatePointDataset(点预测)。可选: TrafficStatePointDataset/TrafficStateDataset',
+  device:               '计算设备。推荐: cuda(自动选择)。可选: cpu/cuda',
+  saved_model:          '是否保存模型checkpoint。推荐: true。可选: true/false',
+  train:                '是否执行训练(可设为false仅评估)。推荐: true。可选: true/false',
+  log_level:            '日志级别。推荐: INFO。可选: DEBUG/INFO/WARNING/ERROR',
+  log_every:            '日志打印间隔(epoch)。推荐: 1。可选: 1/5/10',
+  load_best_epoch:      '是否加载验证集最佳epoch。推荐: true。可选: true/false',
+  hyper_tune:           '是否超参调优模式。推荐: false。可选: true/false',
+  is_distributed:       '是否分布式训练(DDP)。推荐: false(单机)。可选: true/false',
+  save_mode:            '模型保存格式。推荐: best。可选: best/all',
+  cache_dataset:        '是否缓存预处理数据。推荐: true(加速后续训练)。可选: true/false',
+  pad_with_last_sample: '是否用最后样本填充不足batch。推荐: true。可选: true/false',
+  robustness_test:      '是否鲁棒性测试。推荐: false。可选: true/false',
+};
+
+function getParamDescription(key) {
+  return PARAM_DESCRIPTIONS[key] || '';
+}
 const HIDDEN_TRAIN_PARAM_KEYS = new Set(["config_file", "train_rate", "eval_rate", "dataset_class", "task", "model", "dataset", "seed"]);
 const normalizeLang = (lang) => {
     const x = String(lang || '').trim();
@@ -88,10 +249,12 @@ function applyI18nLabels() {
     byId('th_config_name_raw').innerText = rawName;
     byId('th_config_type').innerText = typeName;
     byId('th_config_value').innerText = valueName;
+    byId('th_config_description').innerText = getParamDisplayName('description') || '说明';
     byId('th_executor_name_localized').innerText = localizedName;
     byId('th_executor_name_raw').innerText = rawName;
     byId('th_executor_type').innerText = typeName;
     byId('th_executor_value').innerText = valueName;
+    byId('th_executor_description').innerText = getParamDisplayName('description') || '说明';
     updateAutoScrollBtnText();
 }
 
@@ -246,6 +409,7 @@ function renderParamCell(section, idx) {
     const valueEditor = row.type === 'json'
         ? `<textarea class="param-value mono value-input value-input-json" data-section="${section}" data-idx="${idx}" rows="4">${esc(row.value)}</textarea>`
         : `<input class="param-value mono value-input" data-section="${section}" data-idx="${idx}" value="${esc(row.value)}"/>`;
+    const desc = getParamDescription(row.key);
     return `
     <td class="param-localized">${esc(getParamDisplayName(row.key))}</td>
     <td class="mono param-key">${esc(row.key)}</td>
@@ -259,6 +423,7 @@ function renderParamCell(section, idx) {
       </select>
     </td>
     <td>${valueEditor}</td>
+    <td class="param-desc">${esc(desc)}</td>
   `;
 }
 
@@ -278,9 +443,9 @@ function renderParamTable() {
     const bodyConfig = byId('param_tbody_config');
     const bodyExecutor = byId('param_tbody_executor');
     bodyConfig.innerHTML = configIds.map((idx) => `<tr>${renderParamCell('config', idx)}</tr>`).join('')
-        || `<tr><td colspan="4" class="small">${esc(t('table_no_params', '无参数'))}</td></tr>`;
+        || `<tr><td colspan="5" class="small">${esc(t('table_no_params', '无参数'))}</td></tr>`;
     bodyExecutor.innerHTML = executorIds.map((idx) => `<tr>${renderParamCell('executor', idx)}</tr>`).join('')
-        || `<tr><td colspan="4" class="small">${esc(t('table_no_params', '无参数'))}</td></tr>`;
+        || `<tr><td colspan="5" class="small">${esc(t('table_no_params', '无参数'))}</td></tr>`;
 
     document.querySelectorAll('#param_tbody_config .type-select, #param_tbody_executor .type-select').forEach(el => {
         el.addEventListener('change', (e) => {

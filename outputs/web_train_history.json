@@ -1,6 +1,38 @@
 [
   {
     "task": "traffic_state_pred",
+    "model": "final_3_type2",
+    "dataset": "PEMSD4",
+    "status": "running",
+    "run_id": "20260604_125637__traffic_state_pred__final_3_type2__PEMSD4",
+    "started_at": 1780548995.5514495,
+    "ended_at": null,
+    "duration_sec": null,
+    "major_metrics": {},
+    "output_dir": "",
+    "error": null,
+    "record_id": "tr_1780548995_c65705fd90",
+    "created_at": 1780548995.5458553,
+    "updated_at": 1780548997.5668964
+  },
+  {
+    "task": "traffic_state_pred",
+    "model": "final_3_type2",
+    "dataset": "PEMSD4",
+    "status": "running",
+    "run_id": "20260604_124113__traffic_state_pred__final_3_type2__PEMSD4",
+    "started_at": 1780548071.355647,
+    "ended_at": null,
+    "duration_sec": null,
+    "major_metrics": {},
+    "output_dir": "",
+    "error": null,
+    "record_id": "tr_1780548071_d40584d4d7",
+    "created_at": 1780548071.3373568,
+    "updated_at": 1780548073.37405
+  },
+  {
+    "task": "traffic_state_pred",
     "model": "final_new",
     "dataset": "PEMS_BAY",
     "status": "running",
