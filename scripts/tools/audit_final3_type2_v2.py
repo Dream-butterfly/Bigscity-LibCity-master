@@ -90,51 +90,52 @@ def audit_layer1_output_change(model, dataloader, device):
 
     results = {}
 
-    # ── A. Semantic Closure: hops=1 vs hops=3 ─────────────────
-    batch = next(iter(dataloader))
-    batch.to_tensor(device)
-    history = batch["X"]
+    with torch.no_grad():
+        # ── A. Semantic Closure: hops=1 vs hops=3 ─────────────────
+        batch = next(iter(dataloader))
+        batch.to_tensor(device)
+        history = batch["X"]
 
-    mu_low, mu_high, _ = fg._compute_memberships(history)
-    R_low, R_high = fg._build_fuzzy_relation_t2(mu_low, mu_high)
+        mu_low, mu_high, _ = fg._compute_memberships(history)
+        R_low, R_high = fg._build_fuzzy_relation_t2(mu_low, mu_high)
 
-    S1_low = fg._compute_closure(R_low, 1)
-    S3_low = fg._compute_closure(R_low, 3)
-    S1_high = fg._compute_closure(R_high, 1)
-    S3_high = fg._compute_closure(R_high, 3)
+        S1_low = fg._compute_closure(R_low, 1)
+        S3_low = fg._compute_closure(R_low, 3)
+        S1_high = fg._compute_closure(R_high, 1)
+        S3_high = fg._compute_closure(R_high, 3)
 
-    delta_low = (S3_low - S1_low).norm('fro') / S1_low.norm('fro').clamp_min(1e-8)
-    delta_high = (S3_high - S1_high).norm('fro') / S1_high.norm('fro').clamp_min(1e-8)
+        delta_low = (S3_low - S1_low).norm('fro') / S1_low.norm('fro').clamp_min(1e-8)
+        delta_high = (S3_high - S1_high).norm('fro') / S1_high.norm('fro').clamp_min(1e-8)
 
-    results["A_closure_delta"] = {
-        "low_bound": float(delta_low),
-        "high_bound": float(delta_high),
-        "verdict": (
-            "✅ ACTIVE (5-20%)" if 0.05 < delta_low < 0.5 else
-            "⚠️  WEAK (1-5%)"   if 0.01 < delta_low <= 0.05 else
-            "❌ DEAD (<1%)"      if delta_low <= 0.01 else
-            "⚠️  TOO STRONG (>50%)"
-        ),
-    }
+        results["A_closure_delta"] = {
+            "low_bound": float(delta_low.cpu()),
+            "high_bound": float(delta_high.cpu()),
+            "verdict": (
+                "✅ ACTIVE (5-20%)" if 0.05 < delta_low < 0.5 else
+                "⚠️  WEAK (1-5%)"   if 0.01 < delta_low <= 0.05 else
+                "❌ DEAD (<1%)"      if delta_low <= 0.01 else
+                "⚠️  TOO STRONG (>50%)"
+            ),
+        }
 
-    # ── B. Entropy Dynamic Graph: S_eff vs S_dyn ──────────────
-    S_eff, FOU_mat = fg.get_effective_graph(
-        max_hops=m.semantic_closure_hops,
-        mode=m.type2_graph_mode,
-        fou_gate_scale=m.type2_fou_gate_scale,
-        node_features=history,
-    )
+        # ── B. Entropy Dynamic Graph: S_eff vs S_dyn ──────────────
+        S_eff, FOU_mat = fg.get_effective_graph(
+            max_hops=m.semantic_closure_hops,
+            mode=m.type2_graph_mode,
+            fou_gate_scale=m.type2_fou_gate_scale,
+            node_features=history,
+        )
 
-    S_dyn = S_eff.clone()
-    if m.use_entropy_dynamic_graph:
-        S_dyn = m._apply_entropy_dynamic_graph(S_eff, FOU=FOU_mat, node_features=history)
+        S_dyn = S_eff.clone()
+        if m.use_entropy_dynamic_graph:
+            S_dyn = m._apply_entropy_dynamic_graph(S_eff, FOU=FOU_mat, node_features=history)
 
-    delta_dyn = (S_dyn - S_eff).norm('fro') / S_eff.norm('fro').clamp_min(1e-8)
+        delta_dyn = (S_dyn - S_eff).norm('fro') / S_eff.norm('fro').clamp_min(1e-8)
 
-    # Correlation: H vs ΔS
-    H_vec = fg.get_cell_entropy(node_features=history).detach().cpu().numpy()
-    delta_S_vec = (S_dyn - S_eff).abs().mean(dim=-1).detach().cpu().numpy()
-    r_dyn, p_dyn = pearsonr(H_vec, delta_S_vec)
+        # Correlation: H vs ΔS (move to CPU for scipy)
+        H_vec = fg.get_cell_entropy(node_features=history).detach().cpu().numpy()
+        delta_S_vec = (S_dyn - S_eff).abs().mean(dim=-1).detach().cpu().numpy()
+        r_dyn, p_dyn = pearsonr(H_vec, delta_S_vec)
 
     results["B_entropy_graph"] = {
         "delta_S_dyn_vs_eff": float(delta_dyn),
@@ -150,18 +151,19 @@ def audit_layer1_output_change(model, dataloader, device):
     }
 
     # ── C. FOU Mode Comparison ─────────────────────────────────
-    mode_results = {}
-    for mode in ["low", "mid", "high", "fou_gated"]:
-        S_mode, _ = fg.get_effective_graph(
-            max_hops=m.semantic_closure_hops,
-            mode=mode,
-            node_features=history,
-        )
-        mode_results[mode] = {
-            "mean": float(S_mode.mean()),
-            "std": float(S_mode.std()),
-            "sparsity": float((S_mode < 0.01).float().mean()),
-        }
+    with torch.no_grad():
+        mode_results = {}
+        for mode in ["low", "mid", "high", "fou_gated"]:
+            S_mode, _ = fg.get_effective_graph(
+                max_hops=m.semantic_closure_hops,
+                mode=mode,
+                node_features=history,
+            )
+            mode_results[mode] = {
+                "mean": float(S_mode.mean().cpu()),
+                "std": float(S_mode.std().cpu()),
+                "sparsity": float((S_mode < 0.01).float().mean().cpu()),
+            }
 
     # Mid vs Low delta
     delta_mid_low = (mode_results["mid"]["mean"] - mode_results["low"]["mean"])
@@ -177,7 +179,8 @@ def audit_layer1_output_change(model, dataloader, device):
     }
 
     # ── D. Dynamic Membership Variance ─────────────────────────
-    mu_static = fg._compute_memberships()[0]  # static μ_low
+    with torch.no_grad():
+        mu_static = fg._compute_memberships()[0].detach().cpu()  # static μ_low → CPU
     mu_per_batch = []
     iterator = iter(dataloader)
     for _ in range(min(10, len(dataloader))):
@@ -186,16 +189,17 @@ def audit_layer1_output_change(model, dataloader, device):
         except StopIteration:
             break
         b.to_tensor(device)
-        mu_l, _, _ = fg._compute_memberships(b["X"])
-        mu_per_batch.append(mu_l.cpu())
+        with torch.no_grad():
+            mu_l, _, _ = fg._compute_memberships(b["X"])
+        mu_per_batch.append(mu_l.detach().cpu())
 
     if len(mu_per_batch) > 1:
-        mu_stack = torch.stack(mu_per_batch, dim=0)  # [B, N, K]
+        mu_stack = torch.stack(mu_per_batch, dim=0)  # [B, N, K] all CPU
         # Per-node variance across batches
         var_per_node = mu_stack.var(dim=0).mean().item()  # avg over N, K
         mu_mean = mu_stack.mean(dim=0).abs().mean().item()
 
-        # Dynamic vs static delta
+        # Dynamic vs static delta (both on CPU)
         delta_mu = (mu_stack.mean(dim=0) - mu_static).norm('fro') / mu_static.norm('fro').clamp_min(1e-8)
     else:
         var_per_node = 0.0
@@ -1030,10 +1034,21 @@ def main():
         if skipped:
             print(f"  ⚠️  Skipped {len(skipped)} size-mismatched params "
                   f"(config override needed):")
-            for name, ckpt_shape, model_shape in skipped[:5]:
+            critical_skipped = [n for n, _, _ in skipped
+                                if any(k in n for k in
+                                       ["input_projection", "raw_projection",
+                                        "region_mu", "fuzzy_to_cell",
+                                        "output_projection"])]
+            for name, ckpt_shape, model_shape in skipped[:8]:
                 print(f"    {name}: ckpt {ckpt_shape} vs model {model_shape}")
-            if len(skipped) > 5:
-                print(f"    ... and {len(skipped) - 5} more")
+            if len(skipped) > 8:
+                print(f"    ... and {len(skipped) - 8} more")
+            if critical_skipped:
+                print(f"  ❌ {len(critical_skipped)} CRITICAL params skipped "
+                      f"(input_projection/region_mu/...). "
+                      f"Results are on PARTIALLY-LOADED model!")
+                print(f"  💡 Fix: find training config with correct "
+                      f"num_cells/feature_dim, or use --other_args")
         print(f"  ✅ Loaded {len(loaded)} params, "
               f"skipped {len(skipped)}, missing {len(missing)}")
     elif not args.train_first:
