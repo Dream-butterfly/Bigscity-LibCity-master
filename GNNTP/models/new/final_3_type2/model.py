@@ -437,7 +437,7 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
     # ═══════════════════════════════════════════════════════════
 
     def calculate_loss(self, batch):
-        """Compute L1 loss + FIR + FOU-entropy alignment."""
+        """Compute Huber loss + FIR + FOU-entropy alignment."""
         history_sequence = batch["X"]
         future_sequence = batch["y"][..., :self.output_dim]
 
@@ -445,7 +445,7 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         pred = self.future_decoder(
             condition, fuzzy_R, graph_dist=self.graph_dist, mu_fuzzy=mu)
 
-        total = F.l1_loss(pred, future_sequence)
+        total = F.huber_loss(pred, future_sequence, delta=1.0)
 
         eff_weight = self._get_effective_reg_weight()
         if eff_weight > 0 and self.fir_mode != "none":
