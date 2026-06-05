@@ -449,13 +449,22 @@ def metric_fou_error_correlation(model, dataloader, device, num_batches=20):
 #  M5: New Closure Edges
 # ═══════════════════════════════════════════════════════════════════════
 
-def metric_new_closure_edges(model, dataloader, device, edge_threshold=0.1):
-    """Count how many new edges closure introduces vs the base relation.
+def metric_new_closure_edges(model, dataloader, device,
+                              thresholds=None):
+    """Multi-threshold closure edge analysis.
 
-    A "new edge" means: R[i,j] < threshold but S[i,j] >= threshold.
-    This quantifies whether closure produces genuine multi-hop inference
-    or if the base graph is already transitively closed.
+    Single-threshold reporting (e.g. R > 0.1) is misleading for sigmoid-based
+    fuzzy relations since R[i,j] > 0 always.  Instead, report density and new
+    edges at multiple thresholds (0.1, 0.3, 0.5, 0.7) to reveal the true
+    contribution of semantic closure.
+
+    Key insight: if closure is working, we expect:
+      density(S, 0.5) > density(R, 0.5)  ← closure lifts edges above threshold
+    even if density(R, 0.1) ≈ 100%.
     """
+    if thresholds is None:
+        thresholds = [0.1, 0.3, 0.5, 0.7]
+
     m = _unwrap(model)
     fg = m.fuzzy_graph
 
@@ -466,68 +475,103 @@ def metric_new_closure_edges(model, dataloader, device, edge_threshold=0.1):
     with torch.no_grad():
         mu_low, mu_high, _ = fg._compute_memberships(history)
         R_low, R_high = fg._build_fuzzy_relation_t2(mu_low, mu_high)
-
-        # Closure at configured hops
         S_high = fg._compute_closure(R_high, m.semantic_closure_hops)
 
     N = R_high.shape[0]
     total_pairs = N * N
-
-    # Use the upper bound for the most optimistic closure assessment
     R = R_high.cpu()
     S = S_high.cpu()
 
-    # New edges: R < threshold but S >= threshold
-    new_edges = ((R < edge_threshold) & (S >= edge_threshold)).float().sum().item()
-    new_frac = new_edges / total_pairs
+    # Per-threshold analysis
+    threshold_data = {}
+    for t in thresholds:
+        r_mask = R >= t
+        s_mask = S >= t
+        new_mask = (~r_mask) & s_mask          # R below but S above
+        strengthen_mask = r_mask & (S >= R + 0.05)  # already above, significantly lifted
 
-    # Strengthened edges: R already >= threshold but S > R substantially
-    already_edges = (R >= edge_threshold).float().sum().item()
-    strengthened = ((R >= edge_threshold) & (S >= R + 0.05)).float().sum().item()
-    strengthen_frac = strengthened / max(already_edges, 1)
-
-    # Mean delta for existing edges
-    delta_existing = (S - R)[R >= edge_threshold].mean().item()
-
-    # Per-hop analysis
-    hop_data = {}
-    S_curr = R.clone()
-    current = R.clone()
-    for h in range(1, m.semantic_closure_hops + 1):
-        new_at_hop = ((R < edge_threshold) & (S_curr >= edge_threshold)).float().sum().item()
-        hop_data[f"hop_{h}"] = {
-            "cumulative_new_edges": new_at_hop,
-            "cumulative_new_pct": new_at_hop / total_pairs * 100,
+        threshold_data[f"threshold_{t}"] = {
+            "R_density": float(r_mask.float().mean()),
+            "S_density": float(s_mask.float().mean()),
+            "new_edges": int(new_mask.float().sum()),
+            "new_edges_pct": float(new_mask.float().mean() * 100),
+            "strengthened_edges": int(strengthen_mask.float().sum()),
+            "strengthened_pct": float(strengthen_mask.float().mean() * 100),
+            "mean_delta": float((S - R)[r_mask].mean()) if r_mask.any() else 0.0,
         }
-        if h < m.semantic_closure_hops:
-            current = torch.max(
-                torch.min(R.unsqueeze(1), current.unsqueeze(0)), dim=-1
-            ).values
-            S_curr = torch.max(S_curr, current)
+
+    # Verdict based on threshold=0.5 (most informative for sigmoid relations)
+    t50 = threshold_data["threshold_0.5"]
+    if t50["new_edges_pct"] > 5.0:
+        verdict = (f"✅ SIGNIFICANT — {t50['new_edges_pct']:.1f}% new edges "
+                   f"at threshold=0.5, closure produces genuine inference")
+    elif t50["new_edges_pct"] > 1.0:
+        verdict = (f"⚠️  MARGINAL — {t50['new_edges_pct']:.1f}% new edges "
+                   f"at threshold=0.5")
+    elif any(threshold_data[f"threshold_{t}"]["new_edges_pct"] > 5.0
+             for t in thresholds if t >= 0.3):
+        verdict = "⚠️  WEAK — new edges only appear at low thresholds"
+    else:
+        verdict = "❌ NEGLIGIBLE — no meaningful new edges at any threshold"
 
     results = {
         "total_pairs": total_pairs,
-        "edge_threshold": edge_threshold,
-        "base_edges_above_threshold": already_edges,
-        "base_edge_density": already_edges / total_pairs,
-        "new_edges_from_closure": int(new_edges),
-        "new_edge_fraction": float(new_frac),
-        "strengthened_edges": int(strengthened),
-        "strengthened_fraction": float(strengthen_frac),
-        "mean_delta_on_existing": float(delta_existing),
-        "per_hop": hop_data,
+        "by_threshold": threshold_data,
+        "_verdict": verdict,
+    }
+    return results
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  M6: Set Utilization
+# ═══════════════════════════════════════════════════════════════════════
+
+def metric_set_utilization(model):
+    """Per-fuzzy-set utilization: are all K sets being used?
+
+    u_k = mean_i(μ_mid[i,k]) / mean_{j,l}(μ_mid[j,l])
+    Ideally u_k ≈ 1.0 for all k (uniform utilization).
+    If u_k ≪ 1 for some sets → those sets are being wasted.
+    If one u_k ≫ 1 → collapse to a single set.
+    """
+    m = _unwrap(model)
+    fg = m.fuzzy_graph
+    with torch.no_grad():
+        _, _, mu_mid = fg._compute_memberships()
+
+    mu_np = mu_mid.cpu().numpy()                                    # [N, K]
+    global_mean = mu_np.mean()
+    u_k = mu_np.mean(axis=0) / global_mean                          # [K]
+
+    # Diversity: how uniform is set utilization?
+    u_norm = u_k / u_k.sum()
+    H_util = -(u_norm * np.log(u_norm + 1e-8)).sum()
+    H_max = np.log(m.fuzzy_num_sets)
+    normalized_util_entropy = H_util / H_max
+
+    # Worst-case dominance
+    max_util = float(u_k.max())
+    min_util = float(u_k.min())
+
+    results = {
+        "per_set_utilization": {f"set_{i}": float(u_k[i]) for i in range(len(u_k))},
+        "max_utilization": max_util,
+        "min_utilization": min_util,
+        "utilization_entropy": float(normalized_util_entropy),
+        "mean_raw_membership": float(global_mean),
     }
 
-    # Verdict
-    if new_frac > 0.05:
-        verdict = (f"✅ SIGNIFICANT — {new_frac*100:.1f}% new edges, "
-                   f"closure produces genuine inference")
-    elif new_frac > 0.01:
-        verdict = (f"⚠️  MARGINAL — {new_frac*100:.1f}% new edges, "
-                   f"closure adds limited inference")
+    if max_util > 3.0:
+        verdict = (f"❌ DOMINATED — set utilization max={max_util:.1f}× mean, "
+                   f"most nodes collapse to one set")
+    elif max_util > 2.0:
+        verdict = (f"⚠️  SKEWED — max utilization {max_util:.1f}× mean, "
+                   f"some sets underused")
+    elif normalized_util_entropy < 0.6:
+        verdict = f"⚠️  UNEVEN — utilization entropy={normalized_util_entropy:.2f}"
     else:
-        verdict = (f"❌ NEGLIGIBLE — {new_frac*100:.2f}% new edges, "
-                   f"graph already transitively closed")
+        verdict = (f"✅ BALANCED — all {m.fuzzy_num_sets} sets actively used, "
+                   f"entropy={normalized_util_entropy:.2f}")
 
     results["_verdict"] = verdict
     return results
@@ -563,32 +607,63 @@ def run_final_audit(model, dataloader, device, num_batches=20):
     _print_metric(m4)
 
     print("\n" + "=" * 60)
-    print("  M5: New Closure Edges")
+    print("  M5: New Closure Edges (multi-threshold)")
     print("=" * 60)
     m5 = metric_new_closure_edges(model, dataloader, device)
     _print_metric(m5)
+
+    print("\n" + "=" * 60)
+    print("  M6: Set Utilization")
+    print("=" * 60)
+    m6 = metric_set_utilization(model)
+    _print_metric(m6)
 
     return {"M1_membership_entropy": m1,
             "M2_pairwise_cosine": m2,
             "M3_routing_entropy": m3,
             "M4_fou_error_corr": m4,
-            "M5_closure_edges": m5}
+            "M5_closure_edges": m5,
+            "M6_set_utilization": m6}
 
 
 def _print_metric(result):
-    """Print key fields of a metric result."""
+    """Print key fields of a metric result with nested dict support."""
     for k, v in result.items():
         if k.startswith("_"):
             continue
         if isinstance(v, float):
             print(f"  {k:<35s} {v:.4f}")
         elif isinstance(v, dict):
-            print(f"  {k}:")
-            for sk, sv in v.items():
-                if isinstance(sv, float):
-                    print(f"    {sk:<33s} {sv:.4f}")
-                else:
-                    print(f"    {sk:<33s} {sv}")
+            # Check if it's a nested dict-of-dicts (e.g. M5 by_threshold)
+            first_val = next(iter(v.values()), None)
+            if isinstance(first_val, dict):
+                print(f"  {k}:")
+                for sk, sv in v.items():
+                    if isinstance(sv, dict):
+                        print(f"    [{sk}]")
+                        for ssk, ssv in sv.items():
+                            if isinstance(ssv, float):
+                                print(f"      {ssk:<30s} {ssv:>8.4f}")
+                            else:
+                                print(f"      {ssk:<30s} {ssv}")
+                    elif isinstance(sv, float):
+                        print(f"    {sk:<31s} {sv:.4f}")
+                    else:
+                        print(f"    {sk:<31s} {sv}")
+            else:
+                print(f"  {k}:")
+                for sk, sv in v.items():
+                    if isinstance(sv, float):
+                        print(f"    {sk:<33s} {sv:.4f}")
+                    elif isinstance(sv, dict):
+                        print(f"    {sk}:")
+                        for ssk, ssv in sv.items():
+                            if isinstance(ssv, float):
+                                print(f"      {ssk:<30s} {ssv:.4f}")
+                            else:
+                                print(f"      {ssk:<30s} {ssv}")
+                    else:
+                        print(f"    {sk:<33s} {sv}")
         else:
             print(f"  {k:<35s} {v}")
     print(f"\n  → {result['_verdict']}")
@@ -609,6 +684,7 @@ def print_scorecard(results):
         "M3_routing_entropy": "Routing Entropy",
         "M4_fou_error_corr": "FOU-Error Corr",
         "M5_closure_edges": "New Closure Edges",
+        "M6_set_utilization": "Set Utilization",
     }
 
     verdicts = {}
