@@ -215,8 +215,11 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self.base_membership_delta = nn.Parameter(
             torch.zeros(num_nodes, num_fuzzy_sets)
         )
-        nn.init.trunc_normal_(self.base_membership_lower, std=0.05)
-        nn.init.trunc_normal_(self.base_membership_delta, std=0.02)
+        # Larger init std → sigmoid outputs spread across [0.1, 0.9]
+        # instead of clustering at 0.5.  This gives nodes initial diversity
+        # so gradient can push memberships toward heterogeneous assignments.
+        nn.init.trunc_normal_(self.base_membership_lower, std=0.5)
+        nn.init.trunc_normal_(self.base_membership_delta, std=0.3)
 
         # ── Raw → hidden projection (for pre-encoder feature conditioning) ──
         if input_dim is not None and input_dim != hidden_dim:
@@ -285,10 +288,12 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
             mu_feat = torch.sigmoid(self.feature_to_membership(node_feat))  # [N, K]
 
-            # Blend feature into center, preserve interval width proportion
+            # Blend feature into center with stronger feature modulation.
+            # Higher feature weight (60%) ensures traffic-conditioned
+            # membership provides meaningful node differentiation.
             center = (mu_low + mu_high) / 2.0
             half_width = (mu_high - mu_low) / 2.0
-            center_blended = 0.7 * center + 0.3 * mu_feat
+            center_blended = 0.4 * center + 0.6 * mu_feat
             mu_low = (center_blended - half_width).clamp(0.0, 1.0)
             mu_high = (center_blended + half_width).clamp(0.0, 1.0)
 

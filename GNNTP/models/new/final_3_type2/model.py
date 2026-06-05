@@ -154,6 +154,14 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         self.fou_entropy_align_weight = config.get(
             "fou_entropy_align_weight", 0.0)
 
+        # ── Membership Diversity regularisation ────────────────
+        # Penalises uniform membership to prevent collapse.
+        # Low weight (0.001–0.01) is sufficient — the point is to
+        # provide a weak gradient signal pulling nodes apart, not
+        # to dominate the loss.
+        self.membership_diversity_weight = config.get(
+            "membership_diversity_weight", 0.005)
+
         # ── Device ────────────────────────────────────────────
         self.device = config.get("device", torch.device("cpu"))
 
@@ -472,6 +480,11 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         nll = 0.5 * (LOG_2PI + log_var + torch.exp(-log_var) * (mu_hat - future_sequence) ** 2)
         total = nll.mean()
 
+        # ── Membership Diversity regularisation ──
+        if self.membership_diversity_weight > 0:
+            total = total + self.membership_diversity_weight * self._membership_diversity_loss(
+                node_features=history_sequence)
+
         # ── FIR: Fuzzy Interaction Regularization ──
         eff_weight = self._get_effective_reg_weight()
         if eff_weight > 0 and self.fir_mode != "none":
@@ -493,6 +506,33 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
     # ═══════════════════════════════════════════════════════════
     #  FIR: Fuzzy Interaction Regularization
     # ═══════════════════════════════════════════════════════════
+
+    # ═══════════════════════════════════════════════════════════
+    #  Membership Diversity regularisation
+    # ═══════════════════════════════════════════════════════════
+
+    def _membership_diversity_loss(self, node_features=None):
+        """Penalise uniform membership vectors across nodes.
+
+        Computes the average pairwise cosine similarity of node membership
+        vectors μ_mid ∈ [N, K].  Higher similarity → higher penalty.
+
+        This is a gentle regulariser: the goal is to provide a gradient
+        signal that pushes nodes toward differentiated memberships,
+        NOT to force arbitrary distinctiveness.
+
+        Returns:
+            scalar: mean pairwise cosine similarity (excl. diagonal).
+        """
+        _, _, mu_mid = self.fuzzy_graph._compute_memberships(node_features)
+        # L2-normalise rows → cosine via dot product
+        mu_norm = F.normalize(mu_mid, p=2, dim=-1)          # [N, K]
+        # All-pairs cosine similarity
+        sim = mu_norm @ mu_norm.T                           # [N, N]
+        # Exclude self-similarity
+        N = sim.shape[0]
+        mask = ~torch.eye(N, dtype=torch.bool, device=sim.device)
+        return sim[mask].mean()
 
     def _get_effective_reg_weight(self):
         """Linearly ramp FIR weight over warmup steps."""

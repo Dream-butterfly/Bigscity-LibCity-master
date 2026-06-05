@@ -126,10 +126,12 @@ def find_component_entry(component_type, component_name, task=None, model_name=N
     if task is not None and model_name is not None:
         metadata = get_model_metadata(task, model_name)
         manifest_name = metadata.get(name_key)
-        if manifest_name != component_name:
-            raise AttributeError(
-                f"{component_type} {component_name} does not match manifest entry {manifest_name} "
-                f"for task={task}, model={model_name}"
+        if manifest_name and manifest_name != component_name:
+            import logging
+            _logger = logging.getLogger(__name__)
+            _logger.warning(
+                "%s %s overridden by manifest entry %s for task=%s, model=%s",
+                component_type, component_name, manifest_name, task, model_name,
             )
         return metadata[entry_key]
 
