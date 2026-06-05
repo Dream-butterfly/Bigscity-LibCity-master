@@ -155,10 +155,11 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
             "fou_entropy_align_weight", 0.0)
 
         # ── Membership Diversity regularisation ────────────────
-        # Penalises uniform membership to prevent collapse.
-        # Low weight (0.001–0.01) is sufficient — the point is to
-        # provide a weak gradient signal pulling nodes apart, not
-        # to dominate the loss.
+        # Two complementary losses:
+        #   sharpness:  penalises HIGH per-node entropy → peaked μ
+        #   diversity:  penalises HIGH pairwise cosine → heterogeneous μ
+        self.membership_sharpness_weight = config.get(
+            "membership_sharpness_weight", 0.02)
         self.membership_diversity_weight = config.get(
             "membership_diversity_weight", 0.01)
 
@@ -480,7 +481,10 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         nll = 0.5 * (LOG_2PI + log_var + torch.exp(-log_var) * (mu_hat - future_sequence) ** 2)
         total = nll.mean()
 
-        # ── Membership Diversity regularisation ──
+        # ── Membership regularisation (sharpness + diversity) ──
+        if self.membership_sharpness_weight > 0:
+            total = total + self.membership_sharpness_weight * self._membership_sharpness_loss(
+                node_features=history_sequence)
         if self.membership_diversity_weight > 0:
             total = total + self.membership_diversity_weight * self._membership_diversity_loss(
                 node_features=history_sequence)
@@ -508,28 +512,38 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
     # ═══════════════════════════════════════════════════════════
 
     # ═══════════════════════════════════════════════════════════
-    #  Membership Diversity regularisation
+    #  Membership regularisation
     # ═══════════════════════════════════════════════════════════
 
-    def _membership_diversity_loss(self, node_features=None):
-        """Penalise uniform membership vectors across nodes.
+    def _membership_sharpness_loss(self, node_features=None):
+        """Penalise HIGH per-node Shannon entropy.
 
-        Computes the average pairwise cosine similarity of node membership
-        vectors μ_mid ∈ [N, K].  Higher similarity → higher penalty.
+        Pushes each node toward a peaked (low-entropy) membership
+        distribution.  This directly attacks the root cause of membership
+        collapse: uniform [1/K, ..., 1/K] vectors that produce a dense,
+        undifferentiated fuzzy relation graph.
 
-        This is a gentle regulariser: the goal is to provide a gradient
-        signal that pushes nodes toward differentiated memberships,
-        NOT to force arbitrary distinctiveness.
+        H(i) = -Σ_k p(k|i)·log p(k|i)  where p(k|i) ∝ μ_mid(i,k).
+        Lower H → more peaked → node commits to specific fuzzy sets.
+        With K=8 sets, nodes naturally distribute across 8 peaks.
 
         Returns:
-            scalar: mean pairwise cosine similarity (excl. diagonal).
+            scalar: mean per-node Shannon entropy.
         """
         _, _, mu_mid = self.fuzzy_graph._compute_memberships(node_features)
-        # L2-normalise rows → cosine via dot product
+        p = mu_mid / mu_mid.sum(dim=-1, keepdim=True).clamp_min(1e-8)
+        H = -(p * (p + 1e-8).log()).sum(dim=-1)  # [N]
+        return H.mean()
+
+    def _membership_diversity_loss(self, node_features=None):
+        """Penalise HIGH pairwise cosine similarity across nodes.
+
+        Complements sharpness loss: sharpness makes each node peaked,
+        diversity makes sure nodes peak at DIFFERENT sets.
+        """
+        _, _, mu_mid = self.fuzzy_graph._compute_memberships(node_features)
         mu_norm = F.normalize(mu_mid, p=2, dim=-1)          # [N, K]
-        # All-pairs cosine similarity
         sim = mu_norm @ mu_norm.T                           # [N, N]
-        # Exclude self-similarity
         N = sim.shape[0]
         mask = ~torch.eye(N, dtype=torch.bool, device=sim.device)
         return sim[mask].mean()
