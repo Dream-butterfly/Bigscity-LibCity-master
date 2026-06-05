@@ -1018,6 +1018,18 @@ def main():
     runtime = build_dataset_runtime(config)
     dataloader = runtime.valid_loader
 
+    # Debug: check actual feature_dim from dataset
+    actual_feat_dim = runtime.data_feature.get("feature_dim", "?")
+    print(f"  data_feature['feature_dim'] = {actual_feat_dim}")
+
+    # If checkpoint specifies a different feature_dim, override before model build
+    ckpt_feature_dim = other_args.get("feature_dim", None)
+    if ckpt_feature_dim and ckpt_feature_dim != actual_feat_dim:
+        print(f"  Overriding feature_dim: {actual_feat_dim} → {ckpt_feature_dim} "
+              f"(from config file)")
+        runtime.data_feature["feature_dim"] = ckpt_feature_dim
+        actual_feat_dim = ckpt_feature_dim
+
     # Build model
     model = get_model(config, runtime.data_feature)
     model = model.to(device)
@@ -1033,6 +1045,78 @@ def main():
             ckpt_state = ckpt["state_dict"]
         else:
             ckpt_state = ckpt
+
+        # Auto-detect feature_dim from checkpoint input_projection shape
+        _ip_key = "condition_encoder.input_projection.weight"
+        if _ip_key in ckpt_state:
+            ckpt_in_dim = ckpt_state[_ip_key].shape[1]
+            model_in_dim = model.condition_encoder.input_projection.weight.shape[1]
+            if ckpt_in_dim != model_in_dim:
+                print(f"  ⚠️  Checkpoint input_dim={ckpt_in_dim} but "
+                      f"model built with input_dim={model_in_dim}")
+                print(f"  🔧 Patching input layers to match checkpoint...")
+                # Patch condition_encoder.input_projection
+                _old_ip = model.condition_encoder.input_projection
+                _new_ip = torch.nn.Linear(ckpt_in_dim, _old_ip.out_features,
+                                          bias=_old_ip.bias is not None).to(device)
+                _new_ip.weight.data.copy_(ckpt_state[_ip_key])
+                if _old_ip.bias is not None:
+                    _new_ip.bias.data.copy_(ckpt_state.get(
+                        _ip_key.replace(".weight", ".bias"),
+                        ckpt_state.get(_ip_key.replace("weight", "bias"),
+                                       torch.zeros(ckpt_in_dim, device=device))))
+                model.condition_encoder.input_projection = _new_ip
+
+                # Patch fuzzy_graph.raw_projection
+                _rp_key = "fuzzy_graph.raw_projection.weight"
+                if _rp_key in ckpt_state:
+                    model.fuzzy_graph.raw_projection = torch.nn.Linear(
+                        ckpt_in_dim, model.fuzzy_graph.raw_projection.out_features,
+                        bias=model.fuzzy_graph.raw_projection.bias is not None).to(device)
+                    model.fuzzy_graph.raw_projection.weight.data.copy_(ckpt_state[_rp_key])
+                    _rp_bias_key = _rp_key.replace(".weight", ".bias")
+                    if _rp_bias_key in ckpt_state:
+                        model.fuzzy_graph.raw_projection.bias.data.copy_(ckpt_state[_rp_bias_key])
+
+                # Monkey-patch predict/calculate_loss AND wrap dataloader
+                # to trim input features globally
+                _orig_predict = model.predict
+                _orig_calc_loss = model.calculate_loss
+                _trim_dim = ckpt_in_dim
+
+                def _trim_batch(batch_dict):
+                    b = dict(batch_dict)
+                    b["X"] = b["X"][..., :_trim_dim]
+                    return b
+
+                def _trimmed_predict(batch):
+                    return _orig_predict(_trim_batch(batch))
+
+                def _trimmed_calc_loss(batch):
+                    return _orig_calc_loss(_trim_batch(batch))
+
+                model.predict = _trimmed_predict
+                model.calculate_loss = _trimmed_calc_loss
+
+                # Wrap dataloader to trim features for ALL code paths
+                _orig_dl = dataloader
+
+                class _TrimLoader:
+                    def __init__(slf, loader, dim):
+                        slf._loader = loader
+                        slf._dim = dim
+
+                    def __iter__(slf):
+                        for batch in slf._loader:
+                            batch["X"] = batch["X"][..., :slf._dim]
+                            yield batch
+
+                    def __len__(slf):
+                        return len(slf._loader)
+
+                dataloader = _TrimLoader(_orig_dl, _trim_dim)
+                runtime.data_feature["_trim_feature_dim"] = _trim_dim
+                print(f"  ✅ Input layers patched + dataloader trimmed to {_trim_dim}")
 
         # Robust loading: skip size-mismatched params
         model_state = model.state_dict()
