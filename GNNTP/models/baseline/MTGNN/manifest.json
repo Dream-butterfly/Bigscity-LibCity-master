@@ -1,0 +1,11 @@
+{
+  "task": "traffic_state_pred",
+  "model": "MTGNN",
+  "model_entry": "GNNTP.models.baseline.MTGNN.model:MTGNN",
+  "dataset_class": "TrafficStatePointDataset",
+  "dataset_entry": "GNNTP.data.dataset.traffic_state_point_dataset:TrafficStatePointDataset",
+  "executor": "MTGNNExecutor",
+  "executor_entry": "GNNTP.models.baseline.MTGNN.executor:MTGNNExecutor",
+  "evaluator": "TrafficStateEvaluator",
+  "evaluator_entry": "GNNTP.common.traffic_state_evaluator:TrafficStateEvaluator"
+}

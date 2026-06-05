@@ -1,0 +1,11 @@
+{
+  "task": "traffic_state_pred",
+  "model": "GMAN",
+  "model_entry": "GNNTP.models.baseline.GMAN.model:GMAN",
+  "dataset_class": "GMANDataset",
+  "dataset_entry": "GNNTP.data.dataset.traffic_flow_prediction.gman_dataset:GMANDataset",
+  "executor": "TrafficStateExecutor",
+  "executor_entry": "GNNTP.common.traffic_state_executor:TrafficStateExecutor",
+  "evaluator": "TrafficStateEvaluator",
+  "evaluator_entry": "GNNTP.common.traffic_state_evaluator:TrafficStateEvaluator"
+}

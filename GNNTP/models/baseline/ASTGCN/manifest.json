@@ -1,0 +1,11 @@
+{
+  "task": "traffic_state_pred",
+  "model": "ASTGCN",
+  "model_entry": "GNNTP.models.baseline.ASTGCN.model:ASTGCN",
+  "dataset_class": "ASTGCNDataset",
+  "dataset_entry": "GNNTP.data.dataset.traffic_flow_prediction.astgcn_dataset:ASTGCNDataset",
+  "executor": "TrafficStateExecutor",
+  "executor_entry": "GNNTP.common.traffic_state_executor:TrafficStateExecutor",
+  "evaluator": "TrafficStateEvaluator",
+  "evaluator_entry": "GNNTP.common.traffic_state_evaluator:TrafficStateEvaluator"
+}

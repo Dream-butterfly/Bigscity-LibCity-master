@@ -1,20 +1,26 @@
-from GNNTP.utils import get_dataset_cache_dir
 import os
 import numpy as np
+from fastdtw import fastdtw
 from tqdm import tqdm
 from GNNTP.data.dataset import TrafficStatePointDataset
 from GNNTP.data.dataloader import generate_dataloader
+from GNNTP.utils import get_dataset_cache_dir
 from tslearn.clustering import TimeSeriesKMeans, KShape
-from GNNTP.utils.dtw import dtw_distance_ndim
 
 
 class PDFormerDataset(TrafficStatePointDataset):
+    """PDFormer 专用数据集，预计算 DTW 矩阵、短路径矩阵和模式聚类中心。
+
+    Re-migrated from Bigscity-LibCity-master/libcity/data/dataset/dataset_subclass/pdformer_dataset.py
+    2026-06-05
+    """
 
     def __init__(self, config):
         self.type_short_path = config.get('type_short_path', 'hop')
         super().__init__(config)
-        self.cache_file_name = os.path.join(get_dataset_cache_dir(),
-                                            'pdformer_point_based_{}.npz'.format(self.parameters_str))
+        self.cache_file_name = os.path.join(
+            get_dataset_cache_dir(),
+            'pdformer_point_based_{}.npz'.format(self.parameters_str))
         self.points_per_hour = 3600 // self.time_intervals
         self.dtw_matrix = self._get_dtw()
         self.points_per_day = 24 * 3600 // self.time_intervals
@@ -23,8 +29,6 @@ class PDFormerDataset(TrafficStatePointDataset):
         self.n_cluster = config.get("n_cluster", 16)
         self.cluster_max_iter = config.get("cluster_max_iter", 5)
         self.cluster_method = config.get("cluster_method", "kshape")
-        self.cluster_sample_ratio = config.get("cluster_sample_ratio", 0.1)  # 下采样比例以加快聚类
-        self.use_fast_clustering = config.get("use_fast_clustering", True)  # 使用快速聚类方法
 
     def _get_dtw(self):
         cache_path = os.path.join(get_dataset_cache_dir(), 'dtw_' + self.dataset + '.npy')
@@ -40,7 +44,8 @@ class PDFormerDataset(TrafficStatePointDataset):
             dtw_distance = np.zeros((self.num_nodes, self.num_nodes))
             for i in tqdm(range(self.num_nodes)):
                 for j in range(i, self.num_nodes):
-                    dtw_distance[i][j] = dtw_distance_ndim(data_mean[:, i, :], data_mean[:, j, :], radius=6)
+                    dtw_distance[i][j], _ = fastdtw(
+                        data_mean[:, i, :], data_mean[:, j, :], radius=6)
             for i in range(self.num_nodes):
                 for j in range(i):
                     dtw_distance[i][j] = dtw_distance[j][i]
@@ -62,7 +67,8 @@ class PDFormerDataset(TrafficStatePointDataset):
             for k in range(self.num_nodes):
                 for i in range(self.num_nodes):
                     for j in range(self.num_nodes):
-                        self.sh_mx[i, j] = min(self.sh_mx[i, j], self.sh_mx[i, k] + self.sh_mx[k, j], 511)
+                        self.sh_mx[i, j] = min(
+                            self.sh_mx[i, j], self.sh_mx[i, k] + self.sh_mx[k, j], 511)
             np.save('{}.npy'.format(self.dataset), self.sh_mx)
 
     def _calculate_adjacency_matrix(self):
@@ -77,7 +83,8 @@ class PDFormerDataset(TrafficStatePointDataset):
             for k in range(self.num_nodes):
                 for i in range(self.num_nodes):
                     for j in range(self.num_nodes):
-                        self.sd_mx[i, j] = min(self.sd_mx[i, j], self.sd_mx[i, k] + self.sd_mx[k, j])
+                        self.sd_mx[i, j] = min(
+                            self.sd_mx[i, j], self.sd_mx[i, k] + self.sd_mx[k, j])
 
     def get_data(self):
         x_train, y_train, x_val, y_val, x_test, y_test = [], [], [], [], [], []
@@ -89,10 +96,10 @@ class PDFormerDataset(TrafficStatePointDataset):
                 x_train, y_train, x_val, y_val, x_test, y_test = self._generate_train_val_test()
         self.feature_dim = x_train.shape[-1]
         self.ext_dim = self.feature_dim - self.output_dim
-        self.scaler = self._get_scalar(self.scaler_type,
-                                       x_train[..., :self.output_dim], y_train[..., :self.output_dim])
-        self.ext_scaler = self._get_scalar(self.ext_scaler_type,
-                                           x_train[..., self.output_dim:], y_train[..., self.output_dim:])
+        self.scaler = self._get_scalar(
+            self.scaler_type, x_train[..., :self.output_dim], y_train[..., :self.output_dim])
+        self.ext_scaler = self._get_scalar(
+            self.ext_scaler_type, x_train[..., self.output_dim:], y_train[..., self.output_dim:])
         x_train[..., :self.output_dim] = self.scaler.transform(x_train[..., :self.output_dim])
         y_train[..., :self.output_dim] = self.scaler.transform(y_train[..., :self.output_dim])
         x_val[..., :self.output_dim] = self.scaler.transform(x_val[..., :self.output_dim])
@@ -106,54 +113,34 @@ class PDFormerDataset(TrafficStatePointDataset):
             y_val[..., self.output_dim:] = self.ext_scaler.transform(y_val[..., self.output_dim:])
             x_test[..., self.output_dim:] = self.ext_scaler.transform(x_test[..., self.output_dim:])
             y_test[..., self.output_dim:] = self.ext_scaler.transform(y_test[..., self.output_dim:])
-        train_data = (x_train, y_train)
-        eval_data = (x_val, y_val)
-        test_data = (x_test, y_test)
+        train_data = list(zip(x_train, y_train))
+        eval_data = list(zip(x_val, y_val))
+        test_data = list(zip(x_test, y_test))
         self.train_dataloader, self.eval_dataloader, self.test_dataloader = \
             generate_dataloader(train_data, eval_data, test_data, self.feature_name,
-                                self.batch_size, self.num_workers, pad_with_last_sample=self.pad_with_last_sample)
+                                self.batch_size, self.num_workers,
+                                pad_with_last_sample=self.pad_with_last_sample)
         self.num_batches = len(self.train_dataloader)
         self.pattern_key_file = os.path.join(
-            get_dataset_cache_dir(), 'pattern_keys_{}_{}_{}_{}_{}_{}'.format(
-                self.cluster_method, self.dataset, self.cand_key_days, self.s_attn_size, self.n_cluster, self.cluster_max_iter))
+            get_dataset_cache_dir(),
+            'pattern_keys_{}_{}_{}_{}_{}_{}'.format(
+                self.cluster_method, self.dataset, self.cand_key_days,
+                self.s_attn_size, self.n_cluster, self.cluster_max_iter))
         if not os.path.exists(self.pattern_key_file + '.npy'):
             cand_key_time_steps = self.cand_key_days * self.points_per_day
-            pattern_cand_keys = x_train[:cand_key_time_steps, :self.s_attn_size, :, :self.output_dim].swapaxes(1, 2).reshape(-1, self.s_attn_size, self.output_dim)
-
-            self._logger.info(f"Original pattern samples: {pattern_cand_keys.shape[0]}")
-
-            # 动态下采样：如果样本数太大，进行随机下采样以加快聚类
-            if pattern_cand_keys.shape[0] > 100000 and self.cluster_sample_ratio < 1.0:
-                n_samples = max(int(pattern_cand_keys.shape[0] * self.cluster_sample_ratio), self.n_cluster * 10)
-                sampled_idx = np.random.choice(pattern_cand_keys.shape[0], size=n_samples, replace=False)
-                pattern_cand_keys_sampled = pattern_cand_keys[sampled_idx]
-                self._logger.info(f"Downsampled to {n_samples} samples ({self.cluster_sample_ratio*100}% of original) for faster clustering")
-            else:
-                pattern_cand_keys_sampled = pattern_cand_keys
-
+            pattern_cand_keys = x_train[
+                :cand_key_time_steps, :self.s_attn_size, :, :self.output_dim
+            ].swapaxes(1, 2).reshape(-1, self.s_attn_size, self.output_dim)
             self._logger.info("Clustering...")
-
-            # 快速聚类：使用 Euclidean 距离代替 softdtw（速度快 1000 倍以上）
-            if self.use_fast_clustering:
-                from sklearn.cluster import KMeans
-                pattern_cand_keys_reshaped = pattern_cand_keys_sampled.reshape(pattern_cand_keys_sampled.shape[0], -1)
-                self._logger.info(f"Using fast Euclidean KMeans on flattened data shape: {pattern_cand_keys_reshaped.shape}")
-                km = KMeans(n_clusters=self.n_cluster, max_iter=self.cluster_max_iter,
-                           random_state=42, verbose=1, n_init=10)
-                km.fit(pattern_cand_keys_reshaped)
-                # 恢复原始形状
-                self.pattern_keys = km.cluster_centers_.reshape(self.n_cluster, self.s_attn_size, self.output_dim)
-                self._logger.info(f"Fast clustering completed with shape: {self.pattern_keys.shape}")
+            if self.cluster_method == "kshape":
+                km = KShape(
+                    n_clusters=self.n_cluster,
+                    max_iter=self.cluster_max_iter).fit(pattern_cand_keys)
             else:
-                # 原始基于距离的聚类（慢速但可能更精确，仅对小数据集）
-                self._logger.info(f"Using original {self.cluster_method} clustering on {pattern_cand_keys_sampled.shape[0]} samples")
-                if self.cluster_method == "kshape":
-                    km = KShape(n_clusters=self.n_cluster, max_iter=self.cluster_max_iter).fit(pattern_cand_keys_sampled)
-                else:
-                    km = TimeSeriesKMeans(n_clusters=self.n_cluster, metric="softdtw",
-                                        max_iter=self.cluster_max_iter, verbose=1).fit(pattern_cand_keys_sampled)
-                self.pattern_keys = km.cluster_centers_
-
+                km = TimeSeriesKMeans(
+                    n_clusters=self.n_cluster, metric="softdtw",
+                    max_iter=self.cluster_max_iter).fit(pattern_cand_keys)
+            self.pattern_keys = km.cluster_centers_
             np.save(self.pattern_key_file, self.pattern_keys)
             self._logger.info("Saved at file " + self.pattern_key_file + ".npy")
         else:
@@ -162,7 +149,11 @@ class PDFormerDataset(TrafficStatePointDataset):
         return self.train_dataloader, self.eval_dataloader, self.test_dataloader
 
     def get_data_feature(self):
-        return {"scaler": self.scaler, "adj_mx": self.adj_mx, "sd_mx": self.sd_mx, "sh_mx": self.sh_mx,
-                "ext_dim": self.ext_dim, "num_nodes": self.num_nodes, "feature_dim": self.feature_dim,
-                "output_dim": self.output_dim, "num_batches": self.num_batches,
-                "dtw_matrix": self.dtw_matrix, "pattern_keys": self.pattern_keys}
+        return {
+            "scaler": self.scaler, "adj_mx": self.adj_mx,
+            "sd_mx": self.sd_mx, "sh_mx": self.sh_mx,
+            "ext_dim": self.ext_dim, "num_nodes": self.num_nodes,
+            "feature_dim": self.feature_dim, "output_dim": self.output_dim,
+            "num_batches": self.num_batches,
+            "dtw_matrix": self.dtw_matrix, "pattern_keys": self.pattern_keys,
+        }

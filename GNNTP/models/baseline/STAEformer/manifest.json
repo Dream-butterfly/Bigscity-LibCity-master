@@ -1,0 +1,11 @@
+{
+  "task": "traffic_state_pred",
+  "model": "STAEformer",
+  "model_entry": "GNNTP.models.baseline.STAEformer.model:STAEformer",
+  "dataset_class": "STAEformerDataset",
+  "dataset_entry": "GNNTP.data.dataset.traffic_flow_prediction.staeformer_dataset:STAEformerDataset",
+  "executor": "TrafficStateExecutor",
+  "executor_entry": "GNNTP.common.traffic_state_executor:TrafficStateExecutor",
+  "evaluator": "TrafficStateEvaluator",
+  "evaluator_entry": "GNNTP.common.traffic_state_evaluator:TrafficStateEvaluator"
+}
