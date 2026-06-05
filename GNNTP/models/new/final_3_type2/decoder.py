@@ -166,7 +166,7 @@ class FutureDecoder(nn.Module):
             for _ in range(num_layers)
         ])
         self.final_norm = nn.LayerNorm(hidden_dim)
-        self.output_projection = nn.Linear(hidden_dim, output_dim)
+        self.output_projection = nn.Linear(hidden_dim, output_dim * 2)
 
     def forward(self, condition_features, graph_matrix,
                 graph_dist=None, mu_fuzzy=None):
@@ -179,7 +179,7 @@ class FutureDecoder(nn.Module):
             mu_fuzzy: [N, K_f].
 
         Returns:
-            [B, T_out, N, C_out].
+            [B, T_out, N, C_out * 2] where first half = μ, second half = log σ².
         """
         B = condition_features.shape[0]
         queries = self.future_queries.expand(B, -1, self.num_nodes, -1)
