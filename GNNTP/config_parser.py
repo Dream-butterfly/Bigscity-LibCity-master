@@ -186,11 +186,15 @@ class ConfigParser(object):
         return get_model_resource_path(self.config['task'], self.config['model'], 'config.json')
 
     def _get_dataset_default_config_path(self):
+        # 使用模型 manifest 中声明的 dataset_class 定位默认配置文件，
+        # 而非用户通过 --dataset_class 覆盖的值（后者仅用于运行时数据集类选择）。
+        model_metadata = get_model_metadata(self.config['task'], self.config['model'])
+        manifest_dataset_class = model_metadata['dataset_class']
         dataset_class = get_dataset_class(
-            self.config['dataset_class'], task=self.config['task'], model_name=self.config['model']
+            manifest_dataset_class, task=self.config['task'], model_name=self.config['model']
         )
         dataset_module_dir = os.path.dirname(inspect.getfile(dataset_class))
-        return os.path.join(dataset_module_dir, '{}.json'.format(self.config['dataset_class']))
+        return os.path.join(dataset_module_dir, '{}.json'.format(manifest_dataset_class))
 
     def _get_executor_default_config_path(self):
         if has_model_resource(self.config['task'], self.config['model'], 'executor.json'):

@@ -1933,10 +1933,7 @@ function renderCompareMetrics(items) {
           const norm = LOWER_IS_BETTER.has(m) ? ref / raw : raw / ref;
           display = Number(norm).toFixed(3);
         } else {
-          // MAPE 类显示为百分比
-          display = m.includes('MAPE') || m.includes('mape')
-            ? (raw * 100).toFixed(2) + '%'
-            : Number(raw).toFixed(4);
+          display = Number(raw).toFixed(4);
         }
         html += `<td class="mono${isBest ? ' compare-best' : ''}">${display}${isBest ? ' ✓' : ''}</td>`;
       });
