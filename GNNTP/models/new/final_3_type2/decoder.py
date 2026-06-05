@@ -116,8 +116,8 @@ class DecoderBlock(nn.Module):
 class FutureDecoder(nn.Module):
     """Decoder: learnable queries → blocks → predictions.
 
-    Learnable future_queries [1, T_out, N, D] refined through
-    N × DecoderBlock, then projected to output dimension.
+    Learnable future_queries [1, T_out, 1, D] broadcast to N nodes,
+    refined through N × DecoderBlock, then projected to output dimension.
     """
 
     def __init__(
@@ -147,7 +147,7 @@ class FutureDecoder(nn.Module):
         self.num_nodes = num_nodes
 
         self.future_queries = nn.Parameter(
-            torch.zeros(1, output_window, num_nodes, hidden_dim))
+            torch.zeros(1, output_window, 1, hidden_dim))
         nn.init.trunc_normal_(self.future_queries, std=0.02)
 
         self.blocks = nn.ModuleList([
@@ -182,7 +182,7 @@ class FutureDecoder(nn.Module):
             [B, T_out, N, C_out].
         """
         B = condition_features.shape[0]
-        queries = self.future_queries.expand(B, -1, -1, -1)
+        queries = self.future_queries.expand(B, -1, self.num_nodes, -1)
 
         for block in self.blocks:
             if self.use_gradient_checkpointing and self.training:
