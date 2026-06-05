@@ -30,12 +30,15 @@ Local-Global Spatial Dual architecture:
   Temporal:       Per-node Transformer
 """
 
+import math
 from logging import getLogger
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+LOG_2PI = math.log(2 * math.pi)
 
 from GNNTP.models.abstract_traffic_state_model import AbstractTrafficStateModel
 
@@ -466,7 +469,7 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         log_var = output[..., self.output_dim:]
 
         # ── NLL for diagonal Gaussian ──
-        nll = 0.5 * (log_var + torch.exp(-log_var) * (mu_hat - future_sequence) ** 2)
+        nll = 0.5 * (LOG_2PI + log_var + torch.exp(-log_var) * (mu_hat - future_sequence) ** 2)
         total = nll.mean()
 
         # ── FIR: Fuzzy Interaction Regularization ──
