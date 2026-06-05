@@ -956,15 +956,34 @@ def main():
                         help="Comma-separated layers to run: 1,2,3,4,5,6 or 'all'")
     parser.add_argument("--num_batches", type=int, default=20,
                         help="Number of batches for gradient tests")
+    parser.add_argument("--other_args", type=str, default=None,
+                        help='JSON string of config overrides, e.g. \'{"num_cells": 16}\'')
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    # Build config and data
+    # Try to auto-detect training config from output directory
     other_args = {}
+    if args.checkpoint:
+        # e.g. outputs/.../model_cache/xxx.tar → outputs/.../
+        ckpt_dir = os.path.dirname(os.path.dirname(args.checkpoint))
+        for cfg_name in ["config.json", "env.json", "train_config.json"]:
+            cfg_path = os.path.join(ckpt_dir, cfg_name)
+            if os.path.exists(cfg_path):
+                print(f"Auto-detected training config: {cfg_path}")
+                other_args["config_file"] = cfg_path
+                break
+
     if args.config_file:
         other_args["config_file"] = args.config_file
+
+    # Parse --other_args JSON overrides (highest priority)
+    if args.other_args:
+        import json as _json
+        cli_overrides = _json.loads(args.other_args)
+        other_args.update(cli_overrides)
+        print(f"Config overrides: {cli_overrides}")
 
     config = ConfigParser(
         "traffic_state_pred",
@@ -983,22 +1002,40 @@ def main():
     model = get_model(config, runtime.data_feature)
     model = model.to(device)
 
-    # Load checkpoint
-    # Supports two formats:
-    #   1. Raw state_dict:  checkpoint.pt
-    #   2. Executor .tar:   {model_state_dict, optimizer_state_dict, ...}
+    # Load checkpoint with size-mismatch tolerance
     if args.checkpoint and os.path.exists(args.checkpoint):
         print(f"Loading checkpoint: {args.checkpoint}")
         ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
         if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
-            # Executor .tar format
-            model.load_state_dict(ckpt["model_state_dict"], strict=False)
+            ckpt_state = ckpt["model_state_dict"]
             print(f"  Loaded from .tar (epoch {ckpt.get('epoch', '?')})")
         elif isinstance(ckpt, dict) and "state_dict" in ckpt:
-            model.load_state_dict(ckpt["state_dict"], strict=False)
+            ckpt_state = ckpt["state_dict"]
         else:
-            # Raw state_dict
-            model.load_state_dict(ckpt, strict=False)
+            ckpt_state = ckpt
+
+        # Robust loading: skip size-mismatched params
+        model_state = model.state_dict()
+        loaded, skipped, missing = [], [], []
+        for key, ckpt_val in ckpt_state.items():
+            if key not in model_state:
+                missing.append(key)
+                continue
+            if model_state[key].shape != ckpt_val.shape:
+                skipped.append((key, list(ckpt_val.shape), list(model_state[key].shape)))
+                continue
+            model_state[key].copy_(ckpt_val)
+            loaded.append(key)
+
+        if skipped:
+            print(f"  ⚠️  Skipped {len(skipped)} size-mismatched params "
+                  f"(config override needed):")
+            for name, ckpt_shape, model_shape in skipped[:5]:
+                print(f"    {name}: ckpt {ckpt_shape} vs model {model_shape}")
+            if len(skipped) > 5:
+                print(f"    ... and {len(skipped) - 5} more")
+        print(f"  ✅ Loaded {len(loaded)} params, "
+              f"skipped {len(skipped)}, missing {len(missing)}")
     elif not args.train_first:
         print("\n⚠️  WARNING: No checkpoint provided. "
               "Auditing UNTRAINED model. Results will be random.")
