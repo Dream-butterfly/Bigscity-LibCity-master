@@ -113,7 +113,7 @@
                         </div>
                         <div>
                             <label class="small">test（自动计算）</label>
-                            <input id="data_test_rate" value="0.2" placeholder="0.2" readonly style="background:#e9ecef;cursor:not-allowed;"/>
+                            <input id="data_test_rate" value="0.2" placeholder="0.2" readonly style="opacity:0.65;cursor:not-allowed;"/>
                         </div>
                         <div class="span-all">
                             <label class="small">预设</label>
@@ -131,6 +131,58 @@
                     </div>
                     <div id="data_split_ratio_hint" class="small">train/eval/test = 0.600 / 0.200 / 0.200</div>
                 </div>
+                <details class="span-all" style="margin-top:8px;">
+                    <summary style="cursor:pointer;user-select:none;font-size:13px;color:var(--text-secondary);">⚙️ 高级数据参数（影响数据工件内容，生成后锁定不可改）</summary>
+                    <div class="group-grid" style="margin-top:8px;">
+                        <div>
+                            <label>add_time_in_day</label>
+                            <select id="data_add_time_in_day">
+                                <option value="true" selected>true</option>
+                                <option value="false">false</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>add_day_in_week</label>
+                            <select id="data_add_day_in_week">
+                                <option value="true" selected>true</option>
+                                <option value="false">false</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>cache_dataset</label>
+                            <select id="data_cache_dataset">
+                                <option value="true" selected>true</option>
+                                <option value="false">false</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>load_external</label>
+                            <select id="data_load_external">
+                                <option value="false" selected>false</option>
+                                <option value="true">true</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>scaler</label>
+                            <select id="data_scaler">
+                                <option value="standard" selected>standard</option>
+                                <option value="normal">normal</option>
+                                <option value="minmax01">minmax01</option>
+                                <option value="minmax11">minmax11</option>
+                                <option value="log">log</option>
+                                <option value="none">none</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>input_window</label>
+                            <input id="data_input_window" value="12" placeholder="12"/>
+                        </div>
+                        <div>
+                            <label>output_window</label>
+                            <input id="data_output_window" value="12" placeholder="12"/>
+                        </div>
+                    </div>
+                </details>
                 <div class="span-all"><label>extra_args</label><input id="data_extra_args" placeholder="--log_level INFO"/></div>
             </div>
             <div class="actions">

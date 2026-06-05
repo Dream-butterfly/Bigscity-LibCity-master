@@ -648,6 +648,33 @@ function collectDataCliOptions() {
     return out;
 }
 
+function collectDataConfig() {
+    const cfg = {};
+    const boolKeys = ['add_time_in_day', 'add_day_in_week', 'cache_dataset', 'load_external'];
+    for (const k of boolKeys) {
+        const el = byId('data_' + k);
+        if (!el) continue;
+        const v = String(el.value ?? '').trim();
+        if (v !== '') cfg[k] = v === 'true';
+    }
+    const scalerEl = byId('data_scaler');
+    if (scalerEl) {
+        const v = String(scalerEl.value ?? '').trim();
+        if (v) cfg.scaler = v;
+    }
+    const inputWindowEl = byId('data_input_window');
+    if (inputWindowEl) {
+        const v = String(inputWindowEl.value ?? '').trim();
+        if (v && !isNaN(Number(v))) cfg.input_window = Number(v);
+    }
+    const outputWindowEl = byId('data_output_window');
+    if (outputWindowEl) {
+        const v = String(outputWindowEl.value ?? '').trim();
+        if (v && !isNaN(Number(v))) cfg.output_window = Number(v);
+    }
+    return cfg;
+}
+
 function setDataStatus(stateName, extra) {
     const el = byId('data_status');
     if (!el) return;
@@ -1003,7 +1030,7 @@ async function startDataPrep() {
         dataset: byId('data_dataset').value,
         extra_args: byId('data_extra_args').value || '',
         cli_options: dataCliOptions,
-        config: {},
+        config: collectDataConfig(),
     };
     const r = await fetch('/api/data/start', {
         method: 'POST',
