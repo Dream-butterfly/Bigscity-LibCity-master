@@ -3,7 +3,7 @@
    基于 main.js 迁移，保留核心功能，适配 sidebar 新布局
    v=20260508b — eval tab for checkpoint evaluation
    ═══════════════════════════════════════════════════════ */
-console.log('[train_web_v2] loaded v=20260604a');
+console.log('[train_web_v2] loaded v=20260604b');
 
 "use strict";
 
@@ -874,7 +874,7 @@ function collectGpuOptions() {
 function applyTrainDataVersionSelection() {
   const vid = document.getElementById('train_data_version')?.value || '';
   const v = (_state.dataVersions || []).find(x => x.version_id === vid);
-  const lockIds = ['seed', 'train_rate', 'eval_rate', 'dataset_class', 'config_file'];
+  const lockIds = ['seed', 'train_rate', 'eval_rate', 'dataset_class', 'config_file', 'batch_size'];
   lockIds.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.disabled = !!v;
@@ -1050,25 +1050,29 @@ async function startDataPrep() {
 
   // 收集 CLI 字段
   const cliOptions = {};
-  ['seed', 'batch_size', 'dataset_class'].forEach(k => {
+  ['seed', 'batch_size', 'dataset_class', 'exp_id', 'gpu', 'gpu_id'].forEach(k => {
     const el = document.getElementById('data_' + k);
     if (el && el.value.trim()) cliOptions[k] = el.value.trim();
   });
 
-  // 验证并收集 split 比例
+  // 验证并收集 split 比例（test 自动计算）
   const t = parseFloat(document.getElementById('data_train_rate')?.value);
   const e = parseFloat(document.getElementById('data_eval_rate')?.value);
-  const s = parseFloat(document.getElementById('data_test_rate')?.value);
-  if (!Number.isFinite(t) || !Number.isFinite(e) || !Number.isFinite(s)) {
-    alert('请填写有效的划分比例（必须为数字）');
+  if (!Number.isFinite(t) || !Number.isFinite(e)) {
+    alert('请填写有效的训练/验证划分比例（必须为数字）');
     return;
   }
-  if (Math.abs(t + e + s - 1) > 1e-6) {
-    alert(`train+eval+test 必须等于 1（当前 ${(t+e+s).toFixed(4)}）`);
+  if (t + e > 1) {
+    alert(`train+eval 必须 ≤ 1（当前 ${(t+e).toFixed(4)}）`);
     return;
   }
+  const test = Math.round((1 - t - e) * 1e6) / 1e6;
+  document.getElementById('data_test_rate').value = String(test);
   cliOptions.train_rate = String(t);
   cliOptions.eval_rate = String(e);
+
+  // 收集数据配置参数
+  const config = collectDataConfig();
 
   try {
     dataLogPrevLen = 0;
@@ -1076,12 +1080,27 @@ async function startDataPrep() {
       task, model, dataset,
       extra_args: extraArgs,
       cli_options: cliOptions,
-      config: {},
+      config: config,
     });
     pollDataLogs();
   } catch (e) {
     alert(`数据处理启动失败: ${e.message}`);
   }
+}
+
+function collectDataConfig() {
+  const cfg = {};
+  ['add_time_in_day', 'add_day_in_week', 'cache_dataset', 'load_external'].forEach(k => {
+    const el = document.getElementById('data_' + k);
+    if (el) cfg[k] = el.value === 'true';
+  });
+  const scalerEl = document.getElementById('data_scaler');
+  if (scalerEl && scalerEl.value) cfg.scaler = scalerEl.value;
+  ['input_window', 'output_window'].forEach(k => {
+    const el = document.getElementById('data_' + k);
+    if (el) { const v = parseFloat(el.value); if (Number.isFinite(v)) cfg[k] = v; }
+  });
+  return cfg;
 }
 
 /* ═══════════════════════ DATA LOG POLLING ═══════════════════════ */
@@ -2032,17 +2051,17 @@ function applySplitPreset() {
   const testInput = document.getElementById('data_test_rate');
   if (trainInput) trainInput.value = parts[0];
   if (evalInput) evalInput.value = parts[1];
-  if (testInput) testInput.value = parts[2];
+  if (testInput) testInput.value = String(Math.round((1 - parts[0] - parts[1]) * 1e6) / 1e6);
   updateSplitRatioHint();
 }
 
 function updateSplitRatioHint() {
   const hint = document.getElementById('data_split_ratio_hint');
   if (!hint) return;
-  const t = document.getElementById('data_train_rate')?.value || '0';
-  const e = document.getElementById('data_eval_rate')?.value || '0';
-  const s = document.getElementById('data_test_rate')?.value || '0';
-  hint.textContent = `train/eval/test = ${Number(t).toFixed(3)} / ${Number(e).toFixed(3)} / ${Number(s).toFixed(3)}`;
+  const t = Number(document.getElementById('data_train_rate')?.value || 0);
+  const e = Number(document.getElementById('data_eval_rate')?.value || 0);
+  const s = Math.round((1 - t - e) * 1e6) / 1e6;
+  hint.textContent = `train/eval/test = ${t.toFixed(3)} / ${e.toFixed(3)} / ${s.toFixed(3)}`;
 }
 
 /* ═══════════════════════ DATA VERSION ACTIONS ═══════════════════════ */

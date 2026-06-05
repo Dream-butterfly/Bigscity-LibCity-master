@@ -6,7 +6,7 @@
 <title data-i18n="app_title">GNNTP Console v2</title>
 <script src="/static/echarts.min.js"></script>
 <link rel="stylesheet" href="/static/design-tokens.css"/>
-<link rel="stylesheet" href="/static/train_web_v2.css?v=20260604a"/>
+<link rel="stylesheet" href="/static/train_web_v2.css?v=20260604b"/>
 </head>
 <body>
 
@@ -85,13 +85,23 @@
             <div><label data-param-label="model">model</label><select id="data_model"></select></div>
             <div><label data-param-label="dataset">dataset</label><select id="data_dataset"></select></div>
             <div><label data-param-label="seed">seed</label><input id="data_seed" value="42"/></div>
+            <div><label>exp_id</label><input id="data_exp_id" placeholder="可选，自动生成"/></div>
+            <div>
+              <label>gpu</label>
+              <select id="data_gpu">
+                <option value=""></option>
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </div>
+            <div><label>gpu_id</label><input id="data_gpu_id" placeholder="0"/></div>
           </div>
         </div>
         <div class="param-group"><div class="param-group-title" data-i18n="group_data_split">数据划分</div>
           <div class="group-grid">
             <div><label>train rate</label><input id="data_train_rate" value="0.6"/></div>
             <div><label>eval rate</label><input id="data_eval_rate" value="0.2"/></div>
-            <div><label>test rate</label><input id="data_test_rate" value="0.2" disabled/></div>
+            <div><label>test rate（自动计算）</label><input id="data_test_rate" value="0.2" readonly style="opacity:0.65;cursor:not-allowed;"/></div>
             <div><label>batch_size</label><input id="data_batch_size" value="64"/></div>
             <div><label>dataset_class</label><input id="data_dataset_class" value="TrafficStatePointDataset"/></div>
             <div class="span-all">
@@ -108,6 +118,14 @@
               </div>
               <div id="data_split_ratio_hint" class="small" style="margin-top:6px">train/eval/test = 0.600 / 0.200 / 0.200</div>
             </div>
+            <div class="span-all" style="margin-top:6px;font-size:12px;color:var(--text-sidebar);border-top:1px solid var(--border);padding-top:8px;">⬇ 数据配置参数（影响数据工件内容，生成后锁定不可改）</div>
+            <div><label>add_time_in_day <span class="param-desc">(天内时段编码)</span></label><select id="data_add_time_in_day"><option value="true" selected>true</option><option value="false">false</option></select></div>
+            <div><label>add_day_in_week <span class="param-desc">(星期几编码)</span></label><select id="data_add_day_in_week"><option value="true" selected>true</option><option value="false">false</option></select></div>
+            <div><label>cache_dataset <span class="param-desc">(缓存加速)</span></label><select id="data_cache_dataset"><option value="true" selected>true</option><option value="false">false</option></select></div>
+            <div><label>load_external <span class="param-desc">(加载外部特征)</span></label><select id="data_load_external"><option value="false" selected>false</option><option value="true">true</option></select></div>
+            <div><label>scaler <span class="param-desc">(归一化方式)</span></label><select id="data_scaler"><option value="standard" selected>standard</option><option value="normal">normal</option><option value="minmax01">minmax01</option><option value="minmax11">minmax11</option><option value="log">log</option><option value="none">none</option></select></div>
+            <div><label>input_window <span class="param-desc">(输入历史步数)</span></label><input id="data_input_window" value="12" placeholder="12"/></div>
+            <div><label>output_window <span class="param-desc">(预测步数)</span></label><input id="data_output_window" value="12" placeholder="12"/></div>
             <div class="span-all"><label>extra_args</label><input id="data_extra_args" placeholder="--log_level INFO"/></div>
           </div>
         </div>
@@ -474,6 +492,6 @@
   </div>
 </div>
 
-<script src="/static/train_web_v2.js?v=20260604a"></script>
+<script src="/static/train_web_v2.js?v=20260604b"></script>
 </body>
 </html>
