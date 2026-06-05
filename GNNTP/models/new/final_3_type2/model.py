@@ -217,8 +217,18 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         # ── Connect FuzzyGraph μ (midpoint) → CellAttention conditioning ─
         self._connect_fuzzy_conditioning()
 
-        # ── Cache for FOU (populated during encode_condition) ─
+        # ── Cache FOU for uncertainty quantification ─
         self._current_fou: torch.Tensor | None = None
+
+        # ── Type-2 FOU → log-var (NLL uncertainty head) ──
+        self.fou_to_logvar = nn.Linear(self.fuzzy_num_sets, 1)
+
+        # ── Init output_projection bias: log_var ≈ 0 (σ² ≈ 1) ─
+        nn.init.zeros_(self.future_decoder.output_projection.bias)
+        # offset bias for log_var half to start near log(1) = 0
+        with torch.no_grad():
+            b = self.future_decoder.output_projection.bias
+            b[self.output_dim:] = 0.0  # already 0 from init
 
     def _connect_fuzzy_conditioning(self):
         """Wire fuzzy_to_cell Linear(K_f→K_c) to all CellAttention blocks."""
@@ -425,42 +435,55 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         """Predict future traffic from history.
 
         Returns:
-            [B, T_out, N, C_out].
+            [B, T_out, N, C_out] — only μ (point estimate).
         """
         history_sequence = batch["X"]
         condition, fuzzy_R, mu = self.encode_condition(history_sequence)
-        return self.future_decoder(
+        output = self.future_decoder(
             condition, fuzzy_R, graph_dist=self.graph_dist, mu_fuzzy=mu)
+        return output[..., :self.output_dim]
 
     # ═══════════════════════════════════════════════════════════
     #  Training loss
     # ═══════════════════════════════════════════════════════════
 
     def calculate_loss(self, batch):
-        """Compute Huber loss + FIR + FOU-entropy alignment."""
+        """Compute NLL + FIR + FOU-uncertainty alignment.
+
+        NLL:        μ, log_var from decoder → Gaussian NLL.
+        FIR:        Łukasiewicz fuzzy interaction regularization.
+        FOU-align:  FOU width → log_var projection → aligned with learned log_var.
+        """
         history_sequence = batch["X"]
         future_sequence = batch["y"][..., :self.output_dim]
 
         condition, fuzzy_R, mu = self.encode_condition(history_sequence)
-        pred = self.future_decoder(
+        output = self.future_decoder(
             condition, fuzzy_R, graph_dist=self.graph_dist, mu_fuzzy=mu)
 
-        total = F.huber_loss(pred, future_sequence, delta=1.0)
+        # ── Split μ and log σ² ──
+        mu_hat = output[..., :self.output_dim]
+        log_var = output[..., self.output_dim:]
 
+        # ── NLL for diagonal Gaussian ──
+        nll = 0.5 * (log_var + torch.exp(-log_var) * (mu_hat - future_sequence) ** 2)
+        total = nll.mean()
+
+        # ── FIR: Fuzzy Interaction Regularization ──
         eff_weight = self._get_effective_reg_weight()
         if eff_weight > 0 and self.fir_mode != "none":
             if self.fir_mode == "lukasiewicz":
                 reg_loss = self._fuzzy_interaction_regularization(
-                    pred, fuzzy_R, node_features=history_sequence)
+                    mu_hat, fuzzy_R, node_features=history_sequence)
             elif self.fir_mode == "simple":
-                reg_loss = self._simple_consistency_loss(pred, fuzzy_R)
+                reg_loss = self._simple_consistency_loss(mu_hat, fuzzy_R)
             else:
                 reg_loss = 0.0
             total = total + eff_weight * reg_loss
 
-        # FOU-Entropy alignment: width ∝ uncertainty
+        # ── Type-2 FOU → log_var alignment ──
         if self.use_type2_fuzzy and self.fou_entropy_align_weight > 0:
-            total = total + self.fou_entropy_align_weight * self._fou_entropy_alignment()
+            total = total + self.fou_entropy_align_weight * self._fou_entropy_alignment(log_var)
 
         return total
 
@@ -547,28 +570,22 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
     #  FOU-Entropy Alignment (Type-2 regularisation)
     # ═══════════════════════════════════════════════════════════
 
-    def _fou_entropy_alignment(self):
-        """Align interval width with membership uncertainty.
+    def _fou_entropy_alignment(self, learned_log_var):
+        """Align FOU width with learned prediction variance.
 
-        L_fou = |FOU_node − Normalize(H_node)|²
+        FOU width → fou_to_logvar → FOU-derived log_var [N]
+        MSE against learned log_var averaged over (B, T, C).
 
-        Principle: a node's interval width (FOU) should be proportional
-        to its membership entropy (H).  High-entropy boundary nodes
-        (ambiguous functional role) are allowed larger uncertainty
-        intervals;  low-entropy core nodes are constrained to tight
-        memberships.
-
-        Uses static membership (no node_features) to regularise the
-        parameter space rather than batch-conditioned outputs.
-
-        Returns:
-            scalar alignment loss, ≥ 0.  Zero when FOU ∝ H perfectly.
+        This gives the Type-2 FOU direct uncertainty semantics:
+          wider FOU ↔ higher predictive variance ↔ larger error.
         """
         mu_low, mu_high, _ = self.fuzzy_graph._compute_memberships()
-        FOU_node = (mu_high - mu_low).mean(dim=-1)                # [N]
-        H = self.fuzzy_graph.get_cell_entropy()                   # [N]
-        H_norm = H / H.max().clamp_min(1e-8)                      # [N] ∈ [0,1]
-        return (FOU_node - H_norm).pow(2).mean()
+        fou_width = mu_high - mu_low                               # [N, K_f]
+        fou_log_var = self.fou_to_logvar(fou_width).squeeze(-1)    # [N]
+
+        # Collapse learned log_var across batch, time, channel → per-node
+        target = learned_log_var.mean(dim=(0, 1, 3))               # [N]
+        return F.mse_loss(fou_log_var, target)
 
     # ═══════════════════════════════════════════════════════════
     #  Stability Diagnostics
