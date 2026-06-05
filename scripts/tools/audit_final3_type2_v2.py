@@ -969,25 +969,41 @@ def main():
 
     # Try to auto-detect training config from output directory
     other_args = {}
+    config_file_path = None
     if args.checkpoint:
-        # e.g. outputs/.../model_cache/xxx.tar → outputs/.../
         ckpt_dir = os.path.dirname(os.path.dirname(args.checkpoint))
         for cfg_name in ["config.json", "env.json", "train_config.json"]:
             cfg_path = os.path.join(ckpt_dir, cfg_name)
             if os.path.exists(cfg_path):
+                config_file_path = cfg_path
                 print(f"Auto-detected training config: {cfg_path}")
-                other_args["config_file"] = cfg_path
                 break
 
     if args.config_file:
-        other_args["config_file"] = args.config_file
+        config_file_path = args.config_file
+        print(f"Loading config file: {args.config_file}")
+
+    # Load config file contents as overrides
+    if config_file_path and os.path.exists(config_file_path):
+        import json as _json
+        with open(config_file_path) as f:
+            file_config = _json.load(f)
+        for k, v in file_config.items():
+            if k in ('task', 'model', 'dataset', 'saved_model', 'train', 'rank',
+                     'world_size', 'local_rank', 'dist_backend', 'is_distributed',
+                     'device', 'gpu_id', 'gpu', 'epoch', 'exp_id',
+                     'data_version_id', 'log_every'):
+                continue
+            if isinstance(v, (dict, list, str, int, float, bool, type(None))):
+                other_args[k] = v
+        print(f"  Merged {len(other_args)} config keys from file")
 
     # Parse --other_args JSON overrides (highest priority)
     if args.other_args:
         import json as _json
         cli_overrides = _json.loads(args.other_args)
         other_args.update(cli_overrides)
-        print(f"Config overrides: {cli_overrides}")
+        print(f"CLI config overrides: {cli_overrides}")
 
     config = ConfigParser(
         "traffic_state_pred",
