@@ -1,0 +1,681 @@
+"""
+final_3_type2 最终架构冻结审计 — 5 项终极指标。
+
+在大规模消融实验前执行的最后一轮检查。全部通过 → 冻结架构 → 进入正式实验。
+
+五项指标:
+  M1: Membership Entropy — 隶属度是否真塌缩？
+  M2: Pairwise Cosine(μ) — 节点是否同质化？
+  M3: Routing Entropy — FRR 是否退化？
+  M4: FOU-Error Correlation — FOU 是否有预测语义？
+  M5: New Closure Edges — Closure 是否产生新的推理边？
+
+用法:
+  python scripts/tools/audit_final3_type2_final.py \
+      --dataset PEMSD4 \
+      --config_file train_config_PEMSD4.json \
+      --checkpoint outputs/.../final_3_type2_PEMSD4_epoch49.tar \
+      --output audit_final_PEMSD4.json
+"""
+
+import argparse
+import json
+import os
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+from scipy.stats import pearsonr
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from GNNTP.common import ConfigParser
+from GNNTP.data import build_dataset_runtime
+from GNNTP.utils import get_model
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Shared model loading (same robust logic as v2)
+# ═══════════════════════════════════════════════════════════════════════
+
+def load_model_robust(args):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Device: {device}")
+
+    # Load config
+    other_args = {}
+    if args.config_file and os.path.exists(args.config_file):
+        with open(args.config_file) as f:
+            file_config = json.load(f)
+        for k, v in file_config.items():
+            if k in ('task', 'model', 'dataset', 'saved_model', 'train',
+                     'rank', 'world_size', 'local_rank', 'dist_backend',
+                     'is_distributed', 'device', 'gpu_id', 'gpu', 'epoch',
+                     'exp_id', 'data_version_id', 'log_every'):
+                continue
+            if isinstance(v, (dict, list, str, int, float, bool, type(None))):
+                other_args[k] = v
+        print(f"  Merged {len(other_args)} config keys from {args.config_file}")
+
+    if args.other_args:
+        other_args.update(json.loads(args.other_args))
+
+    config = ConfigParser(
+        "traffic_state_pred", "final_3_type2", args.dataset,
+        config_file=None, saved_model=True, train=False,
+        other_args=other_args,
+    )
+
+    runtime = build_dataset_runtime(config)
+    dataloader = runtime.valid_loader
+    print(f"  data_feature['feature_dim'] = {runtime.data_feature.get('feature_dim')}")
+
+    # Build model
+    model = get_model(config, runtime.data_feature).to(device)
+
+    # Load checkpoint
+    if not args.checkpoint or not os.path.exists(args.checkpoint):
+        print("❌ No checkpoint found. Aborting.")
+        sys.exit(1)
+
+    print(f"Loading checkpoint: {args.checkpoint}")
+    ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
+    ckpt_state = (ckpt.get("model_state_dict") or
+                  ckpt.get("state_dict") or ckpt)
+
+    # Auto-patch input_dim mismatch
+    _ip_key = "condition_encoder.input_projection.weight"
+    if _ip_key in ckpt_state:
+        ckpt_in_dim = ckpt_state[_ip_key].shape[1]
+        model_in_dim = model.condition_encoder.input_projection.weight.shape[1]
+        if ckpt_in_dim != model_in_dim:
+            print(f"  🔧 Patching input_dim: {model_in_dim} → {ckpt_in_dim}")
+            # Patch input_projection
+            model.condition_encoder.input_projection = torch.nn.Linear(
+                ckpt_in_dim,
+                model.condition_encoder.input_projection.out_features,
+                bias=True,
+            ).to(device)
+            model.condition_encoder.input_projection.weight.data.copy_(
+                ckpt_state[_ip_key])
+            model.condition_encoder.input_projection.bias.data.copy_(
+                ckpt_state.get(_ip_key.replace(".weight", ".bias"),
+                               torch.zeros(ckpt_in_dim, device=device)))
+
+            # Patch raw_projection
+            _rp_key = "fuzzy_graph.raw_projection.weight"
+            if _rp_key in ckpt_state:
+                model.fuzzy_graph.raw_projection = torch.nn.Linear(
+                    ckpt_in_dim,
+                    model.fuzzy_graph.raw_projection.out_features,
+                    bias=True,
+                ).to(device)
+                model.fuzzy_graph.raw_projection.weight.data.copy_(
+                    ckpt_state[_rp_key])
+                model.fuzzy_graph.raw_projection.bias.data.copy_(
+                    ckpt_state.get(_rp_key.replace(".weight", ".bias"),
+                                   torch.zeros(ckpt_in_dim, device=device)))
+
+            # Patch encode_condition to auto-trim
+            _orig_encode = model.encode_condition
+            def _trimmed_encode(hist):
+                if hist.shape[-1] > ckpt_in_dim:
+                    hist = hist[..., :ckpt_in_dim]
+                return _orig_encode(hist)
+            model.encode_condition = _trimmed_encode
+            model._trim_dim = ckpt_in_dim
+
+    # Load all params
+    model_state = model.state_dict()
+    loaded = 0
+    for key, val in ckpt_state.items():
+        if key in model_state and model_state[key].shape == val.shape:
+            model_state[key].copy_(val)
+            loaded += 1
+
+    total = len(model_state)
+    print(f"  ✅ Loaded {loaded}/{total} params"
+          + (f" (skipped {total - loaded})" if loaded < total else ""))
+
+    model.eval()
+    return model, dataloader, device, runtime
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Metric helpers
+# ═══════════════════════════════════════════════════════════════════════
+
+def _unwrap(model):
+    return model.module if hasattr(model, 'module') else model
+
+def _trim(hist, model):
+    d = getattr(_unwrap(model), '_trim_dim', None)
+    if d and isinstance(hist, torch.Tensor) and hist.shape[-1] > d:
+        return hist[..., :d]
+    return hist
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  M1: Membership Entropy
+# ═══════════════════════════════════════════════════════════════════════
+
+def metric_membership_entropy(model):
+    """Per-node Shannon entropy of fuzzy membership distribution.
+
+    If ALL nodes have the SAME entropy → membership collapse is real.
+    If entropy varies widely across nodes → model has learned heterogeneous
+    memberships.
+    """
+    m = _unwrap(model)
+    fg = m.fuzzy_graph
+    with torch.no_grad():
+        mu_low, mu_high, mu_mid = fg._compute_memberships()
+        # Shannon entropy on (static) midpoint membership
+        p = mu_mid / mu_mid.sum(dim=-1, keepdim=True).clamp_min(1e-8)
+        H = -(p * (p + 1e-8).log()).sum(dim=-1)  # [N]
+
+    H_np = H.cpu().numpy()
+    H_max = np.log(m.fuzzy_num_sets)
+
+    # Diversity metrics
+    cv = H_np.std() / (H_np.mean() + 1e-8)  # coefficient of variation
+
+    results = {
+        "H_mean": float(H_np.mean()),
+        "H_std": float(H_np.std()),
+        "H_min": float(H_np.min()),
+        "H_max": float(H_np.max()),
+        "H_normalized_mean": float(H_np.mean() / H_max),
+        "coefficient_of_variation": float(cv),
+        "frac_low_entropy (<0.1*H_max)": float((H_np < 0.1 * H_max).mean()),
+        "frac_high_entropy (>0.8*H_max)": float((H_np > 0.8 * H_max).mean()),
+    }
+
+    # Verdict
+    if cv < 0.05:
+        verdict = "❌ COLLAPSED — all nodes have nearly identical entropy"
+    elif cv < 0.15:
+        verdict = f"⚠️  LOW DIVERSITY — CV={cv:.3f}, membership barely varies"
+    elif results["frac_low_entropy (<0.1*H_max)"] > 0.8:
+        verdict = "❌ NEAR-ZERO — most nodes have ~0 entropy (one-hot membership)"
+    else:
+        verdict = f"✅ HEALTHY — CV={cv:.3f}, membership entropy varies across nodes"
+
+    results["_verdict"] = verdict
+    return results
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  M2: Pairwise Cosine(μ)
+# ═══════════════════════════════════════════════════════════════════════
+
+def metric_pairwise_cosine(model):
+    """Average pairwise cosine similarity of node membership vectors.
+
+    If ≈1.0 → all nodes have identical membership → collapse.
+    If ≪0.5 → nodes are genuinely heterogeneous.
+    """
+    m = _unwrap(model)
+    fg = m.fuzzy_graph
+    with torch.no_grad():
+        _, _, mu_mid = fg._compute_memberships()
+
+    # Normalize rows
+    mu_norm = F.normalize(mu_mid, p=2, dim=-1)  # [N, K]
+
+    # Compute all-pairs cosine (memory-efficient for N < 500)
+    N = mu_norm.shape[0]
+    if N <= 500:
+        sim_full = mu_norm @ mu_norm.T  # [N, N]
+        # Exclude diagonal (self-similarity = 1.0)
+        mask = ~torch.eye(N, dtype=torch.bool, device=mu_norm.device)
+        sim_mean = sim_full[mask].mean().item()
+        sim_std = sim_full[mask].std().item()
+        sim_p90 = sim_full[mask].quantile(0.9).item()
+    else:
+        # Random sample of 5000 pairs for large graphs
+        idx_i = torch.randint(0, N, (5000,), device=mu_norm.device)
+        idx_j = torch.randint(0, N, (5000,), device=mu_norm.device)
+        mask = idx_i != idx_j
+        sims = (mu_norm[idx_i] * mu_norm[idx_j]).sum(dim=-1)[mask]
+        sim_mean = sims.mean().item()
+        sim_std = sims.std().item()
+        sim_p90 = sims.quantile(0.9).item()
+
+    results = {
+        "mean_cosine": float(sim_mean),
+        "std_cosine": float(sim_std),
+        "p90_cosine": float(sim_p90),
+        "num_nodes": N,
+    }
+
+    if sim_mean > 0.95:
+        verdict = "❌ HOMOGENEOUS — all nodes have near-identical membership vectors"
+    elif sim_mean > 0.8:
+        verdict = f"⚠️  HIGH SIMILARITY — mean cosine={sim_mean:.3f}, low diversity"
+    elif sim_mean > 0.5:
+        verdict = f"⚠️  MODERATE — mean cosine={sim_mean:.3f}, some diversity"
+    else:
+        verdict = f"✅ DIVERSE — mean cosine={sim_mean:.3f}, nodes are heterogeneous"
+
+    results["_verdict"] = verdict
+    return results
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  M3: Routing Entropy (FRR)
+# ═══════════════════════════════════════════════════════════════════════
+
+def metric_routing_entropy(model, dataloader, device):
+    """Entropy of routing weights in FRR's CellAttention blocks.
+
+    Captures intermediate routing weights B = sqrt(u)/||sqrt(u)|| from the
+    first encoder block on a single batch.
+
+    If low entropy → all nodes routed to same region → FRR ≈ GCN.
+    """
+    m = _unwrap(model)
+    m.eval()
+
+    # Get one batch
+    batch = next(iter(dataloader))
+    batch.to_tensor(device)
+    history = _trim(batch["X"], model)
+
+    # Get mu_fuzzy for routing
+    fg = m.fuzzy_graph
+    with torch.no_grad():
+        mu_fuzzy = fg.get_memberships(history).to(device)
+
+    # Collect routing weights from each CellAttention block
+    routing_entropies = []
+    routing_max_counts = []
+
+    for block_list in [m.condition_encoder.blocks, m.future_decoder.blocks]:
+        for blk in block_list:
+            if not hasattr(blk, 'cell_attention'):
+                continue
+            ca = blk.cell_attention
+            with torch.no_grad():
+                # Get node representations for this block
+                # We need to run a partial forward to get the pre-FRR features
+                # Use the mean feature as proxy
+                x = m.condition_encoder.input_projection(history)
+                node_repr = x.mean(dim=(0, 1))  # [N, D]
+
+                # Compute routing membership u = _compute_membership(x)
+                if ca.use_fuzzy_routing and ca.fuzzy_to_cell is not None:
+                    u_fuzzy = ca._compute_membership(node_repr, mu_fuzzy)
+                else:
+                    u_fuzzy = ca._compute_membership(node_repr)
+
+                # B = sqrt(u) / ||sqrt(u)||
+                B = u_fuzzy.sqrt()
+                B = B / B.norm(p=2, dim=-1, keepdim=True).clamp_min(1e-8)  # [N, K_c]
+
+                # Per-node routing entropy
+                H_route = -(B * (B + 1e-8).log()).sum(dim=-1)  # [N]
+                routing_entropies.append(H_route.mean().item())
+
+                # Which region gets the most nodes?
+                argmax_counts = B.argmax(dim=-1).bincount(minlength=ca.num_cells).float()
+                max_frac = (argmax_counts.max() / argmax_counts.sum()).item()
+                routing_max_counts.append(max_frac)
+
+    if not routing_entropies:
+        return {"_verdict": "⚠️  NO CellAttention blocks found"}
+
+    H_max = np.log(m.num_cells)
+    avg_entropy = float(np.mean(routing_entropies))
+    avg_max_frac = float(np.mean(routing_max_counts))
+
+    results = {
+        "avg_routing_entropy": avg_entropy,
+        "normalized_entropy": avg_entropy / H_max,
+        "max_entropy_possible": float(H_max),
+        "avg_max_region_fraction": avg_max_frac,
+        "num_blocks_measured": len(routing_entropies),
+        "per_block_entropy": [float(e) for e in routing_entropies],
+        "per_block_max_frac": [float(f) for f in routing_max_counts],
+    }
+
+    if avg_max_frac > 0.8:
+        verdict = (f"❌ DEGENERATE — {avg_max_frac:.0%} of nodes routed to "
+                   f"single region, FRR ≈ GCN")
+    elif avg_max_frac > 0.5:
+        verdict = (f"⚠️  WEAK ROUTING — {avg_max_frac:.0%} dominated by one region")
+    elif avg_entropy / H_max < 0.3:
+        verdict = f"⚠️  LOW ENTROPY — routing distribution is peaked"
+    else:
+        verdict = (f"✅ HEALTHY — routing entropy={avg_entropy:.3f}, "
+                   f"max region={avg_max_frac:.0%}")
+
+    results["_verdict"] = verdict
+    return results
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  M4: FOU-Error Correlation
+# ═══════════════════════════════════════════════════════════════════════
+
+def metric_fou_error_correlation(model, dataloader, device, num_batches=20):
+    """Per-node FOU vs per-node prediction error correlation.
+
+    If FOU is positively correlated with error → model knows where it's
+    uncertain → FOU has genuine predictive semantics.
+    """
+    m = _unwrap(model)
+    fg = m.fuzzy_graph
+    m.eval()
+
+    # Per-node FOU from static membership
+    with torch.no_grad():
+        mu_low, mu_high, _ = fg._compute_memberships()
+        fou_node = (mu_high - mu_low).mean(dim=-1).cpu().numpy()  # [N]
+
+    # Per-node error accumulation
+    all_errors = []
+    iterator = iter(dataloader)
+    count = 0
+    for batch in iterator:
+        if count >= num_batches:
+            break
+        batch.to_tensor(device)
+        history = _trim(batch["X"], model)
+        future = batch["y"][..., :m.output_dim].to(device)
+
+        with torch.no_grad():
+            pred = m.predict({"X": history})
+            abs_err = (pred - future).abs().mean(dim=(0, 1, -1)).cpu().numpy()
+        all_errors.append(abs_err)
+        count += 1
+
+    mean_error = np.stack(all_errors, axis=0).mean(axis=0)  # [N]
+    r, p = pearsonr(fou_node, mean_error)
+
+    # Also check per-fuzzy-set FOU vs per-set prediction error
+    fou_per_set = (mu_high - mu_low).mean(dim=0).cpu().numpy()  # [K]
+    # For per-set, we correlate with the mean error of nodes dominated by that set
+    with torch.no_grad():
+        _, _, mu_mid = fg._compute_memberships()
+        argmax_set = mu_mid.argmax(dim=-1).cpu().numpy()  # [N]
+    set_errors = []
+    set_fous = []
+    for k in range(m.fuzzy_num_sets):
+        mask = argmax_set == k
+        if mask.sum() > 0:
+            set_errors.append(mean_error[mask].mean())
+            set_fous.append(fou_per_set[k])
+    r_set, p_set = pearsonr(set_fous, set_errors) if len(set_errors) >= 3 else (0.0, 1.0)
+
+    results = {
+        "per_node": {
+            "pearson_r": float(r),
+            "p_value": float(p),
+            "is_significant": p < 0.05,
+        },
+        "per_fuzzy_set": {
+            "pearson_r": float(r_set),
+            "p_value": float(p_set),
+            "is_significant": p_set < 0.05,
+        },
+        "fou_mean": float(fou_node.mean()),
+        "fou_std": float(fou_node.std()),
+        "error_mean": float(mean_error.mean()),
+        "num_batches_evaluated": count,
+    }
+
+    # Verdict
+    if r > 0.3 and p < 0.05:
+        verdict = (f"✅ STRONG — r={r:.3f} (p={p:.3f}), "
+                   f"FOU captures prediction uncertainty")
+    elif r > 0.1 and p < 0.1:
+        verdict = f"⚠️  WEAK — r={r:.3f} (p={p:.3f}), marginal signal"
+    elif r > 0:
+        verdict = f"⚠️  VERY WEAK — r={r:.3f} (p={p:.3f}), not statistically reliable"
+    else:
+        verdict = f"❌ NEGATIVE or ZERO — r={r:.3f}, FOU has no error semantics"
+
+    results["_verdict"] = verdict
+    return results
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  M5: New Closure Edges
+# ═══════════════════════════════════════════════════════════════════════
+
+def metric_new_closure_edges(model, dataloader, device, edge_threshold=0.1):
+    """Count how many new edges closure introduces vs the base relation.
+
+    A "new edge" means: R[i,j] < threshold but S[i,j] >= threshold.
+    This quantifies whether closure produces genuine multi-hop inference
+    or if the base graph is already transitively closed.
+    """
+    m = _unwrap(model)
+    fg = m.fuzzy_graph
+
+    batch = next(iter(dataloader))
+    batch.to_tensor(device)
+    history = _trim(batch["X"], model)
+
+    with torch.no_grad():
+        mu_low, mu_high, _ = fg._compute_memberships(history)
+        R_low, R_high = fg._build_fuzzy_relation_t2(mu_low, mu_high)
+
+        # Closure at configured hops
+        S_high = fg._compute_closure(R_high, m.semantic_closure_hops)
+
+    N = R_high.shape[0]
+    total_pairs = N * N
+
+    # Use the upper bound for the most optimistic closure assessment
+    R = R_high.cpu()
+    S = S_high.cpu()
+
+    # New edges: R < threshold but S >= threshold
+    new_edges = ((R < edge_threshold) & (S >= edge_threshold)).float().sum().item()
+    new_frac = new_edges / total_pairs
+
+    # Strengthened edges: R already >= threshold but S > R substantially
+    already_edges = (R >= edge_threshold).float().sum().item()
+    strengthened = ((R >= edge_threshold) & (S >= R + 0.05)).float().sum().item()
+    strengthen_frac = strengthened / max(already_edges, 1)
+
+    # Mean delta for existing edges
+    delta_existing = (S - R)[R >= edge_threshold].mean().item()
+
+    # Per-hop analysis
+    hop_data = {}
+    S_curr = R.clone()
+    current = R.clone()
+    for h in range(1, m.semantic_closure_hops + 1):
+        new_at_hop = ((R < edge_threshold) & (S_curr >= edge_threshold)).float().sum().item()
+        hop_data[f"hop_{h}"] = {
+            "cumulative_new_edges": new_at_hop,
+            "cumulative_new_pct": new_at_hop / total_pairs * 100,
+        }
+        if h < m.semantic_closure_hops:
+            current = torch.max(
+                torch.min(R.unsqueeze(1), current.unsqueeze(0)), dim=-1
+            ).values
+            S_curr = torch.max(S_curr, current)
+
+    results = {
+        "total_pairs": total_pairs,
+        "edge_threshold": edge_threshold,
+        "base_edges_above_threshold": already_edges,
+        "base_edge_density": already_edges / total_pairs,
+        "new_edges_from_closure": int(new_edges),
+        "new_edge_fraction": float(new_frac),
+        "strengthened_edges": int(strengthened),
+        "strengthened_fraction": float(strengthen_frac),
+        "mean_delta_on_existing": float(delta_existing),
+        "per_hop": hop_data,
+    }
+
+    # Verdict
+    if new_frac > 0.05:
+        verdict = (f"✅ SIGNIFICANT — {new_frac*100:.1f}% new edges, "
+                   f"closure produces genuine inference")
+    elif new_frac > 0.01:
+        verdict = (f"⚠️  MARGINAL — {new_frac*100:.1f}% new edges, "
+                   f"closure adds limited inference")
+    else:
+        verdict = (f"❌ NEGLIGIBLE — {new_frac*100:.2f}% new edges, "
+                   f"graph already transitively closed")
+
+    results["_verdict"] = verdict
+    return results
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Orchestrator
+# ═══════════════════════════════════════════════════════════════════════
+
+def run_final_audit(model, dataloader, device, num_batches=20):
+    print("\n" + "=" * 60)
+    print("  M1: Membership Entropy")
+    print("=" * 60)
+    m1 = metric_membership_entropy(model)
+    _print_metric(m1)
+
+    print("\n" + "=" * 60)
+    print("  M2: Pairwise Cosine(μ)")
+    print("=" * 60)
+    m2 = metric_pairwise_cosine(model)
+    _print_metric(m2)
+
+    print("\n" + "=" * 60)
+    print("  M3: Routing Entropy (FRR)")
+    print("=" * 60)
+    m3 = metric_routing_entropy(model, dataloader, device)
+    _print_metric(m3)
+
+    print("\n" + "=" * 60)
+    print("  M4: FOU-Error Correlation")
+    print("=" * 60)
+    m4 = metric_fou_error_correlation(model, dataloader, device, num_batches)
+    _print_metric(m4)
+
+    print("\n" + "=" * 60)
+    print("  M5: New Closure Edges")
+    print("=" * 60)
+    m5 = metric_new_closure_edges(model, dataloader, device)
+    _print_metric(m5)
+
+    return {"M1_membership_entropy": m1,
+            "M2_pairwise_cosine": m2,
+            "M3_routing_entropy": m3,
+            "M4_fou_error_corr": m4,
+            "M5_closure_edges": m5}
+
+
+def _print_metric(result):
+    """Print key fields of a metric result."""
+    for k, v in result.items():
+        if k.startswith("_"):
+            continue
+        if isinstance(v, float):
+            print(f"  {k:<35s} {v:.4f}")
+        elif isinstance(v, dict):
+            print(f"  {k}:")
+            for sk, sv in v.items():
+                if isinstance(sv, float):
+                    print(f"    {sk:<33s} {sv:.4f}")
+                else:
+                    print(f"    {sk:<33s} {sv}")
+        else:
+            print(f"  {k:<35s} {v}")
+    print(f"\n  → {result['_verdict']}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Scorecard
+# ═══════════════════════════════════════════════════════════════════════
+
+def print_scorecard(results):
+    print("\n" + "=" * 60)
+    print("  ARCHITECTURE FREEZE DECISION")
+    print("=" * 60)
+
+    m_labels = {
+        "M1_membership_entropy": "Membership Entropy",
+        "M2_pairwise_cosine": "Pairwise Cosine",
+        "M3_routing_entropy": "Routing Entropy",
+        "M4_fou_error_corr": "FOU-Error Corr",
+        "M5_closure_edges": "New Closure Edges",
+    }
+
+    verdicts = {}
+    for key, label in m_labels.items():
+        v = results.get(key, {}).get("_verdict", "?")
+        verdicts[label] = v
+        print(f"\n  [{key[:2]}] {label}")
+        print(f"      {v}")
+
+    failures = sum(1 for v in verdicts.values() if "❌" in v)
+    warnings = sum(1 for v in verdicts.values() if "⚠️" in v)
+
+    print("\n" + "-" * 40)
+    if failures == 0 and warnings == 0:
+        print("  ✅ ALL 5 METRICS PASSED")
+        print("  → FREEZE ARCHITECTURE")
+        print("  → ENTER FORMAL EXPERIMENT PHASE")
+    elif failures == 0 and warnings <= 2:
+        print(f"  ⚠️  {warnings} WARNING(S), 0 FAILURES")
+        print("  → ARCHITECTURE ACCEPTABLE")
+        print("  → Proceed to experiments, note warnings in paper")
+    elif failures >= 2:
+        print(f"  ❌ {failures} FAILURES")
+        print("  → DO NOT FREEZE — fix issues before experiments")
+    else:
+        print(f"  ⚠️  {failures} FAILURE, {warnings} WARNING(S)")
+        print("  → Fix failures before freezing")
+    print("-" * 40)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  CLI
+# ═══════════════════════════════════════════════════════════════════════
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="final_3_type2 最终架构冻结审计 (5 metrics)")
+    parser.add_argument("--dataset", type=str, default="METR_LA")
+    parser.add_argument("--config_file", type=str, default=None,
+                        help="Training config JSON")
+    parser.add_argument("--checkpoint", type=str, required=True)
+    parser.add_argument("--other_args", type=str, default=None,
+                        help='JSON config overrides')
+    parser.add_argument("--output", type=str, default=None,
+                        help="Save results to JSON")
+    parser.add_argument("--num_batches", type=int, default=20,
+                        help="Batches for M4 error accumulation")
+    args = parser.parse_args()
+
+    model, dataloader, device, runtime = load_model_robust(args)
+
+    results = run_final_audit(model, dataloader, device, args.num_batches)
+
+    print_scorecard(results)
+
+    if args.output:
+        def convert(o):
+            if isinstance(o, (np.integer,)): return int(o)
+            if isinstance(o, (np.floating,)): return float(o)
+            if isinstance(o, np.ndarray): return o.tolist()
+            return str(o)
+        with open(args.output, "w") as f:
+            json.dump(results, f, indent=2, default=convert)
+        print(f"\nResults saved to {args.output}")
+
+    return results
+
+
+if __name__ == "__main__":
+    main()
