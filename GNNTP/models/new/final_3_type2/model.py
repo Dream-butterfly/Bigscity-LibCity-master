@@ -464,9 +464,9 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         output = self.future_decoder(
             condition, fuzzy_R, graph_dist=self.graph_dist, mu_fuzzy=mu)
 
-        # ── Split μ and log σ² ──
+        # ── Split μ and log σ², clamp σ² ≥ exp(-1.5) ≈ 0.22 ──
         mu_hat = output[..., :self.output_dim]
-        log_var = output[..., self.output_dim:]
+        log_var = output[..., self.output_dim:].clamp(min=-1.5)
 
         # ── NLL for diagonal Gaussian ──
         nll = 0.5 * (LOG_2PI + log_var + torch.exp(-log_var) * (mu_hat - future_sequence) ** 2)
