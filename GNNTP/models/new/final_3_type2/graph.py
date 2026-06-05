@@ -215,11 +215,11 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self.base_membership_delta = nn.Parameter(
             torch.zeros(num_nodes, num_fuzzy_sets)
         )
-        # Larger init std → sigmoid outputs spread across [0.1, 0.9]
-        # instead of clustering at 0.5.  This gives nodes initial diversity
-        # so gradient can push memberships toward heterogeneous assignments.
-        nn.init.trunc_normal_(self.base_membership_lower, std=0.5)
-        nn.init.trunc_normal_(self.base_membership_delta, std=0.3)
+        # Large init std → sigmoid outputs spread across [0.05, 0.95].
+        # With K=8 fuzzy sets, this gives 307 nodes enough initial diversity
+        # across the 8-dimensional simplex before gradient kicks in.
+        nn.init.trunc_normal_(self.base_membership_lower, std=1.2)
+        nn.init.trunc_normal_(self.base_membership_delta, std=0.6)
 
         # ── Raw → hidden projection (for pre-encoder feature conditioning) ──
         if input_dim is not None and input_dim != hidden_dim:

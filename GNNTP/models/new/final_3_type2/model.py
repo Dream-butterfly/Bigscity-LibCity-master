@@ -160,7 +160,7 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         # provide a weak gradient signal pulling nodes apart, not
         # to dominate the loss.
         self.membership_diversity_weight = config.get(
-            "membership_diversity_weight", 0.005)
+            "membership_diversity_weight", 0.01)
 
         # ── Device ────────────────────────────────────────────
         self.device = config.get("device", torch.device("cpu"))
