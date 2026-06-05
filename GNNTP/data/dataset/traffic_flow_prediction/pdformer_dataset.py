@@ -23,6 +23,8 @@ class PDFormerDataset(TrafficStatePointDataset):
         self.n_cluster = config.get("n_cluster", 16)
         self.cluster_max_iter = config.get("cluster_max_iter", 5)
         self.cluster_method = config.get("cluster_method", "kshape")
+        self.cluster_sample_ratio = config.get("cluster_sample_ratio", 0.1)  # 下采样比例以加快聚类
+        self.use_fast_clustering = config.get("use_fast_clustering", True)  # 使用快速聚类方法
 
     def _get_dtw(self):
         cache_path = os.path.join(get_dataset_cache_dir(), 'dtw_' + self.dataset + '.npy')
@@ -117,12 +119,41 @@ class PDFormerDataset(TrafficStatePointDataset):
         if not os.path.exists(self.pattern_key_file + '.npy'):
             cand_key_time_steps = self.cand_key_days * self.points_per_day
             pattern_cand_keys = x_train[:cand_key_time_steps, :self.s_attn_size, :, :self.output_dim].swapaxes(1, 2).reshape(-1, self.s_attn_size, self.output_dim)
-            self._logger.info("Clustering...")
-            if self.cluster_method == "kshape":
-                km = KShape(n_clusters=self.n_cluster, max_iter=self.cluster_max_iter).fit(pattern_cand_keys)
+
+            self._logger.info(f"Original pattern samples: {pattern_cand_keys.shape[0]}")
+
+            # 动态下采样：如果样本数太大，进行随机下采样以加快聚类
+            if pattern_cand_keys.shape[0] > 100000 and self.cluster_sample_ratio < 1.0:
+                n_samples = max(int(pattern_cand_keys.shape[0] * self.cluster_sample_ratio), self.n_cluster * 10)
+                sampled_idx = np.random.choice(pattern_cand_keys.shape[0], size=n_samples, replace=False)
+                pattern_cand_keys_sampled = pattern_cand_keys[sampled_idx]
+                self._logger.info(f"Downsampled to {n_samples} samples ({self.cluster_sample_ratio*100}% of original) for faster clustering")
             else:
-                km = TimeSeriesKMeans(n_clusters=self.n_cluster, metric="softdtw", max_iter=self.cluster_max_iter).fit(pattern_cand_keys)
-            self.pattern_keys = km.cluster_centers_
+                pattern_cand_keys_sampled = pattern_cand_keys
+
+            self._logger.info("Clustering...")
+
+            # 快速聚类：使用 Euclidean 距离代替 softdtw（速度快 1000 倍以上）
+            if self.use_fast_clustering:
+                from sklearn.cluster import KMeans
+                pattern_cand_keys_reshaped = pattern_cand_keys_sampled.reshape(pattern_cand_keys_sampled.shape[0], -1)
+                self._logger.info(f"Using fast Euclidean KMeans on flattened data shape: {pattern_cand_keys_reshaped.shape}")
+                km = KMeans(n_clusters=self.n_cluster, max_iter=self.cluster_max_iter,
+                           random_state=42, verbose=1, n_init=10)
+                km.fit(pattern_cand_keys_reshaped)
+                # 恢复原始形状
+                self.pattern_keys = km.cluster_centers_.reshape(self.n_cluster, self.s_attn_size, self.output_dim)
+                self._logger.info(f"Fast clustering completed with shape: {self.pattern_keys.shape}")
+            else:
+                # 原始基于距离的聚类（慢速但可能更精确，仅对小数据集）
+                self._logger.info(f"Using original {self.cluster_method} clustering on {pattern_cand_keys_sampled.shape[0]} samples")
+                if self.cluster_method == "kshape":
+                    km = KShape(n_clusters=self.n_cluster, max_iter=self.cluster_max_iter).fit(pattern_cand_keys_sampled)
+                else:
+                    km = TimeSeriesKMeans(n_clusters=self.n_cluster, metric="softdtw",
+                                        max_iter=self.cluster_max_iter, verbose=1).fit(pattern_cand_keys_sampled)
+                self.pattern_keys = km.cluster_centers_
+
             np.save(self.pattern_key_file, self.pattern_keys)
             self._logger.info("Saved at file " + self.pattern_key_file + ".npy")
         else:
