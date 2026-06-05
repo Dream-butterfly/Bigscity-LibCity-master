@@ -90,11 +90,13 @@ def audit_layer1_output_change(model, dataloader, device):
 
     results = {}
 
+    _trim_fn = getattr(m, '_trim_fn', lambda x: x)
+
     with torch.no_grad():
         # ── A. Semantic Closure: hops=1 vs hops=3 ─────────────────
         batch = next(iter(dataloader))
         batch.to_tensor(device)
-        history = batch["X"]
+        history = _trim_fn(batch["X"])
 
         mu_low, mu_high, _ = fg._compute_memberships(history)
         R_low, R_high = fg._build_fuzzy_relation_t2(mu_low, mu_high)
@@ -190,7 +192,7 @@ def audit_layer1_output_change(model, dataloader, device):
             break
         b.to_tensor(device)
         with torch.no_grad():
-            mu_l, _, _ = fg._compute_memberships(b["X"])
+            mu_l, _, _ = fg._compute_memberships(_trim_fn(b["X"]))
         mu_per_batch.append(mu_l.detach().cpu())
 
     if len(mu_per_batch) > 1:
@@ -460,11 +462,12 @@ def audit_layer4_module_metrics(model, dataloader, device):
     """
     m = model.module if hasattr(model, 'module') else model
     fg = m.fuzzy_graph
+    _trim_fn = getattr(m, '_trim_fn', lambda x: x)
     m.eval()
 
     batch = next(iter(dataloader))
     batch.to_tensor(device)
-    history = batch["X"]
+    history = _trim_fn(batch["X"])
 
     results = {}
 
@@ -1078,43 +1081,27 @@ def main():
                     if _rp_bias_key in ckpt_state:
                         model.fuzzy_graph.raw_projection.bias.data.copy_(ckpt_state[_rp_bias_key])
 
-                # Monkey-patch predict/calculate_loss AND wrap dataloader
-                # to trim input features globally
-                _orig_predict = model.predict
-                _orig_calc_loss = model.calculate_loss
+                # Trim approach: monkey-patch model.encode_condition to trim inputs,
+                # and also add trim to audit functions via a helper.
+                _orig_encode = model.encode_condition
                 _trim_dim = ckpt_in_dim
 
-                def _trim_batch(batch_dict):
-                    b = dict(batch_dict)
-                    b["X"] = b["X"][..., :_trim_dim]
-                    return b
+                def _trimmed_encode(history_sequence):
+                    if history_sequence.shape[-1] > _trim_dim:
+                        history_sequence = history_sequence[..., :_trim_dim]
+                    return _orig_encode(history_sequence)
 
-                def _trimmed_predict(batch):
-                    return _orig_predict(_trim_batch(batch))
+                model.encode_condition = _trimmed_encode
 
-                def _trimmed_calc_loss(batch):
-                    return _orig_calc_loss(_trim_batch(batch))
+                # Helper for audit functions that bypass encode_condition
+                def _trim_history(hist):
+                    if isinstance(hist, torch.Tensor) and hist.shape[-1] > _trim_dim:
+                        return hist[..., :_trim_dim]
+                    return hist
 
-                model.predict = _trimmed_predict
-                model.calculate_loss = _trimmed_calc_loss
-
-                # Wrap dataloader to trim features for ALL code paths
-                _orig_dl = dataloader
-
-                class _TrimLoader:
-                    def __init__(slf, loader, dim):
-                        slf._loader = loader
-                        slf._dim = dim
-
-                    def __iter__(slf):
-                        for batch in slf._loader:
-                            batch["X"] = batch["X"][..., :slf._dim]
-                            yield batch
-
-                    def __len__(slf):
-                        return len(slf._loader)
-
-                dataloader = _TrimLoader(_orig_dl, _trim_dim)
+                model._trim_fn = _trim_history
+                model._trim_dim = _trim_dim
+                print(f"  ✅ Input layers patched + encode_condition trimmed to {_trim_dim}")
                 runtime.data_feature["_trim_feature_dim"] = _trim_dim
                 print(f"  ✅ Input layers patched + dataloader trimmed to {_trim_dim}")
 
