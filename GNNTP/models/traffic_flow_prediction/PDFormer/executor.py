@@ -365,8 +365,8 @@ class PDFormerExecutor(TrafficStateExecutor):
 
             if self._is_rank0() and (epoch_idx % self.log_every) == 0:
                 log_lr = self.optimizer.param_groups[0]['lr']
-                message = 'Epoch [{}/{}] ({}) train_loss: {:.4f}, val_loss: {:.4f}, lr: {:.6f}, {:.2f}s'. \
-                    format(epoch_idx, self.epochs, batches_seen, train_loss, val_loss, log_lr, epoch_time)
+                message = 'Epoch [{}/{}] train_loss: {:.4f}, val_loss: {:.4f}, lr: {:.6f}, {:.2f}s'. \
+                    format(epoch_idx, self.epochs, train_loss, val_loss, log_lr, epoch_time)
                 self._logger.info(message)
 
             if self.hyper_tune and self._is_rank0():
