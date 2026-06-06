@@ -339,6 +339,8 @@ class TrafficStateExecutor(AbstractExecutor):
             # DDP: 各 rank 只推理自己的数据分片，需 all_gather 汇总
             if self.is_distributed:
                 import torch.distributed as dist
+                # 确保所有 rank 都完成 for 循环再进入 all_gather
+                dist.barrier()
                 world_size = dist.get_world_size()
                 y_preds_t = torch.from_numpy(y_preds).to(self.device)
                 y_truths_t = torch.from_numpy(y_truths).to(self.device)
@@ -511,6 +513,7 @@ class TrafficStateExecutor(AbstractExecutor):
             # DDP: all_reduce 求全局平均损失，保证所有 rank 的 val_loss 一致
             if self.is_distributed:
                 import torch.distributed as dist
+                dist.barrier()
                 loss_tensor = torch.tensor([mean_loss], device=self.device)
                 dist.all_reduce(loss_tensor, op=dist.ReduceOp.AVG)
                 mean_loss = loss_tensor.item()
