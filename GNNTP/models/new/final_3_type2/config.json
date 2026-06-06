@@ -8,7 +8,7 @@
   "ffn_hidden_dim": 128,
   "graph_k_hop": 2,
   "fuzzy_num_sets": 8,
-  "num_cells": 8,
+  "num_cells": 16,
   "cell_blend_init": 0.0,
   "band_center_init": 1.1,
   "band_width_init": 0.7,
