@@ -232,6 +232,12 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         # ── Cache FOU for uncertainty quantification ─
         self._current_fou: torch.Tensor | None = None
 
+        # ── Diagnostic tracking ─────────────────────────────
+        self._prev_mu: torch.Tensor | None = None
+        self._prev_S: torch.Tensor | None = None
+        self._diag_buffer: dict[str, float] = {}
+        self._diag_count: int = 0
+
         # ── Type-2 FOU → log-var (NLL uncertainty head) ──
         self.fou_to_logvar = nn.Linear(self.fuzzy_num_sets, 1)
 
@@ -505,6 +511,50 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         if self.use_type2_fuzzy and self.fou_entropy_align_weight > 0:
             total = total + self.fou_entropy_align_weight * self._fou_entropy_alignment(log_var)
 
+        # ════════════════════════════════════════════════
+        #  Diagnostic tracking (no-grad, no effect on loss)
+        # ════════════════════════════════════════════════
+        with torch.no_grad():
+            buf = self._diag_buffer
+
+            # ── Sub-loss decomposition ──
+            buf["pred_loss"] = buf.get("pred_loss", 0.0) + nll.mean().item()
+
+            if eff_weight > 0 and self.fir_mode != "none":
+                buf["fir_loss"] = buf.get("fir_loss", 0.0) + (eff_weight * reg_loss).item()
+
+            if self.membership_sharpness_weight > 0:
+                sharp_val = self.membership_sharpness_weight * self._membership_sharpness_loss(
+                    node_features=history_sequence)
+                buf["sharp_loss"] = buf.get("sharp_loss", 0.0) + sharp_val.item()
+
+            if self.membership_diversity_weight > 0:
+                div_val = self.membership_diversity_weight * self._membership_diversity_loss(
+                    node_features=history_sequence)
+                buf["div_loss"] = buf.get("div_loss", 0.0) + div_val.item()
+
+            # ── FOU statistics ──
+            if self._current_fou is not None:
+                buf["fou_mean"] = buf.get("fou_mean", 0.0) + self._current_fou.mean().item()
+
+            # ── Membership dispersion (cross-node std) ──
+            mu_std_val = mu.std(dim=0).mean().item()
+            buf["mu_std"] = buf.get("mu_std", 0.0) + mu_std_val
+
+            # ── Step-to-step change rates ──
+            if self._prev_mu is not None:
+                buf["mu_change"] = buf.get("mu_change", 0.0) + (
+                    mu - self._prev_mu).abs().mean().item()
+            self._prev_mu = mu.detach().cpu()
+
+            if self._prev_S is not None and fuzzy_R is not None:
+                buf["S_change"] = buf.get("S_change", 0.0) + (
+                    fuzzy_R - self._prev_S.to(fuzzy_R.device)).abs().mean().item()
+            if fuzzy_R is not None:
+                self._prev_S = fuzzy_R.detach().cpu()
+
+            self._diag_count += 1
+
         return total
 
     # ═══════════════════════════════════════════════════════════
@@ -700,6 +750,29 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
                     x = block.norm_ffn(x + block.dropout(block.feed_forward(x)))
 
         return metrics
+
+    # ═══════════════════════════════════════════════════════════
+    #  Training diagnostics (epoch-level accumulation)
+    # ═══════════════════════════════════════════════════════════
+
+    def reset_diagnostics(self):
+        """Clear epoch-level diagnostic buffers."""
+        self._diag_buffer = {}
+        self._diag_count = 0
+        self._prev_mu = None
+        self._prev_S = None
+
+    def get_diagnostics(self) -> dict:
+        """Return averaged diagnostics for the epoch.
+
+        Returns:
+            dict mapping metric name → averaged value.
+            Keys present depend on which losses were active.
+        """
+        if self._diag_count == 0:
+            return {}
+        return {k: round(v / self._diag_count, 6)
+                for k, v in self._diag_buffer.items()}
 
     # ═══════════════════════════════════════════════════════════
     #  Type-2 specific diagnostics

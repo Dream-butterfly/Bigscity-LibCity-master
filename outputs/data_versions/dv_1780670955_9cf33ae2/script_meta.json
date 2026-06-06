@@ -1,0 +1,22 @@
+{
+  "task": "traffic_state_pred",
+  "model": "AGCRN",
+  "dataset": "PEMSD4",
+  "exp_id": "20260605_224917__traffic_state_pred__AGCRN__PEMSD4",
+  "artifact_id": "da_20260605_224934__PEMSD4__TrafficStatePointDataset__1e7272c2",
+  "artifact_dir": "D:\\a_code\\A_Agent\\projects\\LibCity\\cache\\data_artifacts\\da_20260605_224934__PEMSD4__TrafficStatePointDataset__1e7272c2",
+  "data_signature": "1e7272c2108bb3dbf29930eeff91dc722b106ce0",
+  "train_batches": 160,
+  "valid_batches": 54,
+  "test_batches": 54,
+  "cache_file_name": "D:\\a_code\\A_Agent\\projects\\LibCity\\cache\\dataset_cache\\point_based_PEMSD4_12_12_0.6_0.2_standard_64_False_True_True_False.npz",
+  "data_feature_keys": [
+    "adj_mx",
+    "ext_dim",
+    "feature_dim",
+    "num_batches",
+    "num_nodes",
+    "output_dim",
+    "scaler"
+  ]
+}

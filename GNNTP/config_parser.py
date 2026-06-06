@@ -93,7 +93,12 @@ class ConfigParser(object):
             self._get_evaluator_default_config_path(),
         ]
         # 加载所有默认配置
+        import logging
+        _logger = logging.getLogger()
         for file_name in default_file_list:
+            if not os.path.exists(file_name):
+                _logger.debug('Default config file not found, skip: %s', file_name)
+                continue
             with open(file_name, 'r') as f:
                 x = json.load(f)
                 for key in x:
