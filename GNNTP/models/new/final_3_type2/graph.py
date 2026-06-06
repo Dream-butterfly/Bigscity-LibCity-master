@@ -197,6 +197,9 @@ class FuzzyRelationalGraphLearner(nn.Module):
         static_adjacency: torch.Tensor | None = None,
         input_dim: int | None = None,
         sparsification_epsilon: float = 0.0,
+        use_competition: bool = False,
+        membership_temperature: float = 1.0,
+        use_gumbel: bool = False,
     ):
         super().__init__()
         if num_fuzzy_sets < 2:
@@ -204,6 +207,16 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self.num_nodes = num_nodes
         self.num_fuzzy_sets = num_fuzzy_sets
         self.sparsification_epsilon = sparsification_epsilon
+
+        # ── Membership competition mode ───────────────────────────
+        #   False (default): sigmoid — each set independent, node can
+        #     have high μ in ALL sets simultaneously (too gentle).
+        #   True: softmax(θ/τ) — Σ_k μ_k(i) = 1, nodes forced to
+        #     commit to specific fuzzy sets, distinct functional zones.
+        #   Gumbel-Softmax (training only): adds stochastic exploration.
+        self.use_competition = use_competition
+        self.membership_temperature = membership_temperature
+        self.use_gumbel = use_gumbel
 
         # ── Type-2 interval membership parameters ─────────────────
         # μ_low  = σ(θ_lower)           ∈ [0, 1]
@@ -257,11 +270,11 @@ class FuzzyRelationalGraphLearner(nn.Module):
     def _compute_memberships(self, node_features=None):
         """Compute interval membership [μ_low, μ_high] for all nodes.
 
-        μ_low  = σ(θ_lower)                     ∈ [0, 1]^K
-        μ_high = μ_low + σ(θ_delta)·(1−μ_low)   ∈ [μ_low, 1]^K
-
-        Feature conditioning (when node_features is provided):
-          Adjusts the interval center while preserving the FOU proportion.
+        Two modes:
+          - Sigmoid (default): μ_low  = σ(θ_lower) — independent per set.
+          - Competition:       μ_mid  = softmax(θ/τ) — Σ_k μ_k(i) = 1.
+            Nodes must commit to specific fuzzy sets, producing
+            distinct functional zones (addressing Partition 5/10).
 
         Args:
             node_features: Optional [B,T,N,D] / [B,N,D] / [N,D].
@@ -271,9 +284,25 @@ class FuzzyRelationalGraphLearner(nn.Module):
             mu_high: [N, K] upper membership bound, ≥ mu_low elementwise.
             mu_mid:  [N, K] midpoint = (mu_low + mu_high) / 2.
         """
-        mu_low = torch.sigmoid(self.base_membership_lower)          # [N, K]
-        mu_delta = torch.sigmoid(self.base_membership_delta)        # [N, K]
-        mu_high = mu_low + mu_delta * (1.0 - mu_low)               # [N, K]
+        if self.use_competition:
+            # ── Competition mode: softmax forces Σ_k μ_k(i) = 1 ──
+            logits = self.base_membership_lower / self.membership_temperature
+
+            if self.training and self.use_gumbel:
+                mu_mid = F.gumbel_softmax(logits, tau=self.membership_temperature,
+                                           hard=False, dim=-1)
+            else:
+                mu_mid = F.softmax(logits, dim=-1)                     # [N, K]
+
+            # Width from delta (sigmoid, independent per set)
+            half_width = torch.sigmoid(self.base_membership_delta) * 0.5  # [N, K]
+            mu_low = (mu_mid - half_width).clamp(0.0, 1.0)
+            mu_high = (mu_mid + half_width).clamp(0.0, 1.0)
+        else:
+            # ── Original sigmoid mode (backward compatible) ──
+            mu_low = torch.sigmoid(self.base_membership_lower)          # [N, K]
+            mu_delta = torch.sigmoid(self.base_membership_delta)        # [N, K]
+            mu_high = mu_low + mu_delta * (1.0 - mu_low)               # [N, K]
 
         if node_features is not None:
             if node_features.dim() == 4:       # [B, T, N, D]
@@ -291,11 +320,21 @@ class FuzzyRelationalGraphLearner(nn.Module):
             # Blend feature into center with stronger feature modulation.
             # Higher feature weight (60%) ensures traffic-conditioned
             # membership provides meaningful node differentiation.
-            center = (mu_low + mu_high) / 2.0
-            half_width = (mu_high - mu_low) / 2.0
-            center_blended = 0.4 * center + 0.6 * mu_feat
-            mu_low = (center_blended - half_width).clamp(0.0, 1.0)
-            mu_high = (center_blended + half_width).clamp(0.0, 1.0)
+            if self.use_competition:
+                # In competition mode, feature conditioning via convex combination
+                # with the softmax base; keeps nodes near their functional zone
+                # while allowing traffic-driven shifts.
+                mu_mid_curr = (mu_low + mu_high) / 2.0
+                half_width_curr = (mu_high - mu_low) / 2.0
+                center_blended = 0.4 * mu_mid_curr + 0.6 * mu_feat
+                mu_low = (center_blended - half_width_curr).clamp(0.0, 1.0)
+                mu_high = (center_blended + half_width_curr).clamp(0.0, 1.0)
+            else:
+                center = (mu_low + mu_high) / 2.0
+                half_width = (mu_high - mu_low) / 2.0
+                center_blended = 0.4 * center + 0.6 * mu_feat
+                mu_low = (center_blended - half_width).clamp(0.0, 1.0)
+                mu_high = (center_blended + half_width).clamp(0.0, 1.0)
 
         mu_mid = (mu_low + mu_high) / 2.0
         return mu_low, mu_high, mu_mid

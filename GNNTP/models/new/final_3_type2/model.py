@@ -124,6 +124,18 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         self.nll_weight = config.get("nll_weight", 0.1)       # λ for hybrid mode
         self.log_var_clamp_min = config.get("log_var_clamp_min", -1.5)
 
+        # ── Membership competition (Partition fix) ──────────────
+        self.use_membership_competition = config.get(
+            "membership_competition", False)
+        self.membership_temperature = config.get(
+            "membership_temperature", 1.0)
+        self.use_membership_gumbel = config.get(
+            "membership_gumbel", False)
+
+        # ── FOU supervision (FOU fix) ──────────────────────────
+        self.fou_supervision_weight = config.get(
+            "fou_supervision_weight", 0.0)
+
         # ── Route 1: Fuzzy Semantic Closure ─────────────────────
         self.use_semantic_closure = config.get(
             "use_semantic_closure", True)
@@ -196,6 +208,9 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
             input_dim=self.feature_dim,
             sparsification_epsilon=(
                 self.sparsification_epsilon if self.use_fuzzy_sparsification else 0.0),
+            use_competition=self.use_membership_competition,
+            membership_temperature=self.membership_temperature,
+            use_gumbel=self.use_membership_gumbel,
         )
 
         # ── Submodules ────────────────────────────────────────
@@ -532,6 +547,13 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
                 and self.fou_entropy_align_weight > 0):
             total = total + self.fou_entropy_align_weight * self._fou_entropy_alignment(log_var)
 
+        # ── FOU supervision: align FOU with prediction error ──
+        fou_sup_loss = None
+        if (self.use_type2_fuzzy
+                and self.fou_supervision_weight > 0):
+            fou_sup_loss = self._fou_supervision_loss(mu_hat, future_sequence)
+            total = total + self.fou_supervision_weight * fou_sup_loss
+
         # ════════════════════════════════════════════════
         #  Diagnostic tracking (no-grad, no effect on loss)
         # ════════════════════════════════════════════════
@@ -566,6 +588,10 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
             # ── FOU statistics ──
             if self._current_fou is not None:
                 buf["fou_mean"] = buf.get("fou_mean", 0.0) + self._current_fou.mean().item()
+
+            # ── FOU supervision ──
+            if fou_sup_loss is not None:
+                buf["fou_sup"] = buf.get("fou_sup", 0.0) + fou_sup_loss.item()
 
             # ── Membership dispersion (cross-node std) ──
             mu_std_val = mu.std(dim=0).mean().item()
@@ -733,6 +759,46 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         # Collapse learned log_var across batch, time, channel → per-node
         target = learned_log_var.mean(dim=(0, 1, 3))               # [N]
         return F.mse_loss(fou_log_var, target)
+
+    # ═══════════════════════════════════════════════════════════
+    #  FOU Supervision (FOU fix)
+    # ═══════════════════════════════════════════════════════════
+
+    def _fou_supervision_loss(self, mu_hat, future_sequence):
+        """Supervise FOU with actual prediction error.
+
+        Problem: without supervision, FOU is just a structural byproduct
+        of membership widths — it has no semantic meaning.
+
+        Solution: align FOU[i,j] with the joint prediction error of
+        nodes i and j.  This gives FOU a clear interpretation:
+          wider FOU ↔ higher expected prediction error.
+
+        L_fou = MSE(FOU_norm, err_norm)
+
+        where:
+          err_norm[i,j] = (|e_i| + |e_j|) / (2 * max_err)  ∈ [0, 1]
+          FOU_norm[i,j] = FOU[i,j] / max(FOU)              ∈ [0, 1]
+
+        Error is detached to prevent self-reinforcing loop.
+        """
+        if self._current_fou is None:
+            return mu_hat.new_tensor(0.0)
+
+        # Per-node average absolute error (detached — no gradient)
+        with torch.no_grad():
+            err = (mu_hat - future_sequence).abs().mean(dim=(0, 1))   # [N]
+            max_err = err.max().clamp_min(1e-8)
+            err_norm = err / max_err                                   # [N], ∈ [0,1]
+
+        # Joint uncertainty: average error of node pair
+        err_matrix = (err_norm.unsqueeze(-1) + err_norm.unsqueeze(-2)) / 2.0  # [N,N]
+
+        # Normalize FOU
+        fou = self._current_fou.to(dtype=err_matrix.dtype, device=err_matrix.device)
+        fou_norm = fou / fou.max().clamp_min(1e-8)
+
+        return F.mse_loss(fou_norm, err_matrix)
 
     # ═══════════════════════════════════════════════════════════
     #  Stability Diagnostics
