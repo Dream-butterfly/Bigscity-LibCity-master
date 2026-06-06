@@ -43,12 +43,86 @@ from GNNTP.utils import get_model
 #  Shared model loading (same robust logic as v2)
 # ═══════════════════════════════════════════════════════════════════════
 
+def _infer_config_overrides(ckpt_state):
+    """从 checkpoint state_dict 推断训练时的关键维度，返回 other_args dict。
+
+    扫描已知的 state_dict key，提取 hidden_dim、ffn_hidden_dim、
+    fuzzy_num_sets、num_cells、encoder_layers、decoder_layers 等。
+    同时返回 feature_dim_override（需注入 data_feature）。
+    """
+    overrides = {}
+    feature_dim_override = None
+
+    # ── hidden_dim + old input_dim ──
+    _ip_w = "condition_encoder.input_projection.weight"
+    if _ip_w in ckpt_state:
+        overrides["hidden_dim"] = ckpt_state[_ip_w].shape[0]       # out_features
+        feature_dim_override = ckpt_state[_ip_w].shape[1]          # in_features
+
+    # ── ffn_hidden_dim ──
+    _ffn_w = "condition_encoder.blocks.0.feed_forward.linear1.weight"
+    if _ffn_w in ckpt_state:
+        overrides["ffn_hidden_dim"] = ckpt_state[_ffn_w].shape[0]
+
+    # ── fuzzy_num_sets ──
+    _fz = "fuzzy_graph.base_membership_lower"
+    if _fz in ckpt_state:
+        overrides["fuzzy_num_sets"] = ckpt_state[_fz].shape[1]
+
+    # ── num_cells ──
+    for _cell_key in (
+        "condition_encoder.blocks.0.cell_attention.region_mu",
+        "condition_encoder.blocks.0.cell_attention.centers",
+    ):
+        if _cell_key in ckpt_state:
+            overrides["num_cells"] = ckpt_state[_cell_key].shape[0]
+            break
+
+    # ── encoder_layers / decoder_layers ──
+    enc_blocks = {k for k in ckpt_state if k.startswith("condition_encoder.blocks.")}
+    enc_indices = set()
+    for k in enc_blocks:
+        parts = k.split(".")
+        if len(parts) >= 3 and parts[2].isdigit():
+            enc_indices.add(int(parts[2]))
+    if enc_indices:
+        overrides["encoder_layers"] = max(enc_indices) + 1
+
+    dec_blocks = {k for k in ckpt_state if k.startswith("future_decoder.blocks.")}
+    dec_indices = set()
+    for k in dec_blocks:
+        parts = k.split(".")
+        if len(parts) >= 3 and parts[2].isdigit():
+            dec_indices.add(int(parts[2]))
+    if dec_indices:
+        overrides["decoder_layers"] = max(dec_indices) + 1
+
+    return overrides, feature_dim_override
+
+
 def load_model_robust(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    # Load config
-    other_args = {}
+    # ── Step 1: 加载 checkpoint ──
+    if not args.checkpoint or not os.path.exists(args.checkpoint):
+        print("❌ No checkpoint found. Aborting.")
+        sys.exit(1)
+
+    print(f"Loading checkpoint: {args.checkpoint}")
+    ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
+    ckpt_state = (ckpt.get("model_state_dict") or
+                  ckpt.get("state_dict") or ckpt)
+
+    # ── Step 2: 从 checkpoint 推断训练时的关键维度 ──
+    ckpt_overrides, ckpt_feature_dim = _infer_config_overrides(ckpt_state)
+    if ckpt_overrides:
+        print(f"  📐 Inferred from checkpoint: {json.dumps(ckpt_overrides)}")
+    if ckpt_feature_dim is not None:
+        print(f"  📐 Checkpoint input_dim: {ckpt_feature_dim}")
+
+    # ── Step 3: 加载 config（ckpt_overrides 作为基础，用户 other_args 可覆盖）──
+    other_args = dict(ckpt_overrides)  # checkpoint 推断优先作为默认
     if args.config_file and os.path.exists(args.config_file):
         with open(args.config_file) as f:
             file_config = json.load(f)
@@ -59,11 +133,11 @@ def load_model_robust(args):
                      'exp_id', 'data_version_id', 'log_every'):
                 continue
             if isinstance(v, (dict, list, str, int, float, bool, type(None))):
-                other_args[k] = v
-        print(f"  Merged {len(other_args)} config keys from {args.config_file}")
+                other_args[k] = v  # config_file 覆盖 checkpoint 推断
+        print(f"  Merged {len(file_config)} config keys from {args.config_file}")
 
     if args.other_args:
-        other_args.update(json.loads(args.other_args))
+        other_args.update(json.loads(args.other_args))  # 用户显式 other_args 最高优先级
 
     config = ConfigParser(
         "traffic_state_pred", "final_3_type2", args.dataset,
@@ -75,72 +149,36 @@ def load_model_robust(args):
     dataloader = runtime.valid_loader
     print(f"  data_feature['feature_dim'] = {runtime.data_feature.get('feature_dim')}")
 
-    # Build model
+    # ── Step 4: 如果 checkpoint 的 input_dim 与数据集不同，注入到 data_feature ──
+    if ckpt_feature_dim is not None:
+        data_feat = runtime.data_feature
+        ds_dim = data_feat.get("feature_dim", 0)
+        if ckpt_feature_dim != ds_dim:
+            print(f"  🔧 Overriding data_feature['feature_dim']: {ds_dim} → {ckpt_feature_dim}")
+            data_feat["feature_dim"] = ckpt_feature_dim
+
+    # ── Step 5: 用正确的维度构建模型 → 直接 load_state_dict ──
     model = get_model(config, runtime.data_feature).to(device)
 
-    # Load checkpoint
-    if not args.checkpoint or not os.path.exists(args.checkpoint):
-        print("❌ No checkpoint found. Aborting.")
-        sys.exit(1)
-
-    print(f"Loading checkpoint: {args.checkpoint}")
-    ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
-    ckpt_state = (ckpt.get("model_state_dict") or
-                  ckpt.get("state_dict") or ckpt)
-
-    # Auto-patch input_dim mismatch
-    _ip_key = "condition_encoder.input_projection.weight"
-    if _ip_key in ckpt_state:
-        ckpt_in_dim = ckpt_state[_ip_key].shape[1]
-        model_in_dim = model.condition_encoder.input_projection.weight.shape[1]
-        if ckpt_in_dim != model_in_dim:
-            print(f"  🔧 Patching input_dim: {model_in_dim} → {ckpt_in_dim}")
-            # Patch input_projection
-            model.condition_encoder.input_projection = torch.nn.Linear(
-                ckpt_in_dim,
-                model.condition_encoder.input_projection.out_features,
-                bias=True,
-            ).to(device)
-            model.condition_encoder.input_projection.weight.data.copy_(
-                ckpt_state[_ip_key])
-            model.condition_encoder.input_projection.bias.data.copy_(
-                ckpt_state.get(_ip_key.replace(".weight", ".bias"),
-                               torch.zeros(ckpt_in_dim, device=device)))
-
-            # Patch raw_projection
-            _rp_key = "fuzzy_graph.raw_projection.weight"
-            if _rp_key in ckpt_state:
-                model.fuzzy_graph.raw_projection = torch.nn.Linear(
-                    ckpt_in_dim,
-                    model.fuzzy_graph.raw_projection.out_features,
-                    bias=True,
-                ).to(device)
-                model.fuzzy_graph.raw_projection.weight.data.copy_(
-                    ckpt_state[_rp_key])
-                model.fuzzy_graph.raw_projection.bias.data.copy_(
-                    ckpt_state.get(_rp_key.replace(".weight", ".bias"),
-                                   torch.zeros(ckpt_in_dim, device=device)))
-
-            # Patch encode_condition to auto-trim
-            _orig_encode = model.encode_condition
-            def _trimmed_encode(hist):
-                if hist.shape[-1] > ckpt_in_dim:
-                    hist = hist[..., :ckpt_in_dim]
-                return _orig_encode(hist)
-            model.encode_condition = _trimmed_encode
-            model._trim_dim = ckpt_in_dim
-
-    # Load all params
     model_state = model.state_dict()
     loaded = 0
+    skipped = []
     for key, val in ckpt_state.items():
         if key in model_state and model_state[key].shape == val.shape:
             model_state[key].copy_(val)
             loaded += 1
+        elif key in model_state:
+            skipped.append(f"{key} (ckpt:{list(val.shape)} vs model:{list(model_state[key].shape)})")
 
     total = len(model_state)
     print(f"  ✅ Loaded {loaded}/{total} params"
           + (f" (skipped {total - loaded})" if loaded < total else ""))
+    if skipped:
+        print(f"  ⚠️  Skipped {len(skipped)} mismatched params (first 5):")
+        for s in skipped[:5]:
+            print(f"     - {s}")
+        if len(skipped) > 5:
+            print(f"     ... and {len(skipped) - 5} more")
 
     model.eval()
     return model, dataloader, device, runtime
