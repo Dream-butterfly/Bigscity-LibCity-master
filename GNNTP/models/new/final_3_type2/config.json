@@ -40,7 +40,7 @@
   "membership_diversity_weight": 0.01,
   "membership_temperature": 1.0,
   "membership_temperature_min": 0.3,
-  "membership_temperature_anneal_steps": 8000,
+  "membership_temperature_anneal_steps": 200,
   "scaler": "standard",
   "load_external": false,
   "normal_external": false,

@@ -305,7 +305,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
             # membership provides meaningful node differentiation.
             center = (mu_low + mu_high) / 2.0
             half_width = (mu_high - mu_low) / 2.0
-            center_blended = 0.8 * center + 0.2 * mu_feat
+            center_blended = 0.4 * center + 0.6 * mu_feat
             mu_low = (center_blended - half_width).clamp(0.0, 1.0)
             mu_high = (center_blended + half_width).clamp(0.0, 1.0)
 
