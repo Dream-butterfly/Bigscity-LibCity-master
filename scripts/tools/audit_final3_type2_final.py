@@ -207,9 +207,9 @@ def metric_membership_entropy(model):
     m = _unwrap(model)
     fg = m.fuzzy_graph
     with torch.no_grad():
-        mu_low, mu_high, mu_mid = fg._compute_memberships()
-        # Shannon entropy on (static) midpoint membership
-        p = mu_mid / mu_mid.sum(dim=-1, keepdim=True).clamp_min(1e-8)
+        # Use μ_low (softmax, competitive) — not μ_mid which is diluted by delta
+        mu_low, _, _ = fg._compute_memberships()
+        p = mu_low  # already a probability simplex
         H = -(p * (p + 1e-8).log()).sum(dim=-1)  # [N]
 
     H_np = H.cpu().numpy()
@@ -256,10 +256,10 @@ def metric_pairwise_cosine(model):
     m = _unwrap(model)
     fg = m.fuzzy_graph
     with torch.no_grad():
-        _, _, mu_mid = fg._compute_memberships()
+        mu_low, _, _ = fg._compute_memberships()
 
     # Normalize rows
-    mu_norm = F.normalize(mu_mid, p=2, dim=-1)  # [N, K]
+    mu_norm = F.normalize(mu_low, p=2, dim=-1)  # [N, K]
 
     # Compute all-pairs cosine (memory-efficient for N < 500)
     N = mu_norm.shape[0]
@@ -435,8 +435,8 @@ def metric_fou_error_correlation(model, dataloader, device, num_batches=20):
     fou_per_set = (mu_high - mu_low).mean(dim=0).cpu().numpy()  # [K]
     # For per-set, we correlate with the mean error of nodes dominated by that set
     with torch.no_grad():
-        _, _, mu_mid = fg._compute_memberships()
-        argmax_set = mu_mid.argmax(dim=-1).cpu().numpy()  # [N]
+        mu_low, _, _ = fg._compute_memberships()
+        argmax_set = mu_low.argmax(dim=-1).cpu().numpy()  # [N]
     set_errors = []
     set_fous = []
     for k in range(m.fuzzy_num_sets):
@@ -570,9 +570,9 @@ def metric_set_utilization(model):
     m = _unwrap(model)
     fg = m.fuzzy_graph
     with torch.no_grad():
-        _, _, mu_mid = fg._compute_memberships()
+        mu_low, _, _ = fg._compute_memberships()
 
-    mu_np = mu_mid.cpu().numpy()                                    # [N, K]
+    mu_np = mu_low.cpu().numpy()                                    # [N, K]
     global_mean = mu_np.mean()
     u_k = mu_np.mean(axis=0) / global_mean                          # [K]
 
@@ -637,10 +637,10 @@ def metric_membership_peak(model):
     m = _unwrap(model)
     fg = m.fuzzy_graph
     with torch.no_grad():
-        _, _, mu_mid = fg._compute_memberships()
+        mu_low, _, _ = fg._compute_memberships()
 
-    # Normalize to probability simplex (same as M1)
-    p = mu_mid / mu_mid.sum(dim=-1, keepdim=True).clamp_min(1e-8)
+    # μ_low is softmax output — already a probability simplex
+    p = mu_low
     p_np = p.cpu().numpy()
     N, K = p_np.shape
 

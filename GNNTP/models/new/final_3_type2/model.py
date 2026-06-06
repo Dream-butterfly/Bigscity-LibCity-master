@@ -600,13 +600,17 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         Returns:
             scalar: mean per-node sharpness (lower = more peaked).
         """
-        _, _, mu_mid = self.fuzzy_graph._compute_memberships(node_features)
-        p = mu_mid / mu_mid.sum(dim=-1, keepdim=True).clamp_min(1e-8)
+        # Use μ_low (softmax, competitive) instead of μ_mid.
+        # μ_mid = (μ_low + μ_high)/2 mixes in μ_delta*(1-μ_low), which
+        # adds proportionally more to small-μ dimensions → equalizes the
+        # distribution → defeats softmax competition → wastes sharpness loss.
+        mu_low, _, _ = self.fuzzy_graph._compute_memberships(node_features)
+        # μ_low is already a simplex (softmax), no normalization needed
         if self.membership_sharpness_mode == "entropy":
-            H = -(p * (p + 1e-8).log()).sum(dim=-1)  # [N]
+            H = -(mu_low * (mu_low + 1e-8).log()).sum(dim=-1)  # [N]
             return H.mean()
         else:  # "gini" (default)
-            G = 1.0 - (p ** 2).sum(dim=-1)  # [N]
+            G = 1.0 - (mu_low ** 2).sum(dim=-1)  # [N]
             return G.mean()
 
     def _membership_diversity_loss(self, node_features=None):
@@ -615,8 +619,8 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         Complements sharpness loss: sharpness makes each node peaked,
         diversity makes sure nodes peak at DIFFERENT sets.
         """
-        _, _, mu_mid = self.fuzzy_graph._compute_memberships(node_features)
-        mu_norm = F.normalize(mu_mid, p=2, dim=-1)          # [N, K]
+        mu_low, _, _ = self.fuzzy_graph._compute_memberships(node_features)
+        mu_norm = F.normalize(mu_low, p=2, dim=-1)          # [N, K]
         sim = mu_norm @ mu_norm.T                           # [N, N]
         N = sim.shape[0]
         mask = ~torch.eye(N, dtype=torch.bool, device=sim.device)
