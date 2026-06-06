@@ -334,6 +334,8 @@ def metric_routing_entropy(model, dataloader, device):
     routing_u_means = []     # Diag 1: u.mean(0) per block
     routing_sigmas = []      # Diag 2: σ_k per block
     routing_aligns = []      # Diag 3: argmax(μ_low) vs argmax(u)
+    routing_dist_sq_stats = []   # Diag 4: dist_sq statistics
+    routing_sigma_sq_stats = []  # Diag 4: σ² statistics
 
     for block_list in [m.condition_encoder.blocks, m.future_decoder.blocks]:
         for blk in block_list:
@@ -383,6 +385,26 @@ def metric_routing_entropy(model, dataloader, device):
                 align = (argmax_u == argmax_mu_low).float().mean().item()
                 routing_aligns.append(float(align))
 
+                # ── Diag 4: dist_sq vs σ² scale check ──
+                if ca.use_fuzzy_routing:
+                    diff = node_repr.unsqueeze(1) - ca.region_mu.unsqueeze(0)
+                    dist_sq = diff.pow(2).sum(dim=-1)
+                    sigma_k = F.softplus(ca.region_log_sigma).unsqueeze(0) + 0.05
+                else:
+                    diff = node_repr.unsqueeze(1) - ca.centers.unsqueeze(0)
+                    dist_sq = diff.pow(2).sum(dim=-1)
+                    sigma_k = (F.softplus(ca.log_sigma_sq) + 0.01).expand_as(dist_sq)
+                routing_dist_sq_stats.append({
+                    "mean": float(dist_sq.mean()),
+                    "std": float(dist_sq.std()),
+                    "max": float(dist_sq.max()),
+                })
+                routing_sigma_sq_stats.append({
+                    "mean": float((sigma_k ** 2).mean()),
+                    "min": float((sigma_k ** 2).min()),
+                    "max": float((sigma_k ** 2).max()),
+                })
+
     if not routing_entropies:
         return {"_verdict": "⚠️  NO CellAttention blocks found"}
 
@@ -402,6 +424,8 @@ def metric_routing_entropy(model, dataloader, device):
         "diag_u_mean_per_block": routing_u_means,
         "diag_sigma_per_block": routing_sigmas,
         "diag_align_mu_vs_u": routing_aligns,
+        "diag_dist_sq_stats": routing_dist_sq_stats,
+        "diag_sigma_sq_stats": routing_sigma_sq_stats,
     }
 
     if avg_max_frac > 0.8:
