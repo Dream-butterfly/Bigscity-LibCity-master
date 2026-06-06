@@ -814,10 +814,11 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
             return mu_hat.new_tensor(0.0)
 
         # Per-node average absolute error (detached — no gradient)
+        # mu_hat / future_sequence are 4D [B, Tout, N, C_out]; reduce all but N
         with torch.no_grad():
-            err = (mu_hat - future_sequence).abs().mean(dim=(0, 1))   # [N]
+            err = (mu_hat - future_sequence).abs().mean(dim=(0, 1, -1))  # [N]
             max_err = err.max().clamp_min(1e-8)
-            err_norm = err / max_err                                   # [N], ∈ [0,1]
+            err_norm = err / max_err                                     # [N], ∈ [0,1]
 
         # Joint uncertainty: average error of node pair
         err_matrix = (err_norm.unsqueeze(-1) + err_norm.unsqueeze(-2)) / 2.0  # [N,N]
