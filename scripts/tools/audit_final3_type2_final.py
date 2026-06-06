@@ -1,20 +1,22 @@
 """
-final_3_type2 最终架构冻结审计 — 5 项终极指标。
+final_3_type2 最终架构冻结审计 — 7 项终极指标。
 
 在大规模消融实验前执行的最后一轮检查。全部通过 → 冻结架构 → 进入正式实验。
 
-五项指标:
+七项指标:
   M1: Membership Entropy — 隶属度是否真塌缩？
   M2: Pairwise Cosine(μ) — 节点是否同质化？
   M3: Routing Entropy — FRR 是否退化？
   M4: FOU-Error Correlation — FOU 是否有预测语义？
   M5: New Closure Edges — Closure 是否产生新的推理边？
+  M6: Set Utilization — 模糊集合是否都被使用？
+  M7: Membership Peak — 节点是否真正 committed 到特定集合？
 
 用法:
   python scripts/tools/audit_final3_type2_final.py \
       --dataset PEMSD4 \
       --config_file train_config_PEMSD4.json \
-      --checkpoint outputs/.../final_3_type2_PEMSD4_epoch49.tar \
+      --checkpoint outputs/.../model_cache/final_3_type2_PEMSD4_epoch49.tar \
       --output audit_final_PEMSD4.json
 """
 
@@ -578,6 +580,106 @@ def metric_set_utilization(model):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+#  M7: Membership Peak Analysis
+# ═══════════════════════════════════════════════════════════════════════
+
+def metric_membership_peak(model):
+    """Per-node peak membership analysis.
+
+    Answers the key question raised by M6 vs M1/M2 tension:
+    "Are all K sets being used, but each node spreads thin across ALL of them?"
+
+    Two diagnostics:
+      1. top1_mean: mean of max_k p(k|i).  With K=8:
+         - uniform baseline ≈ 0.125  → no commitment
+         - weak              ≈ 0.25   → thin spread (current suspected state)
+         - moderate          ≈ 0.50   → emerging clusters
+         - strong             > 0.70   → genuine fuzzy clustering
+      2. argmax distribution: how nodes distribute across K peaks.
+         - Uniform across K  → sets are all used (confirms M6)
+         - Skewed            → some sets dead
+
+    Combined with M6 utilization_entropy, this reveals whether
+    "balanced utilization" is genuine clustering or just uniform
+    thin membership spread.
+    """
+    m = _unwrap(model)
+    fg = m.fuzzy_graph
+    with torch.no_grad():
+        _, _, mu_mid = fg._compute_memberships()
+
+    # Normalize to probability simplex (same as M1)
+    p = mu_mid / mu_mid.sum(dim=-1, keepdim=True).clamp_min(1e-8)
+    p_np = p.cpu().numpy()
+    N, K = p_np.shape
+
+    # ── Top-1 statistics ──
+    top1_vals = p_np.max(axis=-1)  # [N]
+    top1_mean = float(top1_vals.mean())
+    top1_std = float(top1_vals.std())
+    top1_min = float(top1_vals.min())
+    top1_max = float(top1_vals.max())
+
+    # Histogram (10 equal-width bins over [0, 1])
+    hist, bin_edges = np.histogram(top1_vals, bins=10, range=(0.0, 1.0))
+
+    # ── Argmax distribution ──
+    argmax_set = p_np.argmax(axis=-1)  # [N]
+    argmax_counts = np.bincount(argmax_set, minlength=K)  # [K]
+    argmax_dist = argmax_counts / N
+
+    # Gini of argmax distribution (low = uniform, high = skewed)
+    argmax_gini = 1.0 - (argmax_dist ** 2).sum()
+    argmax_gini_max = 1.0 - 1.0 / K
+    argmax_gini_norm = float(argmax_gini / argmax_gini_max)
+
+    # Per-set details
+    per_set = {}
+    for k in range(K):
+        mask = argmax_set == k
+        n_k = int(mask.sum())
+        per_set[f"set_{k}"] = {
+            "count": n_k,
+            "pct": round(n_k / N * 100, 1),
+            "mean_top1": round(float(top1_vals[mask].mean()), 4) if n_k > 0 else 0.0,
+        }
+
+    results = {
+        "N_nodes": N,
+        "K_sets": K,
+        "top1_mean": top1_mean,
+        "top1_std": top1_std,
+        "top1_min": top1_min,
+        "top1_max": top1_max,
+        "top1_histogram": {
+            "bin_edges": [round(float(e), 2) for e in bin_edges],
+            "counts": [int(c) for c in hist],
+        },
+        "argmax_counts": {f"set_{k}": int(argmax_counts[k]) for k in range(K)},
+        "argmax_gini_normalized": argmax_gini_norm,
+        "per_set": per_set,
+    }
+
+    uniform_baseline = 1.0 / K
+
+    if top1_mean > 0.7:
+        verdict = (f"✅ STRONG PEAKS — top1_mean={top1_mean:.3f}, "
+                   f"nodes are committed to specific fuzzy sets")
+    elif top1_mean > 0.4:
+        verdict = (f"⚠️  MODERATE — top1_mean={top1_mean:.3f}, "
+                   f"some commitment but membership still diffuse")
+    elif top1_mean > uniform_baseline * 1.5:
+        verdict = (f"⚠️  WEAK — top1_mean={top1_mean:.3f}, "
+                   f"barely above uniform baseline ({uniform_baseline:.3f})")
+    else:
+        verdict = (f"❌ UNIFORM — top1_mean={top1_mean:.3f}, "
+                   f"membership is effectively flat across {K} sets")
+
+    results["_verdict"] = verdict
+    return results
+
+
+# ═══════════════════════════════════════════════════════════════════════
 #  Orchestrator
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -618,12 +720,19 @@ def run_final_audit(model, dataloader, device, num_batches=20):
     m6 = metric_set_utilization(model)
     _print_metric(m6)
 
+    print("\n" + "=" * 60)
+    print("  M7: Membership Peak Analysis")
+    print("=" * 60)
+    m7 = metric_membership_peak(model)
+    _print_metric(m7)
+
     return {"M1_membership_entropy": m1,
             "M2_pairwise_cosine": m2,
             "M3_routing_entropy": m3,
             "M4_fou_error_corr": m4,
             "M5_closure_edges": m5,
-            "M6_set_utilization": m6}
+            "M6_set_utilization": m6,
+            "M7_membership_peak": m7}
 
 
 def _print_metric(result):
@@ -685,6 +794,7 @@ def print_scorecard(results):
         "M4_fou_error_corr": "FOU-Error Corr",
         "M5_closure_edges": "New Closure Edges",
         "M6_set_utilization": "Set Utilization",
+        "M7_membership_peak": "Membership Peak",
     }
 
     verdicts = {}
@@ -699,7 +809,7 @@ def print_scorecard(results):
 
     print("\n" + "-" * 40)
     if failures == 0 and warnings == 0:
-        print("  ✅ ALL 5 METRICS PASSED")
+        print("  ✅ ALL 7 METRICS PASSED")
         print("  → FREEZE ARCHITECTURE")
         print("  → ENTER FORMAL EXPERIMENT PHASE")
     elif failures == 0 and warnings <= 2:
@@ -721,7 +831,7 @@ def print_scorecard(results):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="final_3_type2 最终架构冻结审计 (5 metrics)")
+        description="final_3_type2 最终架构冻结审计 (7 metrics)")
     parser.add_argument("--dataset", type=str, default="METR_LA")
     parser.add_argument("--config_file", type=str, default=None,
                         help="Training config JSON")
