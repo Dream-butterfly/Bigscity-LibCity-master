@@ -1,0 +1,18 @@
+"""Shared utility exports for final_T2 (copied).
+"""
+
+from .adjacency import build_normalized_adjacency, expand_adjacency_batch
+from .attention_ops import (
+    apply_node_temporal_cross_attention,
+    apply_spatiotemporal_attention,
+    apply_temporal_attention,
+)
+
+__all__ = [
+    "build_normalized_adjacency",
+    "expand_adjacency_batch",
+    "apply_temporal_attention",
+    "apply_node_temporal_cross_attention",
+    "apply_spatiotemporal_attention",
+]
+
