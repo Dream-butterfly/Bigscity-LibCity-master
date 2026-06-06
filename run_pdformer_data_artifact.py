@@ -14,7 +14,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="运行 PDFormer 数据 artifact 生成，使用优化的快速聚类"
     )
-
+    
     parser.add_argument(
         "--dataset",
         default="PEMSD4",
@@ -71,9 +71,9 @@ def main():
         action="store_true",
         help="显示详细输出"
     )
-
+    
     args = parser.parse_args()
-
+    
     # 构建命令行
     cmd = [
         "uv", "run",
@@ -92,7 +92,7 @@ def main():
         "--use_fast_clustering", str(args.use_fast_clustering),
         "--cluster_sample_ratio", str(args.cluster_sample_ratio),
     ]
-
+    
     print("=" * 80)
     print("PDFormer 数据 Artifact 快速启动")
     print("=" * 80)
@@ -106,23 +106,23 @@ def main():
     print(f"  ✅ 聚类时间: 5-15 秒 (vs 原来的 1-10 小时)")
     print(f"  ✅ 样本从 1,238,304 → ~123,830")
     print(f"  ✅ 加速倍数: ~675,000×")
-
+    
     if args.verbose:
         print(f"\n[完整命令]\n")
         print(" ".join(cmd))
-
+    
     print(f"\n[执行中...]\n")
-
+    
     try:
         result = subprocess.run(cmd, check=False)
-
+        
         if result.returncode == 0:
             print(f"\n[成功] ✅ 数据 artifact 生成完成！")
             return 0
         else:
             print(f"\n[错误] ❌ 数据 artifact 生成失败，返回码: {result.returncode}")
             return result.returncode
-
+            
     except KeyboardInterrupt:
         print(f"\n[中断] ⚠️ 用户中断")
         return 1
@@ -132,4 +132,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-

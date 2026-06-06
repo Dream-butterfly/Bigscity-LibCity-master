@@ -1,6 +1,6 @@
 # PDFormer 聚类卡住问题 - 修复完成总结
 
-## 📋 问题概述
+##  问题概述
 
 **症状**: 执行 `run_data_artifact.py` 时卡在 "Clustering..." 无法继续
 
@@ -55,7 +55,7 @@ if self.use_fast_clustering:
 
 ---
 
-## 📊 性能对比
+##  性能对比
 
 | 指标 | 修复前 | 修复后 | 改进 |
 |------|--------|--------|------|
@@ -84,7 +84,7 @@ if self.use_fast_clustering:
 
 ---
 
-## 🚀 快速使用指南
+##  快速使用指南
 
 ### 选项 1: 使用快速启动脚本（推荐）
 
@@ -131,7 +131,7 @@ uv run scripts/run/run_data_artifact.py \
 
 ---
 
-## 📝 预期日志输出
+##  预期日志输出
 
 修复后运行时，应该看到：
 
@@ -152,7 +152,7 @@ uv run scripts/run/run_data_artifact.py \
 
 ---
 
-## 🔧 配置选项详解
+##  配置选项详解
 
 ### `use_fast_clustering` (默认: `True`)
 
@@ -180,7 +180,7 @@ uv run scripts/run/run_data_artifact.py \
 
 ---
 
-## 🧪 验证修复
+##  验证修复
 
 ### 快速检查清单
 
@@ -212,7 +212,7 @@ uv run scripts/run/run_data_artifact.py \
 
 ---
 
-## 📚 相关文件
+##  相关文件
 
 本次优化涉及的文件：
 
@@ -227,7 +227,7 @@ uv run scripts/run/run_data_artifact.py \
 
 ---
 
-## 🎯 下一步
+##  下一步
 
 ### 立即测试
 
@@ -286,7 +286,7 @@ python -c "import numpy as np; pk=np.load('cache/dataset_cache/pattern_keys_*.np
 
 ---
 
-## 📞 支持
+##  支持
 
 如果遇到问题：
 
@@ -310,5 +310,4 @@ python -c "import numpy as np; pk=np.load('cache/dataset_cache/pattern_keys_*.np
 | **向后兼容** | 100% ✅ |
 
 **修复完成，可立即使用！** ✨
-
 

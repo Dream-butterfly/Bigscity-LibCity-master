@@ -1,4 +1,4 @@
-# 🎉 PDFormer 聚类卡住问题 - 修复完成
+#  PDFormer 聚类卡住问题 - 修复完成
 
 ## 概要
 
@@ -213,6 +213,5 @@ rm cache/dataset_cache/pattern_keys_*.npy
 3. 或查看详细报告: `cat PDFormer_CLUSTERING_FIX_REPORT.md`
 4. 然后继续正常的模型训练流程
 
-**修复完成，无需进一步操作！** 🎉
-
+**修复完成，无需进一步操作！** 
 
