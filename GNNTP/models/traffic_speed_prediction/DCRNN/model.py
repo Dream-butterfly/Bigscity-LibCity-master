@@ -108,6 +108,9 @@ class GCONV(nn.Module):
             pass
         else:
             for support in supports:
+                # CUDA sparse.mm doesn't support FP16 (Half), cast support to FP32
+                if original_dtype != torch.float32:
+                    support = support.float()
                 # T1=L x1=T1*x=L*x
                 x1 = torch.sparse.mm(support, x0)  # supports: n*n; x0: n*(total_arg_size * batch_size)
                 x = self._concat(x, x1)  # (2, num_nodes, total_arg_size * batch_size)
