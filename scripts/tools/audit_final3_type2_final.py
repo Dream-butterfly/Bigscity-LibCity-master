@@ -324,10 +324,16 @@ def metric_routing_entropy(model, dataloader, device):
     fg = m.fuzzy_graph
     with torch.no_grad():
         mu_fuzzy = fg.get_memberships(history).to(device)
+        # Static μ_low for membership→routing alignment diagnostic
+        mu_low_static, _, _ = fg._compute_memberships()
+        argmax_mu_low = mu_low_static.argmax(dim=-1).cpu()  # [N]
 
     # Collect routing weights from each CellAttention block
     routing_entropies = []
     routing_max_counts = []
+    routing_u_means = []     # Diag 1: u.mean(0) per block
+    routing_sigmas = []      # Diag 2: σ_k per block
+    routing_aligns = []      # Diag 3: argmax(μ_low) vs argmax(u)
 
     for block_list in [m.condition_encoder.blocks, m.future_decoder.blocks]:
         for blk in block_list:
@@ -360,6 +366,23 @@ def metric_routing_entropy(model, dataloader, device):
                 max_frac = (argmax_counts.max() / argmax_counts.sum()).item()
                 routing_max_counts.append(max_frac)
 
+                # ── Diag 1: per-region average raw u (before B normalization) ──
+                u_mean_k = u_fuzzy.mean(dim=0).cpu().tolist()
+                routing_u_means.append([float(v) for v in u_mean_k])
+
+                # ── Diag 2: per-region σ_k (fuzziness / bandwidth) ──
+                if ca.use_fuzzy_routing:
+                    sigma_k = (F.softplus(ca.region_log_sigma) + 0.05).detach().cpu().tolist()
+                else:
+                    sigma_global = float((F.softplus(ca.log_sigma_sq) + 0.01).detach().cpu())
+                    sigma_k = [sigma_global] * ca.num_cells
+                routing_sigmas.append([float(v) for v in sigma_k])
+
+                # ── Diag 3: argmax(μ_low) vs argmax(u) consistency ──
+                argmax_u = u_fuzzy.argmax(dim=-1).cpu()
+                align = (argmax_u == argmax_mu_low).float().mean().item()
+                routing_aligns.append(float(align))
+
     if not routing_entropies:
         return {"_verdict": "⚠️  NO CellAttention blocks found"}
 
@@ -375,6 +398,10 @@ def metric_routing_entropy(model, dataloader, device):
         "num_blocks_measured": len(routing_entropies),
         "per_block_entropy": [float(e) for e in routing_entropies],
         "per_block_max_frac": [float(f) for f in routing_max_counts],
+        # ── Diagnostic: why does routing collapse? ──
+        "diag_u_mean_per_block": routing_u_means,
+        "diag_sigma_per_block": routing_sigmas,
+        "diag_align_mu_vs_u": routing_aligns,
     }
 
     if avg_max_frac > 0.8:
