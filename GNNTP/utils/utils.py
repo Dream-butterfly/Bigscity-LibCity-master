@@ -267,3 +267,76 @@ def set_random_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
+
+
+def detect_checkpoint_model_params(checkpoint_path: str) -> dict[str, int]:
+    """从 checkpoint state_dict 中自动检测模型超参数。
+
+    扫描 state_dict 的 key/shape，推断 num_cells 和 fuzzy_num_sets。
+    用于继续训练/评估时自动对齐 checkpoint 中的模型结构与当前配置。
+
+    Args:
+        checkpoint_path: checkpoint 文件路径
+
+    Returns:
+        dict: 检测到的参数，可能包含 'num_cells', 'fuzzy_num_sets'。
+              文件不存在或无可识别参数时返回空 dict。
+    """
+    if not os.path.exists(checkpoint_path):
+        return {}
+
+    try:
+        state_dict = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+        if "model_state_dict" in state_dict:
+            state_dict = state_dict["model_state_dict"]
+    except Exception:
+        return {}
+
+    detected: dict[str, int] = {}
+
+    # num_cells: 从 region_mu 形状检测 → shape = [num_cells, hidden_dim]
+    for key in state_dict:
+        if key.endswith("cell_attention.region_mu"):
+            tensor = state_dict[key]
+            if hasattr(tensor, "ndim") and tensor.ndim >= 1:
+                detected["num_cells"] = int(tensor.shape[0])
+                break
+
+    # fuzzy_num_sets: 从 fuzzy_to_cell.weight 形状检测 → shape = [num_cells, fuzzy_num_sets]
+    for key in state_dict:
+        if key.endswith("cell_attention.fuzzy_to_cell.weight"):
+            tensor = state_dict[key]
+            if hasattr(tensor, "ndim") and tensor.ndim >= 2:
+                detected["fuzzy_num_sets"] = int(tensor.shape[1])
+                break
+
+    return detected
+
+
+def align_checkpoint_config(config: dict, checkpoint_path: str, logger=None) -> list[str]:
+    """自动检测 checkpoint 超参数并对齐 config。
+
+    从 checkpoint 中推断 num_cells / fuzzy_num_sets 等，
+    若与 config 当前值不一致则自动覆盖（原地修改 config）。
+
+    Args:
+        config: 配置字典（会被原地修改）
+        checkpoint_path: checkpoint 文件路径
+        logger: 可选的 logger，用于记录对齐信息
+
+    Returns:
+        list[str]: 本次对齐中被覆盖的参数名列表
+    """
+    ckpt_params = detect_checkpoint_model_params(checkpoint_path)
+    overridden: list[str] = []
+    for name, value in ckpt_params.items():
+        old_value = config.get(name)
+        if old_value is not None and old_value != value:
+            if logger:
+                logger.warning(
+                    "Checkpoint %s=%d ≠ config %s=%d, auto-overriding config.",
+                    name, value, name, old_value,
+                )
+            config[name] = value
+            overridden.append(name)
+    return overridden

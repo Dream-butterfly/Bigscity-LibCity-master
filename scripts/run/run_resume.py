@@ -16,6 +16,7 @@ from GNNTP.common import ConfigParser
 from GNNTP.data import build_dataset_runtime
 from GNNTP.utils import (
     add_general_args,
+    align_checkpoint_config,
     ensure_run_id,
     get_executor,
     get_logger,
@@ -46,6 +47,12 @@ def run_resume(task=None, model_name=None, dataset_name=None, config_file=None, 
 
     seed = config.get("seed", 0)
     set_random_seed(seed)
+
+    # ── 自动检测 checkpoint 中的 num_cells / fuzzy_num_sets，确保模型结构与 checkpoint 匹配 ──
+    if epoch > 0:
+        _cache_dir = get_run_subdir(exp_id, "model_cache")
+        _ckpt_path = os.path.join(_cache_dir, f"{model_name}_{dataset_name}_epoch{epoch}.tar")
+        align_checkpoint_config(config.config, _ckpt_path, logger)
 
     runtime = build_dataset_runtime(config)
 

@@ -25,6 +25,7 @@ from GNNTP.data.artifact_io import load_run_meta
 from GNNTP.data import build_artifact_runtime
 from GNNTP.utils import (
     add_general_args,
+    align_checkpoint_config,
     get_executor,
     get_logger,
     get_model,
@@ -162,6 +163,9 @@ def run_eval_checkpoint(
                 _ckpt_layers, _config_layers,
             )
             config.config["denoiser_layers"] = _ckpt_layers
+
+    # ── 自动检测 num_cells / fuzzy_num_sets，确保模型结构与 checkpoint 匹配 ──
+    _overridden = align_checkpoint_config(config.config, _ckpt_path, logger)
 
     model = get_model(config, runtime.data_feature)
     executor = get_executor(config, model, runtime.data_feature)
