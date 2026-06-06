@@ -160,6 +160,8 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         #   diversity:  penalises HIGH pairwise cosine → heterogeneous μ
         self.membership_sharpness_weight = config.get(
             "membership_sharpness_weight", 0.02)
+        self.membership_sharpness_mode = config.get(
+            "membership_sharpness_mode", "gini")  # "gini" | "entropy"
         self.membership_diversity_weight = config.get(
             "membership_diversity_weight", 0.01)
 
@@ -566,24 +568,34 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
     # ═══════════════════════════════════════════════════════════
 
     def _membership_sharpness_loss(self, node_features=None):
-        """Penalise HIGH per-node Shannon entropy.
+        """Penalise HIGH per-node membership dispersion.
 
-        Pushes each node toward a peaked (low-entropy) membership
-        distribution.  This directly attacks the root cause of membership
-        collapse: uniform [1/K, ..., 1/K] vectors that produce a dense,
+        Pushes each node toward a peaked membership distribution.
+        This directly attacks the root cause of membership collapse:
+        uniform [1/K, ..., 1/K] vectors that produce a dense,
         undifferentiated fuzzy relation graph.
 
-        H(i) = -Σ_k p(k|i)·log p(k|i)  where p(k|i) ∝ μ_mid(i,k).
-        Lower H → more peaked → node commits to specific fuzzy sets.
+        Two modes (controlled by config membership_sharpness_mode):
+          - "gini":    Gini impurity  = 1 - Σ_k p(k|i)²
+                       Gradient ∝ -2p_k, strongest at p≈0.5.
+                       Better for pushing mid-range μ toward 0/1.
+          - "entropy": Shannon entropy = -Σ_k p(k|i)·log p(k|i)
+                       Gradient ∝ -(1+log p_k), strongest near p≈0.
+                       Weaker when membership is already in [0.1, 0.4].
+
         With K=8 sets, nodes naturally distribute across 8 peaks.
 
         Returns:
-            scalar: mean per-node Shannon entropy.
+            scalar: mean per-node sharpness (lower = more peaked).
         """
         _, _, mu_mid = self.fuzzy_graph._compute_memberships(node_features)
         p = mu_mid / mu_mid.sum(dim=-1, keepdim=True).clamp_min(1e-8)
-        H = -(p * (p + 1e-8).log()).sum(dim=-1)  # [N]
-        return H.mean()
+        if self.membership_sharpness_mode == "entropy":
+            H = -(p * (p + 1e-8).log()).sum(dim=-1)  # [N]
+            return H.mean()
+        else:  # "gini" (default)
+            G = 1.0 - (p ** 2).sum(dim=-1)  # [N]
+            return G.mean()
 
     def _membership_diversity_loss(self, node_features=None):
         """Penalise HIGH pairwise cosine similarity across nodes.

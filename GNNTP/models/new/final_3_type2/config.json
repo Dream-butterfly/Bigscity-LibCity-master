@@ -36,6 +36,7 @@
   "sparsification_epsilon": 0.05,
   "fou_entropy_align_weight": 0.01,
   "membership_sharpness_weight": 0.02,
+  "membership_sharpness_mode": "gini",
   "membership_diversity_weight": 0.01,
   "scaler": "standard",
   "load_external": false,
