@@ -207,9 +207,9 @@ def metric_membership_entropy(model):
     m = _unwrap(model)
     fg = m.fuzzy_graph
     with torch.no_grad():
-        mu_low, mu_high, mu_mid = fg._compute_memberships()
-        # Shannon entropy on (static) midpoint membership
-        p = mu_mid / mu_mid.sum(dim=-1, keepdim=True).clamp_min(1e-8)
+        # Use μ_low (softmax, competitive) — not μ_mid which is diluted by delta
+        mu_low, _, _ = fg._compute_memberships()
+        p = mu_low  # already a probability simplex
         H = -(p * (p + 1e-8).log()).sum(dim=-1)  # [N]
 
     H_np = H.cpu().numpy()
@@ -256,10 +256,10 @@ def metric_pairwise_cosine(model):
     m = _unwrap(model)
     fg = m.fuzzy_graph
     with torch.no_grad():
-        _, _, mu_mid = fg._compute_memberships()
+        mu_low, _, _ = fg._compute_memberships()
 
     # Normalize rows
-    mu_norm = F.normalize(mu_mid, p=2, dim=-1)  # [N, K]
+    mu_norm = F.normalize(mu_low, p=2, dim=-1)  # [N, K]
 
     # Compute all-pairs cosine (memory-efficient for N < 500)
     N = mu_norm.shape[0]
@@ -324,10 +324,18 @@ def metric_routing_entropy(model, dataloader, device):
     fg = m.fuzzy_graph
     with torch.no_grad():
         mu_fuzzy = fg.get_memberships(history).to(device)
+        # Static μ_low for membership→routing alignment diagnostic
+        mu_low_static, _, _ = fg._compute_memberships()
+        argmax_mu_low = mu_low_static.argmax(dim=-1).cpu()  # [N]
 
     # Collect routing weights from each CellAttention block
     routing_entropies = []
     routing_max_counts = []
+    routing_u_means = []     # Diag 1: u.mean(0) per block
+    routing_sigmas = []      # Diag 2: σ_k per block
+    routing_aligns = []      # Diag 3: argmax(μ_low) vs argmax(u)
+    routing_dist_sq_stats = []   # Diag 4: dist_sq statistics
+    routing_sigma_sq_stats = []  # Diag 4: σ² statistics
 
     for block_list in [m.condition_encoder.blocks, m.future_decoder.blocks]:
         for blk in block_list:
@@ -360,6 +368,43 @@ def metric_routing_entropy(model, dataloader, device):
                 max_frac = (argmax_counts.max() / argmax_counts.sum()).item()
                 routing_max_counts.append(max_frac)
 
+                # ── Diag 1: per-region average raw u (before B normalization) ──
+                u_mean_k = u_fuzzy.mean(dim=0).cpu().tolist()
+                routing_u_means.append([float(v) for v in u_mean_k])
+
+                # ── Diag 2: per-region σ_k (fuzziness / bandwidth) ──
+                if ca.use_fuzzy_routing:
+                    sigma_k = (F.softplus(ca.region_log_sigma) + 0.05).detach().cpu().tolist()
+                else:
+                    sigma_global = float((F.softplus(ca.log_sigma_sq) + 0.01).detach().cpu())
+                    sigma_k = [sigma_global] * ca.num_cells
+                routing_sigmas.append([float(v) for v in sigma_k])
+
+                # ── Diag 3: argmax(μ_low) vs argmax(u) consistency ──
+                argmax_u = u_fuzzy.argmax(dim=-1).cpu()
+                align = (argmax_u == argmax_mu_low).float().mean().item()
+                routing_aligns.append(float(align))
+
+                # ── Diag 4: dist_sq vs σ² scale check ──
+                if ca.use_fuzzy_routing:
+                    diff = node_repr.unsqueeze(1) - ca.region_mu.unsqueeze(0)
+                    dist_sq = diff.pow(2).sum(dim=-1)
+                    sigma_k = F.softplus(ca.region_log_sigma).unsqueeze(0) + 0.05
+                else:
+                    diff = node_repr.unsqueeze(1) - ca.centers.unsqueeze(0)
+                    dist_sq = diff.pow(2).sum(dim=-1)
+                    sigma_k = (F.softplus(ca.log_sigma_sq) + 0.01).expand_as(dist_sq)
+                routing_dist_sq_stats.append({
+                    "mean": float(dist_sq.mean()),
+                    "std": float(dist_sq.std()),
+                    "max": float(dist_sq.max()),
+                })
+                routing_sigma_sq_stats.append({
+                    "mean": float((sigma_k ** 2).mean()),
+                    "min": float((sigma_k ** 2).min()),
+                    "max": float((sigma_k ** 2).max()),
+                })
+
     if not routing_entropies:
         return {"_verdict": "⚠️  NO CellAttention blocks found"}
 
@@ -375,6 +420,12 @@ def metric_routing_entropy(model, dataloader, device):
         "num_blocks_measured": len(routing_entropies),
         "per_block_entropy": [float(e) for e in routing_entropies],
         "per_block_max_frac": [float(f) for f in routing_max_counts],
+        # ── Diagnostic: why does routing collapse? ──
+        "diag_u_mean_per_block": routing_u_means,
+        "diag_sigma_per_block": routing_sigmas,
+        "diag_align_mu_vs_u": routing_aligns,
+        "diag_dist_sq_stats": routing_dist_sq_stats,
+        "diag_sigma_sq_stats": routing_sigma_sq_stats,
     }
 
     if avg_max_frac > 0.8:
@@ -435,8 +486,8 @@ def metric_fou_error_correlation(model, dataloader, device, num_batches=20):
     fou_per_set = (mu_high - mu_low).mean(dim=0).cpu().numpy()  # [K]
     # For per-set, we correlate with the mean error of nodes dominated by that set
     with torch.no_grad():
-        _, _, mu_mid = fg._compute_memberships()
-        argmax_set = mu_mid.argmax(dim=-1).cpu().numpy()  # [N]
+        mu_low, _, _ = fg._compute_memberships()
+        argmax_set = mu_low.argmax(dim=-1).cpu().numpy()  # [N]
     set_errors = []
     set_fous = []
     for k in range(m.fuzzy_num_sets):
@@ -570,9 +621,9 @@ def metric_set_utilization(model):
     m = _unwrap(model)
     fg = m.fuzzy_graph
     with torch.no_grad():
-        _, _, mu_mid = fg._compute_memberships()
+        mu_low, _, _ = fg._compute_memberships()
 
-    mu_np = mu_mid.cpu().numpy()                                    # [N, K]
+    mu_np = mu_low.cpu().numpy()                                    # [N, K]
     global_mean = mu_np.mean()
     u_k = mu_np.mean(axis=0) / global_mean                          # [K]
 
@@ -637,10 +688,10 @@ def metric_membership_peak(model):
     m = _unwrap(model)
     fg = m.fuzzy_graph
     with torch.no_grad():
-        _, _, mu_mid = fg._compute_memberships()
+        mu_low, _, _ = fg._compute_memberships()
 
-    # Normalize to probability simplex (same as M1)
-    p = mu_mid / mu_mid.sum(dim=-1, keepdim=True).clamp_min(1e-8)
+    # μ_low is softmax output — already a probability simplex
+    p = mu_low
     p_np = p.cpu().numpy()
     N, K = p_np.shape
 

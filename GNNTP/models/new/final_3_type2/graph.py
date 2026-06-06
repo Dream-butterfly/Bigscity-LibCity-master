@@ -587,16 +587,17 @@ class FuzzyRelationalGraphLearner(nn.Module):
     # ═══════════════════════════════════════════════════════════════
 
     def get_memberships(self, node_features=None):
-        """Return midpoint memberships for FRR conditioning.
+        """Return competitive (softmax) memberships for FRR conditioning.
 
-        Uses the midpoint μ_mid = (μ_low + μ_high) / 2 —
-        the most representative single-valued membership.
+        Returns μ_low (softmax simplex) instead of μ_mid.
+        μ_mid is diluted by μ_delta·(1-μ_low) which equalises the
+        distribution, weakening the fuzzy→cell routing gate.
 
         Args:
             node_features: Optional [B,T,N,D] for dynamic membership.
         """
-        _, _, mu_mid = self._compute_memberships(node_features)
-        return mu_mid  # [N, K]
+        mu_low, _, _ = self._compute_memberships(node_features)
+        return mu_low  # [N, K] — softmax simplex, competitive
 
     def get_interval_memberships(self):
         """Return full interval memberships [μ_low, μ_high].
