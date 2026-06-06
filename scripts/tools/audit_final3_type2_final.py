@@ -60,7 +60,7 @@ def _infer_config_overrides(ckpt_state):
         feature_dim_override = ckpt_state[_ip_w].shape[1]          # in_features
 
     # ── ffn_hidden_dim ──
-    _ffn_w = "condition_encoder.blocks.0.feed_forward.linear1.weight"
+    _ffn_w = "condition_encoder.blocks.0.feed_forward.network.0.weight"
     if _ffn_w in ckpt_state:
         overrides["ffn_hidden_dim"] = ckpt_state[_ffn_w].shape[0]
 
@@ -135,6 +135,18 @@ def load_model_robust(args):
             if isinstance(v, (dict, list, str, int, float, bool, type(None))):
                 other_args[k] = v  # config_file 覆盖 checkpoint 推断
         print(f"  Merged {len(file_config)} config keys from {args.config_file}")
+
+        # ── Restore checkpoint-inferred dimensions (truth source) ──
+        # Config file defaults must not override dimension keys inferred
+        # from the checkpoint, as they cause shape mismatches in
+        # FeedForwardNetwork and other dimension-dependent layers.
+        _DIMENSION_KEYS = {
+            'hidden_dim', 'ffn_hidden_dim', 'fuzzy_num_sets',
+            'num_cells', 'encoder_layers', 'decoder_layers',
+        }
+        for k in _DIMENSION_KEYS:
+            if k in ckpt_overrides:
+                other_args[k] = ckpt_overrides[k]
 
     if args.other_args:
         other_args.update(json.loads(args.other_args))  # 用户显式 other_args 最高优先级

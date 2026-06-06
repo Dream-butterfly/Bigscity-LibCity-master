@@ -184,6 +184,8 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
             "membership_sharpness_mode", "gini")  # "gini" | "entropy"
         self.membership_diversity_weight = config.get(
             "membership_diversity_weight", 0.01)
+        self.membership_variance_weight = config.get(
+            "membership_variance_weight", 0.0)
 
         # ── Device ────────────────────────────────────────────
         self.device = config.get("device", torch.device("cpu"))
@@ -528,6 +530,9 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         if self.membership_diversity_weight > 0:
             total = total + self.membership_diversity_weight * self._membership_diversity_loss(
                 node_features=history_sequence)
+        if self.membership_variance_weight > 0:
+            total = total + self.membership_variance_weight * self._membership_variance_loss(
+                node_features=history_sequence)
 
         # ── FIR: Fuzzy Interaction Regularization ──
         eff_weight = self._get_effective_reg_weight()
@@ -584,6 +589,11 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
                 div_val = self.membership_diversity_weight * self._membership_diversity_loss(
                     node_features=history_sequence)
                 buf["div_loss"] = buf.get("div_loss", 0.0) + div_val.item()
+
+            if self.membership_variance_weight > 0:
+                var_val = self.membership_variance_weight * self._membership_variance_loss(
+                    node_features=history_sequence)
+                buf["var_loss"] = buf.get("var_loss", 0.0) + var_val.item()
 
             # ── FOU statistics ──
             if self._current_fou is not None:
@@ -663,6 +673,24 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         N = sim.shape[0]
         mask = ~torch.eye(N, dtype=torch.bool, device=sim.device)
         return sim[mask].mean()
+
+    def _membership_variance_loss(self, node_features=None):
+        """Maximise per-fuzzy-set cross-node variance.
+
+        Unlike diversity loss (pairwise cosine), this loss has non-zero
+        gradient at the homogeneous state where all nodes share identical
+        membership vectors.  It directly rewards per-set variance across
+        nodes, providing a strong symmetry-breaking signal early in
+        training that self-attenuates as membership differentiates.
+
+             L_var = -mean_k( sqrt(Var_i(μ_{i,k}) + ε) )
+
+        Returns:
+            scalar: negative of per-set std (lower = more variance).
+        """
+        _, _, mu_mid = self.fuzzy_graph._compute_memberships(node_features)
+        set_var = mu_mid.var(dim=0)                         # [K]
+        return -(set_var + 1e-8).sqrt().mean()
 
     def _get_effective_reg_weight(self):
         """Linearly ramp FIR weight over warmup steps."""
@@ -877,8 +905,37 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         """
         if self._diag_count == 0:
             return {}
-        return {k: round(v / self._diag_count, 6)
-                for k, v in self._diag_buffer.items()}
+        result = {k: round(v / self._diag_count, 6)
+                  for k, v in self._diag_buffer.items()}
+
+        # ── Per-epoch membership diagnostics (M1/M2) ──────────
+        # Computed once at epoch end from current membership params.
+        # Not averaged across batches — reflects the final model state.
+        try:
+            with torch.no_grad():
+                _, _, mu_mid = self.fuzzy_graph._compute_memberships()
+                p = mu_mid / mu_mid.sum(dim=-1, keepdim=True).clamp_min(1e-8)
+                H = -(p * (p + 1e-8).log()).sum(dim=-1)
+                result["M1_H_norm"] = round(
+                    float(H.mean() / math.log(self.fuzzy_num_sets)), 4)
+                # M2: pairwise cosine (sampled for large N)
+                mu_norm = F.normalize(mu_mid, p=2, dim=-1)
+                N = mu_norm.shape[0]
+                if N <= 500:
+                    sim = mu_norm @ mu_norm.T
+                    mask = ~torch.eye(N, dtype=torch.bool, device=mu_norm.device)
+                    cosine = sim[mask].mean().item()
+                else:
+                    idx_i = torch.randint(0, N, (5000,), device=mu_norm.device)
+                    idx_j = torch.randint(0, N, (5000,), device=mu_norm.device)
+                    valid = idx_i != idx_j
+                    cosine = (mu_norm[idx_i] * mu_norm[idx_j]).sum(
+                        dim=-1)[valid].mean().item()
+                result["M2_cosine"] = round(float(cosine), 4)
+        except Exception:
+            pass
+
+        return result
 
     # ═══════════════════════════════════════════════════════════
     #  Type-2 specific diagnostics
