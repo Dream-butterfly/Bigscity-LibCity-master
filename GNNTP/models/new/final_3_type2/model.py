@@ -545,13 +545,13 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
             if self._prev_mu is not None:
                 buf["mu_change"] = buf.get("mu_change", 0.0) + (
                     mu - self._prev_mu).abs().mean().item()
-            self._prev_mu = mu.detach().cpu()
+            self._prev_mu = mu.detach()
 
             if self._prev_S is not None and fuzzy_R is not None:
                 buf["S_change"] = buf.get("S_change", 0.0) + (
-                    fuzzy_R - self._prev_S.to(fuzzy_R.device)).abs().mean().item()
+                    fuzzy_R - self._prev_S).abs().mean().item()
             if fuzzy_R is not None:
-                self._prev_S = fuzzy_R.detach().cpu()
+                self._prev_S = fuzzy_R.detach()
 
             self._diag_count += 1
 
