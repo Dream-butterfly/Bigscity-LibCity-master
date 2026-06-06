@@ -116,6 +116,14 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         self.physics_channel_idx = config.get("physics_channel_idx", 0)
         self._train_step_count = 0
 
+        # ── Loss function configuration ───────────────────────────
+        #   "nll"    : Gaussian NLL (μ + log_var) — heteroscedastic regression
+        #   "mae"    : L1 loss on μ_hat only — standard traffic prediction
+        #   "hybrid" : MAE + λ·NLL — μ_hat dominant, log_var auxiliary
+        self.loss_mode = config.get("loss_mode", "nll")
+        self.nll_weight = config.get("nll_weight", 0.1)       # λ for hybrid mode
+        self.log_var_clamp_min = config.get("log_var_clamp_min", -1.5)
+
         # ── Route 1: Fuzzy Semantic Closure ─────────────────────
         self.use_semantic_closure = config.get(
             "use_semantic_closure", True)
@@ -481,13 +489,22 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         output = self.future_decoder(
             condition, fuzzy_R, graph_dist=self.graph_dist, mu_fuzzy=mu)
 
-        # ── Split μ and log σ², clamp σ² ≥ exp(-1.5) ≈ 0.22 ──
+        # ── Split μ and log σ² ──
         mu_hat = output[..., :self.output_dim]
-        log_var = output[..., self.output_dim:].clamp(min=-1.5)
+        log_var = output[..., self.output_dim:].clamp(min=self.log_var_clamp_min)
 
-        # ── NLL for diagonal Gaussian ──
-        nll = 0.5 * (LOG_2PI + log_var + torch.exp(-log_var) * (mu_hat - future_sequence) ** 2)
-        total = nll.mean()
+        # ── MAE (always computed for diagnostics) ──
+        mae = (mu_hat - future_sequence).abs().mean()
+
+        # ── Primary loss ──
+        if self.loss_mode == "mae":
+            total = mae
+        elif self.loss_mode == "hybrid":
+            nll = 0.5 * (LOG_2PI + log_var + torch.exp(-log_var) * (mu_hat - future_sequence) ** 2)
+            total = mae + self.nll_weight * nll.mean()
+        else:  # "nll" (default, backward compatible)
+            nll = 0.5 * (LOG_2PI + log_var + torch.exp(-log_var) * (mu_hat - future_sequence) ** 2)
+            total = nll.mean()
 
         # ── Membership regularisation (sharpness + diversity) ──
         if self.membership_sharpness_weight > 0:
@@ -509,8 +526,10 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
                 reg_loss = 0.0
             total = total + eff_weight * reg_loss
 
-        # ── Type-2 FOU → log_var alignment ──
-        if self.use_type2_fuzzy and self.fou_entropy_align_weight > 0:
+        # ── Type-2 FOU → log_var alignment (nll/hybrid only) ──
+        if (self.loss_mode in ("nll", "hybrid")
+                and self.use_type2_fuzzy
+                and self.fou_entropy_align_weight > 0):
             total = total + self.fou_entropy_align_weight * self._fou_entropy_alignment(log_var)
 
         # ════════════════════════════════════════════════
@@ -520,7 +539,16 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
             buf = self._diag_buffer
 
             # ── Sub-loss decomposition ──
-            buf["pred_loss"] = buf.get("pred_loss", 0.0) + nll.mean().item()
+            buf["pred_loss"] = buf.get("pred_loss", 0.0) + mae.item()
+
+            # ── log_var statistics (critical for NLL diagnosis) ──
+            buf["logvar_mean"] = buf.get("logvar_mean", 0.0) + log_var.mean().item()
+            buf["logvar_std"]  = buf.get("logvar_std",  0.0) + log_var.std().item()
+            buf["logvar_min"]  = buf.get("logvar_min",  0.0) + log_var.min().item()
+            buf["logvar_max"]  = buf.get("logvar_max",  0.0) + log_var.max().item()
+
+            if self.loss_mode in ("nll", "hybrid"):
+                buf["nll_raw"] = buf.get("nll_raw", 0.0) + nll.mean().item()
 
             if eff_weight > 0 and self.fir_mode != "none":
                 buf["fir_loss"] = buf.get("fir_loss", 0.0) + (eff_weight * reg_loss).item()
