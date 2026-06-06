@@ -165,6 +165,14 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         self.membership_diversity_weight = config.get(
             "membership_diversity_weight", 0.01)
 
+        # ── Membership temperature annealing ───────────────────
+        self.membership_temperature_init = config.get(
+            "membership_temperature", 1.0)
+        self.membership_temperature_min = config.get(
+            "membership_temperature_min", 0.3)
+        self.membership_temperature_anneal_steps = config.get(
+            "membership_temperature_anneal_steps", 8000)
+
         # ── Device ────────────────────────────────────────────
         self.device = config.get("device", torch.device("cpu"))
 
@@ -448,6 +456,7 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         """Forward entry. Training → returns loss. Inference → predicts."""
         if self.training:
             self._train_step_count += 1
+            self._anneal_membership_temperature()
             return self.calculate_loss(batch)
         return self.predict(batch)
 
@@ -539,6 +548,9 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
             if self._current_fou is not None:
                 buf["fou_mean"] = buf.get("fou_mean", 0.0) + self._current_fou.mean().item()
 
+            # ── Membership temperature ──
+            buf["mem_temp"] = buf.get("mem_temp", 0.0) + self.fuzzy_graph.membership_temperature
+
             # ── Membership dispersion (cross-node std) ──
             mu_std_val = mu.std(dim=0).mean().item()
             buf["mu_std"] = buf.get("mu_std", 0.0) + mu_std_val
@@ -609,6 +621,27 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         N = sim.shape[0]
         mask = ~torch.eye(N, dtype=torch.bool, device=sim.device)
         return sim[mask].mean()
+
+    def _anneal_membership_temperature(self):
+        """Linearly decay membership temperature toward minimum.
+
+        τ starts at membership_temperature_init (default 1.0)
+        and linearly decays to membership_temperature_min (default 0.3)
+        over membership_temperature_anneal_steps.
+
+        Lower τ → sharper sigmoid → membership pushed to 0/1 extremes.
+        """
+        if self.membership_temperature_anneal_steps <= 0:
+            return
+        steps = self._train_step_count
+        total = self.membership_temperature_anneal_steps
+        if steps >= total:
+            tau = self.membership_temperature_min
+        else:
+            frac = steps / total
+            tau = (self.membership_temperature_init
+                   + frac * (self.membership_temperature_min - self.membership_temperature_init))
+        self.fuzzy_graph.set_temperature(tau)
 
     def _get_effective_reg_weight(self):
         """Linearly ramp FIR weight over warmup steps."""

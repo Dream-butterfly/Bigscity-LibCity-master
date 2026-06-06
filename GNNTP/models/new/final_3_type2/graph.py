@@ -204,6 +204,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self.num_nodes = num_nodes
         self.num_fuzzy_sets = num_fuzzy_sets
         self.sparsification_epsilon = sparsification_epsilon
+        self.membership_temperature = 1.0  # annealed during training
 
         # ── Type-2 interval membership parameters ─────────────────
         # μ_low  = σ(θ_lower)           ∈ [0, 1]
@@ -271,8 +272,9 @@ class FuzzyRelationalGraphLearner(nn.Module):
             mu_high: [N, K] upper membership bound, ≥ mu_low elementwise.
             mu_mid:  [N, K] midpoint = (mu_low + mu_high) / 2.
         """
-        mu_low = torch.sigmoid(self.base_membership_lower)          # [N, K]
-        mu_delta = torch.sigmoid(self.base_membership_delta)        # [N, K]
+        tau = max(self.membership_temperature, 0.05)  # prevent div by zero
+        mu_low = torch.sigmoid(self.base_membership_lower / tau)    # [N, K]
+        mu_delta = torch.sigmoid(self.base_membership_delta / tau)  # [N, K]
         mu_high = mu_low + mu_delta * (1.0 - mu_low)               # [N, K]
 
         if node_features is not None:
@@ -286,7 +288,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
             if self.raw_projection is not None:
                 node_feat = self.raw_projection(node_feat)
 
-            mu_feat = torch.sigmoid(self.feature_to_membership(node_feat))  # [N, K]
+            mu_feat = torch.sigmoid(self.feature_to_membership(node_feat) / tau)  # [N, K]
 
             # Blend feature into center with stronger feature modulation.
             # Higher feature weight (60%) ensures traffic-conditioned
@@ -299,6 +301,15 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
         mu_mid = (mu_low + mu_high) / 2.0
         return mu_low, mu_high, mu_mid
+
+    def set_temperature(self, tau: float):
+        """Update membership temperature for annealing.
+
+        Lower τ → sigmoid outputs pushed toward 0/1 extremes,
+        encouraging sharper fuzzy set membership.
+        τ=1.0 is identity (default), τ→0 is near-hard assignment.
+        """
+        self.membership_temperature = max(tau, 0.05)
 
     # ═══════════════════════════════════════════════════════════════
     #  Interval Relation Construction
