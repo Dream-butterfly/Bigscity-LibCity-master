@@ -99,16 +99,16 @@ class STID(AbstractTrafficStateModel):
     def forward(self, batch):
         # prepare data
         input_data = batch['X']  # [B, L, N, C]
-        time_series = input_data[..., :1]
+        time_series = input_data[..., :self.output_dim]
 
         if self.if_time_in_day:
-            tid_data = input_data[..., 1]
+            tid_data = input_data[..., self.output_dim]
             time_in_day_emb = self.time_in_day_emb[
                 (tid_data[:, -1, :] * self.time_of_day_size).type(torch.LongTensor)]
         else:
             time_in_day_emb = None
         if self.if_day_in_week:
-            diw_data = torch.argmax(input_data[..., 2:], dim=-1)
+            diw_data = torch.argmax(input_data[..., self.output_dim + int(self.if_time_in_day):], dim=-1)
             day_in_week_emb = self.day_in_week_emb[
                 (diw_data[:, -1, :]).type(torch.LongTensor)]
         else:
