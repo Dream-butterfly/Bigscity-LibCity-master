@@ -159,6 +159,8 @@ def load_model_robust(args):
 
     # ── Step 5: 用正确的维度构建模型 → 直接 load_state_dict ──
     model = get_model(config, runtime.data_feature).to(device)
+    if ckpt_feature_dim is not None:
+        model._trim_dim = ckpt_feature_dim  # 告诉 _trim() 裁剪数据最后一维
 
     model_state = model.state_dict()
     loaded = 0
