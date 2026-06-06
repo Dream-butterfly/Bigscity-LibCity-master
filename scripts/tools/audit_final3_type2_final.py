@@ -135,14 +135,45 @@ def load_model_robust(args):
     # Load all params
     model_state = model.state_dict()
     loaded = 0
+    skipped_shape = []
+    skipped_missing = []
     for key, val in ckpt_state.items():
-        if key in model_state and model_state[key].shape == val.shape:
-            model_state[key].copy_(val)
-            loaded += 1
+        if key in model_state:
+            if model_state[key].shape == val.shape:
+                model_state[key].copy_(val)
+                loaded += 1
+            else:
+                skipped_shape.append(
+                    f"    {key}: ckpt{tuple(val.shape)} vs model{tuple(model_state[key].shape)}")
+        else:
+            skipped_missing.append(f"    {key}")
+
+    # Also check: params in model but NOT in checkpoint
+    ckpt_keys = set(ckpt_state.keys())
+    model_keys = set(model_state.keys())
+    missing_from_ckpt = model_keys - ckpt_keys - {
+        'fuzzy_graph.static_adjacency'}  # buffer, not param
 
     total = len(model_state)
     print(f"  ✅ Loaded {loaded}/{total} params"
           + (f" (skipped {total - loaded})" if loaded < total else ""))
+
+    if skipped_shape:
+        print(f"  ⚠️  {len(skipped_shape)} params SKIPPED (shape mismatch):")
+        for s in skipped_shape:
+            print(s)
+
+    if skipped_missing:
+        print(f"  ⚠️  {len(skipped_missing)} ckpt keys NOT in model:")
+        for s in skipped_missing:
+            print(s)
+
+    if missing_from_ckpt:
+        print(f"  ⚠️  {len(missing_from_ckpt)} model keys NOT in checkpoint (random init):")
+        for k in sorted(missing_from_ckpt)[:10]:
+            print(f"    {k}: shape={tuple(model_state[k].shape)}")
+        if len(missing_from_ckpt) > 10:
+            print(f"    ... and {len(missing_from_ckpt)-10} more")
 
     model.eval()
     return model, dataloader, device, runtime

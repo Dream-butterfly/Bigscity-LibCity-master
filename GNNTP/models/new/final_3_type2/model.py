@@ -455,8 +455,6 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
     def forward(self, batch):
         """Forward entry. Training → returns loss. Inference → predicts."""
         if self.training:
-            self._train_step_count += 1
-            self._anneal_membership_temperature()
             return self.calculate_loss(batch)
         return self.predict(batch)
 
@@ -483,6 +481,8 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         FIR:        Łukasiewicz fuzzy interaction regularization.
         FOU-align:  FOU width → log_var projection → aligned with learned log_var.
         """
+        self._train_step_count += 1
+        self._anneal_membership_temperature()
         history_sequence = batch["X"]
         future_sequence = batch["y"][..., :self.output_dim]
 
