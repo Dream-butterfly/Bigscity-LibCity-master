@@ -258,24 +258,34 @@ class FuzzyRelationalGraphLearner(nn.Module):
     def _compute_memberships(self, node_features=None):
         """Compute interval membership [μ_low, μ_high] for all nodes.
 
-        μ_low  = σ(θ_lower)                     ∈ [0, 1]^K
-        μ_high = μ_low + σ(θ_delta)·(1−μ_low)   ∈ [μ_low, 1]^K
+        μ_low  = softmax(θ_lower / τ)            ∈ Δ^{K-1} (simplex)
+        μ_delta = σ(θ_delta / τ)                 ∈ [0, 1]^K
+        μ_high = μ_low + μ_delta·(1−μ_low)       ∈ [μ_low, 1]^K
+
+        Softmax on μ_low enforces competition across the K fuzzy sets:
+        if one set gains membership, another must lose it.  This directly
+        attacks the "uniform spread" problem where sigmoid allows all K
+        sets to activate independently at ~0.5.
+
+        μ_delta stays sigmoid: interval width is a per-dimension
+        independent property (FOU), not a zero-sum resource.
 
         Feature conditioning (when node_features is provided):
-          Adjusts the interval center while preserving the FOU proportion.
+          Blends traffic-conditioned softmax μ_feat into the interval
+          center while preserving the FOU half-width.
 
         Args:
             node_features: Optional [B,T,N,D] / [B,N,D] / [N,D].
 
         Returns:
-            mu_low:  [N, K] lower membership bound.
+            mu_low:  [N, K] lower membership bound (softmax, Σ_k ≈ 1).
             mu_high: [N, K] upper membership bound, ≥ mu_low elementwise.
             mu_mid:  [N, K] midpoint = (mu_low + mu_high) / 2.
         """
         tau = max(self.membership_temperature, 0.05)  # prevent div by zero
-        mu_low = torch.sigmoid(self.base_membership_lower / tau)    # [N, K]
-        mu_delta = torch.sigmoid(self.base_membership_delta / tau)  # [N, K]
-        mu_high = mu_low + mu_delta * (1.0 - mu_low)               # [N, K]
+        mu_low = F.softmax(self.base_membership_lower / tau, dim=-1)   # [N, K]
+        mu_delta = torch.sigmoid(self.base_membership_delta / tau)     # [N, K]
+        mu_high = mu_low + mu_delta * (1.0 - mu_low)                  # [N, K]
 
         if node_features is not None:
             if node_features.dim() == 4:       # [B, T, N, D]
@@ -288,7 +298,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
             if self.raw_projection is not None:
                 node_feat = self.raw_projection(node_feat)
 
-            mu_feat = torch.sigmoid(self.feature_to_membership(node_feat) / tau)  # [N, K]
+            mu_feat = F.softmax(self.feature_to_membership(node_feat) / tau, dim=-1)  # [N, K]
 
             # Blend feature into center with stronger feature modulation.
             # Higher feature weight (60%) ensures traffic-conditioned
