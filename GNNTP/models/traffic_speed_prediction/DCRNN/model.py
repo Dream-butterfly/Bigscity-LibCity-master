@@ -107,20 +107,23 @@ class GCONV(nn.Module):
         if self._max_diffusion_step == 0:
             pass
         else:
-            for support in supports:
-                # CUDA sparse.mm doesn't support FP16 (Half), cast support to FP32
-                if original_dtype != torch.float32:
-                    support = support.float()
-                # T1=L x1=T1*x=L*x
-                x1 = torch.sparse.mm(support, x0)  # supports: n*n; x0: n*(total_arg_size * batch_size)
-                x = self._concat(x, x1)  # (2, num_nodes, total_arg_size * batch_size)
-                x_prev, x_curr = x0, x1
-                for k in range(2, self._max_diffusion_step + 1):
-                    # T2=2LT1-T0=2L^2-1 x2=T2*x=2L^2x-x=2L*x1-x0...
-                    # T3=2LT2-T1=2L(2L^2-1)-L x3=2L*x2-x1...
-                    x2 = 2 * torch.sparse.mm(support, x_curr) - x_prev
-                    x = self._concat(x, x2)  # (3, num_nodes, total_arg_size * batch_size)
-                    x_prev, x_curr = x_curr, x2
+            # torch.sparse.mm does NOT support FP16 on CUDA.
+            # Disable autocast here to prevent it from casting sparse operands to Half,
+            # and explicitly cast operands to FP32 (handles model.half() case).
+            with torch.autocast(device_type=self._device.type, enabled=False):
+                x0_fp32 = x0.float()
+                for support in supports:
+                    support_fp32 = support.float()
+                    # T1=L x1=T1*x=L*x
+                    x1 = torch.sparse.mm(support_fp32, x0_fp32)  # supports: n*n; x0: n*(total_arg_size * batch_size)
+                    x = self._concat(x, x1)  # (2, num_nodes, total_arg_size * batch_size)
+                    x_prev, x_curr = x0_fp32, x1
+                    for k in range(2, self._max_diffusion_step + 1):
+                        # T2=2LT1-T0=2L^2-1 x2=T2*x=2L^2x-x=2L*x1-x0...
+                        # T3=2LT2-T1=2L(2L^2-1)-L x3=2L*x2-x1...
+                        x2 = 2 * torch.sparse.mm(support_fp32, x_curr) - x_prev
+                        x = self._concat(x, x2)  # (3, num_nodes, total_arg_size * batch_size)
+                        x_prev, x_curr = x_curr, x2
         # x.shape (Ks, num_nodes, total_arg_size * batch_size)
         # Ks = len(supports) * self._max_diffusion_step + 1
 
