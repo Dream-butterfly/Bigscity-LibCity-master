@@ -448,6 +448,7 @@ class TrafficStateExecutor(AbstractExecutor):
                               format(len(train_time), sum(train_time) / len(train_time),
                                      sum(eval_time) / len(eval_time)))
         if self.load_best_epoch:
+            self._barrier()  # 等待 rank 0 写完 checkpoint 文件
             self.load_model_with_epoch(best_epoch)
         return min_val_loss
 
