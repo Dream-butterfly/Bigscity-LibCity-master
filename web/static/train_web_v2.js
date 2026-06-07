@@ -1788,6 +1788,10 @@ let _showAllMetrics = false;
 
 function toggleCompareMetrics() {
   _showAllMetrics = document.getElementById('compare_show_all_metrics')?.checked || false;
+  const hint = document.getElementById('compare_core_hint');
+  if (hint) {
+    hint.textContent = _showAllMetrics ? '' : `默认: ${CORE_METRICS.join(', ')}`;
+  }
   renderCompareMetrics(_lastCompareItems);
 }
 
@@ -1876,6 +1880,11 @@ function renderCompareMetrics(items) {
   _lastCompareItems = items || [];
   const wrap = document.getElementById('compare_metrics_wrap');
   if (!wrap) return;
+  // 更新核心指标提示
+  const hint = document.getElementById('compare_core_hint');
+  if (hint) {
+    hint.textContent = _showAllMetrics ? '' : `默认核心指标: ${CORE_METRICS.join(', ')}`;
+  }
   if (!items || !items.length) {
     wrap.innerHTML = `<div class="small" style="padding:1.5em;text-align:center;color:var(--text-muted)">${escHtml(t('compare_no_data', '无可对比数据'))}</div>`;
     return;
@@ -1919,10 +1928,13 @@ function renderCompareMetrics(items) {
       bestH1 = Math.max(...vals.filter(Boolean).map(v => v.h1));
       bestAvg = Math.max(...vals.filter(Boolean).map(v => v.avg));
     }
+    // 指标名称加上方向标识
+    const arrow = LOWER_IS_BETTER.has(m) ? ' ↓' : ' ↑';
+    const title = LOWER_IS_BETTER.has(m) ? '越低越好' : '越高越好';
 
     const renderRow = (dim, dimLabel) => {
       html += '<tr>';
-      html += `<td class="param-localized" style="padding-left:${dim === 'avg' ? '20px' : '8px'}">${dim === 'h1' ? escHtml(m) : ''} ${dimLabel}</td>`;
+      html += `<td class="param-localized" style="padding-left:${dim === 'avg' ? '20px' : '8px'}">${dim === 'h1' ? `<span title="${title}">${escHtml(m)}${arrow}</span>` : ''} ${dimLabel}</td>`;
       vals.forEach((v, i) => {
         if (!v) { html += '<td>-</td>'; return; }
         const raw = v[dim];

@@ -420,10 +420,11 @@
     <div class="card">
         <div class="card-header">
           <strong>指标对比</strong>
-          <div class="card-controls">
+          <div class="card-controls" style="flex-wrap:wrap;gap:6px 12px">
             <label class="small" style="display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none">
               <input type="checkbox" id="compare_show_all_metrics" onchange="toggleCompareMetrics()"> 显示全部指标
             </label>
+            <span class="small" id="compare_core_hint" style="color:var(--text-muted)"></span>
             <label class="small" style="display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none">
               <input type="checkbox" id="compare_normalize" onchange="toggleCompareMetrics()"> 相对缩放
             </label>
