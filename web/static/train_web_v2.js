@@ -998,6 +998,9 @@ function renderDataVersionTable(versions) {
       renderDataVersionTable(_state.dataVersions || []);
     });
   });
+  // 渲染选中版本的完整配置参数
+  const selected = filtered.find(v => v.version_id === _state.selectedDataVersionId);
+  renderDataVersionDetail(selected || null);
 }
 
 function getVersionProfile(v) {
@@ -1015,6 +1018,97 @@ function getVersionProfile(v) {
 }
 
 function fmtRate(v) { return Number.isFinite(v) ? Number(v).toFixed(3) : '-'; }
+
+/* ── 渲染数据版本完整配置参数详情 ── */
+function renderDataVersionDetail(version) {
+  const panel = document.getElementById('data_version_detail');
+  const grid = document.getElementById('version_detail_grid');
+  const idEl = document.getElementById('version_detail_id');
+  const statusEl = document.getElementById('version_detail_status');
+  if (!panel || !grid) return;
+
+  if (!version) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+
+  // 头部
+  if (idEl) idEl.textContent = version.version_id || '-';
+  if (statusEl) {
+    statusEl.textContent = version.status || '-';
+    const st = String(version.status || '').toLowerCase();
+    statusEl.className = 'badge ' + (st === 'ready' ? 'badge-finished' : st === 'processing' ? 'badge-processing' : 'badge-failed');
+  }
+
+  const cli = version.cli_options || {};
+  const cfg = version.config_payload || {};
+  const sm = version.script_meta || {};
+
+  const items = [];
+
+  function add(key, val, section) {
+    if (val === undefined || val === null || val === '') return;
+    items.push({ key, val: String(val), section });
+  }
+
+  // ── CLI 参数 ──
+  const cliSection = 'CLI Options';
+  add('config_file', cli.config_file, cliSection);
+  add('exp_id', cli.exp_id, cliSection);
+  add('seed', version.seed ?? cli.seed, cliSection);
+  add('gpu', cli.gpu, cliSection);
+  add('gpu_id', cli.gpu_id, cliSection);
+  add('batch_size', cli.batch_size, cliSection);
+  add('learning_rate', cli.learning_rate, cliSection);
+  add('max_epoch', cli.max_epoch, cliSection);
+  add('dataset_class', cli.dataset_class, cliSection);
+  add('executor', cli.executor, cliSection);
+  add('evaluator', cli.evaluator, cliSection);
+
+  // ── 数据配置 ──
+  const cfgSection = 'Data Config';
+  add('add_time_in_day', cfg.add_time_in_day, cfgSection);
+  add('add_day_in_week', cfg.add_day_in_week, cfgSection);
+  add('cache_dataset', cfg.cache_dataset, cfgSection);
+  add('load_external', cfg.load_external, cfgSection);
+  add('scaler', cfg.scaler, cfgSection);
+  add('input_window', cfg.input_window, cfgSection);
+  add('output_window', cfg.output_window, cfgSection);
+
+  // ── 处理结果 ──
+  const metaSection = 'Processing Result';
+  add('cache_file_name', sm.cache_file_name, metaSection);
+  add('train_batches', sm.train_batches, metaSection);
+  add('valid_batches', sm.valid_batches, metaSection);
+  add('test_batches', sm.test_batches, metaSection);
+
+  // ── Split 信息 ──
+  const p = getVersionProfile(version);
+  add('train_rate', p.trainRate !== null ? p.trainRate : null, cliSection);
+  add('eval_rate', p.evalRate !== null ? p.evalRate : null, cliSection);
+  add('test_rate', p.testRate !== null ? p.testRate : null, cliSection);
+
+  // ── 其他 ──
+  add('created_at', version.created_at ? new Date(version.created_at * 1000).toLocaleString() : null, metaSection);
+  add('note', version.note, metaSection);
+  add('error', version.error, metaSection);
+
+  // 按 section 分组渲染
+  let lastSection = '';
+  let html = '';
+  for (const item of items) {
+    if (item.section !== lastSection) {
+      html += `<div class="detail-section">${escHtml(item.section)}</div>`;
+      lastSection = item.section;
+    }
+    html += `<div class="detail-item">
+      <span class="detail-key">${escHtml(item.key)}</span>
+      <span class="detail-val">${escHtml(item.val)}</span>
+    </div>`;
+  }
+  grid.innerHTML = html;
+}
 
 function populateDatasetFilter(versions) {
   const sel = document.getElementById('data_versions_dataset_filter');
