@@ -2067,9 +2067,13 @@ async def api_start_resume(request: Request):
     exp_id = str(cli_options.get("exp_id", "")).strip()
     if not exp_id:
         return JSONResponse(status_code=400, content={"error": "Resume training requires cli_options.exp_id."})
-    prep_config_payload = data_meta.get("config_payload", {})
-    if not isinstance(prep_config_payload, dict):
-        prep_config_payload = {}
+    prep_config_payload = dict(data_meta.get("config_payload", {}) or {})
+    prep_cli_options = dict(data_meta.get("cli_options", {}) or {})
+    # 将 cli_options 中的签名关键字段补入 config_payload，
+    # 防止 _merge_with_data_version_constraints 因 DATA_LOCKED_CONFIG_KEYS 将其丢弃
+    for key in ("seed", "train_rate", "eval_rate"):
+        if key in prep_cli_options and key not in prep_config_payload:
+            prep_config_payload[key] = prep_cli_options[key]
     config_payload, _ = _merge_with_data_version_constraints(
         prep_config_payload=prep_config_payload,
         user_config_payload=user_config_payload,
@@ -2077,9 +2081,6 @@ async def api_start_resume(request: Request):
         user_cli_options={},
     )
     config_payload["data_version_id"] = resolved_version_id
-    prep_cli_options = data_meta.get("cli_options", {})
-    if not isinstance(prep_cli_options, dict):
-        prep_cli_options = {}
     merged_cli_options = {k: v for k, v in prep_cli_options.items() if k != "config_file" and k not in DATA_LOCKED_CLI_KEYS}
     merged_cli_options["exp_id"] = exp_id
     cli_options = merged_cli_options
