@@ -1817,7 +1817,7 @@ async function loadCompareRuns() {
 }
 
 /* ── 核心指标（默认只显示这些，避免图表过密）── */
-const CORE_METRICS = ['masked_MAE', 'masked_RMSE', 'masked_MAPE'];
+const CORE_METRICS = ['masked_MAE', 'masked_RMSE', 'R2'];
 const LOWER_IS_BETTER = new Set(['MAE','MSE','RMSE','MAPE','masked_MAE','masked_MSE','masked_RMSE','masked_MAPE']);
 let _lastCompareItems = [];
 let _showAllMetrics = false;
@@ -1852,7 +1852,7 @@ function buildCompareChartOption(items, metricList, normalize) {
         });
     }
 
-    const xAxisName = normalize ? '相对值（最佳=1.00）' : '指标值（越低越好）';
+    const xAxisName = normalize ? '相对值（最佳=1.00）' : '原始值';
 
     const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666'];
     const series = items.map((it, idx) => {
