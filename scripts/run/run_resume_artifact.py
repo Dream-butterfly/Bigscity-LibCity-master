@@ -3,6 +3,7 @@
 """
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -80,7 +81,18 @@ def run_resume_artifact(
     if not effective_artifact_id and not artifact_path:
         raise ValueError("No artifact_id provided and run_meta has no bound artifact_id.")
 
-    merged_other_args = dict(other_args or {})
+    # 优先从 run 目录加载训练时保存的完整配置
+    _saved_path = Path(PROJECT_ROOT) / "outputs" / text_run_id / "effective_config.json"
+    if _saved_path.exists():
+        with open(_saved_path, "r", encoding="utf-8") as _f:
+            _base_config = json.load(_f)
+        # 排除 ConfigParser 通过函数参数单独设置的顶层字段
+        for _key in ("task", "model", "dataset", "exp_id"):
+            _base_config.pop(_key, None)
+    else:
+        _base_config = {}
+    merged_other_args = dict(_base_config)
+    merged_other_args.update(other_args or {})
     merged_other_args["exp_id"] = text_run_id
     config = ConfigParser(
         resolved_task,

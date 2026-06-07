@@ -3,6 +3,7 @@
 """
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -70,6 +71,13 @@ def run_train_artifact(
     resolved_model = str(config.get("model", model_name))
     resolved_dataset = str(config.get("dataset", dataset_name))
     exp_id = ensure_run_id(config)
+    # 保存完整有效配置，供继续训练时直接读取
+    _cfg_dir = Path(PROJECT_ROOT) / "outputs" / exp_id
+    _cfg_dir.mkdir(parents=True, exist_ok=True)
+    _cfg_save = dict(config.config)
+    _cfg_save.pop("device", None)  # torch.device 不可 JSON 序列化
+    with open(_cfg_dir / "effective_config.json", "w", encoding="utf-8") as _f:
+        json.dump(_cfg_save, _f, ensure_ascii=False, indent=2, default=str)
     is_distributed = config.get("is_distributed", False)
     rank = config.get("rank", 0)
     logger = get_logger(config)
