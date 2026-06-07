@@ -12,7 +12,8 @@ class TrafficStateEvaluator(AbstractEvaluator):
 
     def __init__(self, config):
         self.metrics = config.get('metrics', ['MAE'])  # 评估指标, 是一个 list
-        self.allowed_metrics = ['MAE', 'MSE', 'RMSE', 'MAPE', 'masked_MAE', 'masked_MSE', 'masked_RMSE', 'masked_MAPE',
+        self.allowed_metrics = ['MAE', 'MSE', 'RMSE', 'MAPE', 'SMAPE',
+                                'masked_MAE', 'masked_MSE', 'masked_RMSE', 'masked_MAPE', 'masked_SMAPE',
                                 'R2', 'EVAR']
         self.save_modes = config.get('save_mode', ['csv', 'json'])
         self.mode = config.get('evaluator_mode', 'single')  # or average
@@ -70,6 +71,13 @@ class TrafficStateEvaluator(AbstractEvaluator):
                         self.intermediate_result[metric + '@' + str(i)].append(
                             loss.masked_mape_torch(y_pred[:, :i], y_true[:, :i], 0,
                                                    mask_val=self.mask_val).item())
+                    elif metric == 'masked_SMAPE':
+                        self.intermediate_result[metric + '@' + str(i)].append(
+                            loss.masked_smape_torch(y_pred[:, :i], y_true[:, :i], 0,
+                                                    mask_val=self.mask_val).item())
+                    elif metric == 'SMAPE':
+                        self.intermediate_result[metric + '@' + str(i)].append(
+                            loss.masked_smape_torch(y_pred[:, :i], y_true[:, :i]).item())
                     elif metric == 'MAE':
                         self.intermediate_result[metric + '@' + str(i)].append(
                             loss.masked_mae_torch(y_pred[:, :i], y_true[:, :i]).item())
@@ -107,6 +115,13 @@ class TrafficStateEvaluator(AbstractEvaluator):
                         self.intermediate_result[metric + '@' + str(i)].append(
                             loss.masked_mape_torch(y_pred[:, i - 1], y_true[:, i - 1], 0,
                                                    mask_val=self.mask_val).item())
+                    elif metric == 'masked_SMAPE':
+                        self.intermediate_result[metric + '@' + str(i)].append(
+                            loss.masked_smape_torch(y_pred[:, i - 1], y_true[:, i - 1], 0,
+                                                    mask_val=self.mask_val).item())
+                    elif metric == 'SMAPE':
+                        self.intermediate_result[metric + '@' + str(i)].append(
+                            loss.masked_smape_torch(y_pred[:, i - 1], y_true[:, i - 1]).item())
                     elif metric == 'MAE':
                         self.intermediate_result[metric + '@' + str(i)].append(
                             loss.masked_mae_torch(y_pred[:, i - 1], y_true[:, i - 1]).item())

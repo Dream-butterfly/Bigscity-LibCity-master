@@ -303,6 +303,10 @@ class TrafficStateExecutor(AbstractExecutor):
                 lf = partial(loss.masked_rmse_torch, null_val=0)
             elif self.train_loss.lower() == 'masked_mape':
                 lf = partial(loss.masked_mape_torch, null_val=0)
+            elif self.train_loss.lower() == 'smape':
+                lf = loss.masked_smape_torch
+            elif self.train_loss.lower() == 'masked_smape':
+                lf = partial(loss.masked_smape_torch, null_val=0)
             elif self.train_loss.lower() == 'r2':
                 lf = loss.r2_score_torch
             elif self.train_loss.lower() == 'evar':

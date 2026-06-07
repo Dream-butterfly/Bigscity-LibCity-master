@@ -181,7 +181,7 @@ const PARAM_DESCRIPTIONS = {
   task_level:              '课程学习起始级别(PDFormer)。推荐: 0。可选: 0/1/2',
   evaluator:            '评估器类名。推荐: TrafficStateEvaluator。可选: TrafficStateEvaluator',
   evaluator_mode:       '评估模式。推荐: single。可选: single/multi',
-  metrics:              '评估指标列表。推荐: ["MAE","RMSE","MAPE"]。可选: MAE/MSE/RMSE/MAPE/WMAPE/R2/EVAR',
+  metrics:              '评估指标列表。推荐: ["MAE","RMSE","MAPE"]。可选: MAE/MSE/RMSE/MAPE/SMAPE/WMAPE/R2/EVAR',
   seed:                 '随机种子(数据划分+模型初始化)。推荐: 42(主实验)或0/1/2(多跑)。可选: 任意整数',
   dataset_class:        '数据集加载类。推荐: TrafficStatePointDataset(点预测)。可选: TrafficStatePointDataset/TrafficStateDataset',
   device:               '计算设备。推荐: cuda(自动选择)。可选: cpu/cuda',
@@ -1818,7 +1818,7 @@ async function loadCompareRuns() {
 
 /* ── 核心指标（默认只显示这些，避免图表过密）── */
 const CORE_METRICS = ['masked_MAE', 'masked_RMSE', 'R2'];
-const LOWER_IS_BETTER = new Set(['MAE','MSE','RMSE','MAPE','masked_MAE','masked_MSE','masked_RMSE','masked_MAPE']);
+const LOWER_IS_BETTER = new Set(['MAE','MSE','RMSE','MAPE','SMAPE','masked_MAE','masked_MSE','masked_RMSE','masked_MAPE','masked_SMAPE']);
 let _lastCompareItems = [];
 let _showAllMetrics = false;
 
@@ -1976,7 +1976,10 @@ function renderCompareMetrics(items) {
                     const norm = LOWER_IS_BETTER.has(m) ? ref / raw : raw / ref;
                     display = Number(norm).toFixed(3);
                 } else {
-                    display = m.includes('MAPE') || m.includes('mape')
+                    // MAPE returns ratio (e.g. 0.05 = 5%), multiply by 100 for %.
+                    // SMAPE is pre-scaled to [0,200], no extra ×100 needed.
+                    const isRawMAPE = (m === 'MAPE' || m === 'masked_MAPE');
+                    display = isRawMAPE
                         ? (raw * 100).toFixed(2) + '%'
                         : Number(raw).toFixed(4);
                 }

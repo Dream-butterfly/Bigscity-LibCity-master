@@ -111,6 +111,10 @@ def evaluate_model(y_pred, y_true, metrics, mode='single', path='metrics.csv'):
                     line[metric] = masked_rmse_torch(y_pred[:, i - 1], y_true[:, i - 1], 0).item()
                 elif metric == 'masked_MAPE':
                     line[metric] = masked_mape_torch(y_pred[:, i - 1], y_true[:, i - 1], 0).item()
+                elif metric == 'masked_SMAPE':
+                    line[metric] = masked_smape_torch(y_pred[:, i - 1], y_true[:, i - 1], 0).item()
+                elif metric == 'SMAPE':
+                    line[metric] = masked_smape_torch(y_pred[:, i - 1], y_true[:, i - 1]).item()
                 elif metric == 'MAE':
                     line[metric] = masked_mae_torch(y_pred[:, i - 1], y_true[:, i - 1]).item()
                 elif metric == 'MSE':
@@ -134,6 +138,10 @@ def evaluate_model(y_pred, y_true, metrics, mode='single', path='metrics.csv'):
                     line[metric] = masked_rmse_torch(y_pred[:, :i], y_true[:, :i], 0).item()
                 elif metric == 'masked_MAPE':
                     line[metric] = masked_mape_torch(y_pred[:, :i], y_true[:, :i], 0).item()
+                elif metric == 'masked_SMAPE':
+                    line[metric] = masked_smape_torch(y_pred[:, :i], y_true[:, :i], 0).item()
+                elif metric == 'SMAPE':
+                    line[metric] = masked_smape_torch(y_pred[:, :i], y_true[:, :i]).item()
                 elif metric == 'MAE':
                     line[metric] = masked_mae_torch(y_pred[:, :i], y_true[:, :i]).item()
                 elif metric == 'MSE':

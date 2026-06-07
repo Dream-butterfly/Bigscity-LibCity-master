@@ -201,7 +201,7 @@ const PARAM_DESCRIPTIONS = {
   // ====== 评估 ======
   evaluator:            '评估器类名。推荐: TrafficStateEvaluator。可选: TrafficStateEvaluator',
   evaluator_mode:       '评估模式。推荐: single。可选: single/multi',
-  metrics:              '评估指标列表。推荐: ["MAE","RMSE","MAPE"]。可选: MAE/MSE/RMSE/MAPE/WMAPE/R2/EVAR',
+  metrics:              '评估指标列表。推荐: ["MAE","RMSE","MAPE"]。可选: MAE/MSE/RMSE/MAPE/SMAPE/WMAPE/R2/EVAR',
 
   // ====== 其他 ======
   seed:                 '随机种子(数据划分+模型初始化)。推荐: 42(主实验)或0/1/2(多跑)。可选: 任意整数',
@@ -1782,7 +1782,7 @@ async function loadCompareRuns() {
 
 /* ── 核心指标（默认只显示这些，避免图表过密）── */
 const CORE_METRICS = ['masked_MAE', 'masked_RMSE', 'R2'];
-const LOWER_IS_BETTER = new Set(['MAE','MSE','RMSE','MAPE','masked_MAE','masked_MSE','masked_RMSE','masked_MAPE']);
+const LOWER_IS_BETTER = new Set(['MAE','MSE','RMSE','MAPE','SMAPE','masked_MAE','masked_MSE','masked_RMSE','masked_MAPE','masked_SMAPE']);
 let _lastCompareItems = [];
 let _showAllMetrics = false;
 
