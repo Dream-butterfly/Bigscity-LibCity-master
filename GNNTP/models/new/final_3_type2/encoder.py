@@ -70,7 +70,7 @@ class STEncoderBlock(nn.Module):
             self.norm_cell = nn.LayerNorm(hidden_dim)
 
     def forward(self, sequence_features, graph_matrix,
-                graph_dist=None, mu_fuzzy=None):
+                graph_dist=None, mu_fuzzy=None, powers=None):
         """Run one encoder block.
 
         Args:
@@ -78,6 +78,7 @@ class STEncoderBlock(nn.Module):
             graph_matrix: [N, N] adjacency or fuzzy relation R.
             graph_dist: [N, N] hop distance for band-pass gate.
             mu_fuzzy: [N, K_f] fuzzy memberships for conditioning.
+            powers: precomputed k-hop powers (optional, avoids recompute).
         """
         # 1. Temporal self-attention (per-node)
         temporal_out = apply_temporal_attention(sequence_features, self.temporal_attention)
@@ -87,7 +88,7 @@ class STEncoderBlock(nn.Module):
         # 2. Graph convolution (shared across time)
         B, T, N, D = sequence_features.shape
         g_in = sequence_features.reshape(B * T, N, D)
-        g_out = self.graph_convolution(g_in, graph_matrix)
+        g_out = self.graph_convolution(g_in, graph_matrix, powers=powers)
         sequence_features = self.norm_graph(
             sequence_features + self.dropout(g_out.reshape(B, T, N, D)))
 
@@ -169,7 +170,7 @@ class STEncoder(nn.Module):
         self.final_norm = nn.LayerNorm(hidden_dim)
 
     def forward(self, history_sequence, graph_matrix,
-                graph_dist=None, mu_fuzzy=None):
+                graph_dist=None, mu_fuzzy=None, powers=None):
         """Encode X [B, Tin, N, Cin] → H [B, Tin, N, D].
 
         Args:
@@ -177,6 +178,7 @@ class STEncoder(nn.Module):
             graph_matrix: [N, N].
             graph_dist: [N, N] hop distance.
             mu_fuzzy: [N, K_f].
+            powers: precomputed k-hop powers (optional, avoids recompute).
 
         Returns:
             [B, Tin, N, D].
@@ -192,8 +194,8 @@ class STEncoder(nn.Module):
         for block in self.blocks:
             if self.use_gradient_checkpointing and self.training:
                 x = checkpoint(block, x, graph_matrix,
-                               graph_dist, mu_fuzzy, use_reentrant=False)
+                               graph_dist, mu_fuzzy, powers, use_reentrant=False)
             else:
-                x = block(x, graph_matrix, graph_dist=graph_dist, mu_fuzzy=mu_fuzzy)
+                x = block(x, graph_matrix, graph_dist=graph_dist, mu_fuzzy=mu_fuzzy, powers=powers)
 
         return self.final_norm(x)

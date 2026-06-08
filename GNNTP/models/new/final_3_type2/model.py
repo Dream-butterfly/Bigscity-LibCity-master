@@ -44,7 +44,7 @@ from GNNTP.models.abstract_traffic_state_model import AbstractTrafficStateModel
 
 from .encoder import STEncoder
 from .decoder import FutureDecoder
-from .graph import FuzzyRelationalGraphLearner
+from .graph import FuzzyGraphConvolution, FuzzyRelationalGraphLearner
 from .utils import compute_hop_distance
 
 
@@ -458,6 +458,10 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
             fuzzy_relation = self._apply_entropy_dynamic_graph(
                 fuzzy_relation, FOU=FOU, node_features=history_sequence)
 
+        # ── Precompute k-hop powers (shared across all encoder/decoder blocks) ──
+        graph_powers = FuzzyGraphConvolution.precompute_powers(
+            fuzzy_relation, k_hop=self.graph_k_hop)
+
         # Midpoint memberships for FRR conditioning
         mu_fuzzy = self.fuzzy_graph.get_memberships(
             node_features=history_sequence).to(device)
@@ -466,8 +470,9 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
             history_sequence, fuzzy_relation,
             graph_dist=self.graph_dist,
             mu_fuzzy=mu_fuzzy,
+            powers=graph_powers,
         )
-        return condition_features, fuzzy_relation, mu_fuzzy
+        return condition_features, fuzzy_relation, mu_fuzzy, graph_powers
 
     # ═══════════════════════════════════════════════════════════
     #  Forward / Predict
@@ -487,9 +492,10 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
             [B, T_out, N, C_out] — only μ (point estimate).
         """
         history_sequence = batch["X"]
-        condition, fuzzy_R, mu = self.encode_condition(history_sequence)
+        condition, fuzzy_R, mu, graph_powers = self.encode_condition(history_sequence)
         output = self.future_decoder(
-            condition, fuzzy_R, graph_dist=self.graph_dist, mu_fuzzy=mu)
+            condition, fuzzy_R, graph_dist=self.graph_dist, mu_fuzzy=mu,
+            powers=graph_powers)
         return output[..., :self.output_dim]
 
     # ═══════════════════════════════════════════════════════════
@@ -506,9 +512,10 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         history_sequence = batch["X"]
         future_sequence = batch["y"][..., :self.output_dim]
 
-        condition, fuzzy_R, mu = self.encode_condition(history_sequence)
+        condition, fuzzy_R, mu, graph_powers = self.encode_condition(history_sequence)
         output = self.future_decoder(
-            condition, fuzzy_R, graph_dist=self.graph_dist, mu_fuzzy=mu)
+            condition, fuzzy_R, graph_dist=self.graph_dist, mu_fuzzy=mu,
+            powers=graph_powers)
 
         # ── Split μ and log σ² ──
         mu_hat = output[..., :self.output_dim]

@@ -45,7 +45,7 @@ class GraphConvolution(nn.Module):
             [nn.Linear(hidden_dim, hidden_dim) for _ in range(k_hop + 1)]
         )
 
-    def forward(self, node_features, adjacency_matrix):
+    def forward(self, node_features, adjacency_matrix, **kwargs):
         batch_size, num_nodes, _ = node_features.shape
         adjacency_matrix = expand_adjacency_batch(adjacency_matrix, batch_size).to(
             device=node_features.device, dtype=node_features.dtype
@@ -94,7 +94,32 @@ class FuzzyGraphConvolution(nn.Module):
             torch.min(R.unsqueeze(1), S.unsqueeze(0)), dim=-1
         ).values  # [N, N]
 
-    def forward(self, node_features, fuzzy_relation):
+    @staticmethod
+    def precompute_powers(R_base, k_hop):
+        """Precompute k-hop relational powers: [I, R, R², …, R^k].
+
+        Call once per forward when the same R_base is shared across
+        multiple FuzzyGraphConvolution blocks.
+
+        Args:
+            R_base: [N, N] fuzzy relation.
+            k_hop:   maximum hop count.
+        Returns:
+            list of [N, N] tensors, length = k_hop + 1.
+        """
+        device = R_base.device
+        dtype = R_base.dtype
+        N = R_base.size(0)
+        I = torch.eye(N, device=device, dtype=dtype)
+        powers = [I]  # R^(0)
+        current = R_base
+        for _ in range(k_hop):
+            powers.append(current)
+            current = FuzzyGraphConvolution._max_min_compose_2d(
+                R_base, current)
+        return powers
+
+    def forward(self, node_features, fuzzy_relation, powers=None):
         """K-hop fuzzy propagation.
 
         All max-min compositions run on [N, N] — the fuzzy relation is
@@ -104,29 +129,27 @@ class FuzzyGraphConvolution(nn.Module):
         Args:
             node_features:  [B, N, D]
             fuzzy_relation: [N, N] or [B, N, N] in [0, 1]
+            powers:         precomputed [I, R, R², …, R^k] (optional).
+                            Saves repeated max-min composes when the same
+                            relation is shared across blocks.
         Returns:
             [B, N, D]
         """
         batch_size, num_nodes, _ = node_features.shape
 
-        # ── Extract base [N, N] relation (all batch elements identical) ──
-        if fuzzy_relation.dim() == 3:
-            R_base = fuzzy_relation[0].to(
-                device=node_features.device, dtype=node_features.dtype
-            )
+        # ── Resolve R_powers: use precomputed or compute on-the-fly ──
+        if powers is not None:
+            R_powers = [p.to(device=node_features.device, dtype=node_features.dtype)
+                        for p in powers]
         else:
-            R_base = fuzzy_relation.to(
-                device=node_features.device, dtype=node_features.dtype
-            )
-        # R_base: [N, N]
-
-        # ── Pre-compute k-hop powers on [N, N] (tiny, shared) ──
-        I = torch.eye(num_nodes, device=node_features.device, dtype=node_features.dtype)
-        R_powers = [I]  # R^(0)
-        current = R_base
-        for _ in range(self.k_hop):
-            R_powers.append(current)
-            current = self._max_min_compose_2d(R_base, current)  # R^(k+1)
+            # Extract base [N, N] relation (all batch elements identical)
+            if fuzzy_relation.dim() == 3:
+                R_base = fuzzy_relation[0].to(
+                    device=node_features.device, dtype=node_features.dtype)
+            else:
+                R_base = fuzzy_relation.to(
+                    device=node_features.device, dtype=node_features.dtype)
+            R_powers = self.precompute_powers(R_base, self.k_hop)
 
         # ── Feature propagation (memory-efficient: avoids [B,N,N] intermediates) ──
         output = self.projections[0](node_features)

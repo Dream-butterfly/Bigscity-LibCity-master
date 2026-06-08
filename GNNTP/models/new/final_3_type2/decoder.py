@@ -74,7 +74,7 @@ class DecoderBlock(nn.Module):
             self.norm_cell = nn.LayerNorm(hidden_dim)
 
     def forward(self, queries, condition_features, graph_matrix,
-                graph_dist=None, mu_fuzzy=None):
+                graph_dist=None, mu_fuzzy=None, powers=None):
         """Run one decoder block.
 
         Args:
@@ -83,6 +83,7 @@ class DecoderBlock(nn.Module):
             graph_matrix: [N, N].
             graph_dist: [N, N] hop distance.
             mu_fuzzy: [N, K_f].
+            powers: precomputed k-hop powers (optional, avoids recompute).
         """
         # 1. Temporal self-attention
         t_out = apply_temporal_attention(queries, self.temporal_attention)
@@ -91,7 +92,7 @@ class DecoderBlock(nn.Module):
         # 2. Graph convolution
         B, T, N, D = queries.shape
         g_in = queries.reshape(B * T, N, D)
-        g_out = self.graph_convolution(g_in, graph_matrix)
+        g_out = self.graph_convolution(g_in, graph_matrix, powers=powers)
         queries = self.norm_graph(
             queries + self.dropout(g_out.reshape(B, T, N, D)))
 
@@ -169,7 +170,7 @@ class FutureDecoder(nn.Module):
         self.output_projection = nn.Linear(hidden_dim, output_dim * 2)
 
     def forward(self, condition_features, graph_matrix,
-                graph_dist=None, mu_fuzzy=None):
+                graph_dist=None, mu_fuzzy=None, powers=None):
         """Decode future from condition.
 
         Args:
@@ -177,6 +178,7 @@ class FutureDecoder(nn.Module):
             graph_matrix: [N, N].
             graph_dist: [N, N] hop distance.
             mu_fuzzy: [N, K_f].
+            powers: precomputed k-hop powers (optional, avoids recompute).
 
         Returns:
             [B, T_out, N, C_out * 2] where first half = μ, second half = log σ².
@@ -188,10 +190,10 @@ class FutureDecoder(nn.Module):
             if self.use_gradient_checkpointing and self.training:
                 queries = checkpoint(
                     block, queries, condition_features, graph_matrix,
-                    graph_dist, mu_fuzzy, use_reentrant=False)
+                    graph_dist, mu_fuzzy, powers, use_reentrant=False)
             else:
                 queries = block(queries, condition_features, graph_matrix,
-                                graph_dist=graph_dist, mu_fuzzy=mu_fuzzy)
+                                graph_dist=graph_dist, mu_fuzzy=mu_fuzzy, powers=powers)
 
         queries = self.final_norm(queries)
         return self.output_projection(queries)
