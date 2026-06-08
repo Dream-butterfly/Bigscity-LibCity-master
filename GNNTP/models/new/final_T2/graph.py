@@ -137,6 +137,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         input_dim: int | None = None,
         closure_steps: int = 0,
         topk: int | None = None,
+        beta_init_random: bool = False,
     ):
         super().__init__()
         if num_fuzzy_sets < 2:
@@ -194,7 +195,8 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
         # Interval relation mixing: β = softmax(logits)
         self.relation_mix_logits = nn.Parameter(
-            torch.randn(3, generator=_g) * 1.0)
+            torch.randn(3, generator=_g) * 1.0 if beta_init_random
+            else torch.zeros(3))
 
     # ═══════════════════════════════════════════════════════════════
     #  Interval Type-2 Membership Computation

@@ -48,5 +48,6 @@
   "graph_topk": 32,
   "use_torch_compile": true,
   "t2_explore_weight": 0.05,
-  "t2_lr_boost": 1.0
+  "t2_lr_boost": 1.0,
+  "beta_init_random": false
 }
