@@ -9,6 +9,8 @@ Design notes:
 """
 
 import math
+import os
+import time
 
 import torch
 import torch.nn as nn
@@ -144,19 +146,24 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self.closure_steps = int(max(0, closure_steps))
         self.topk = topk
 
+        # ── Random init with time+pid seed (different per run) ─────
+        _seed = int((time.time() * 1e6) % (2**31)) ^ (os.getpid() % (2**16))
+        _g = torch.Generator()
+        _g.manual_seed(_seed)
+
         # ── Prototype centers c_k ∈ R^D ──────────────────────────
         self.prototype_center = nn.Parameter(
-            torch.randn(num_fuzzy_sets, hidden_dim) * 0.1)
+            torch.randn(num_fuzzy_sets, hidden_dim, generator=_g) * 0.1)
 
         # ── Interval width: σ_k (base), r_k (ratio) ──────────────
         #   σ_low  = σ·(1−r)  → narrower  → optimistic (upper MF)
         #   σ_high = σ·(1+r)  → wider     → pessimistic (lower MF)
         #   Random init σ ∈ [1, 8] to test if 3.5 is a true attractor
-        _sigma_init = torch.empty(num_fuzzy_sets).uniform_(1.0, 8.0)
+        _sigma_init = torch.rand(num_fuzzy_sets, generator=_g) * 7.0 + 1.0  # U(1,8)
         self.log_sigma = nn.Parameter(
             torch.log(torch.exp(_sigma_init) - 1))  # softplus$^{-1}$
         self.log_radius_ratio = nn.Parameter(
-            torch.randn(num_fuzzy_sets) * 0.1)  # sigmoid(0±0.1)≈0.5±0.025
+            torch.randn(num_fuzzy_sets, generator=_g) * 0.1)
 
         # ── Input projection ──────────────────────────────────────
         if input_dim is not None and input_dim != hidden_dim:
@@ -187,7 +194,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
         # Interval relation mixing: β = softmax(logits)
         self.relation_mix_logits = nn.Parameter(
-            torch.randn(3) * 1.0)  # random init to test if router learns
+            torch.randn(3, generator=_g) * 1.0)
 
     # ═══════════════════════════════════════════════════════════════
     #  Interval Type-2 Membership Computation
