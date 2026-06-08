@@ -114,6 +114,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         static_adjacency: torch.Tensor | None = None,
         input_dim: int | None = None,
         closure_steps: int = 0,
+        uncertainty_alpha_init: float = -2.0,
     ):
         super().__init__()
         if num_fuzzy_sets < 2:
@@ -157,6 +158,11 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
         # Type-2 scale per fuzzy set (log space for positivity)
         self.log_epsilon = nn.Parameter(torch.log(torch.full((num_fuzzy_sets,), 0.08)))
+
+        # FOU graph gate: α = sigmoid(init) → starts weak
+        #   R_eff = R_mid * (1 − α · FOU_R)
+        #   High-uncertainty edges are dampened in the main propagation path
+        self.fou_gate_alpha = nn.Parameter(torch.tensor(uncertainty_alpha_init))
 
     # ── Internal: membership logits (θ) ──────────────────────────
 
@@ -203,25 +209,39 @@ class FuzzyRelationalGraphLearner(nn.Module):
     def get_type2_info(self, node_features=None):
         theta = self._compute_membership_logits(node_features)  # [N, K]
         eps = self.log_epsilon.exp().clamp_min(1e-6)  # [K]
-        # Broadcast eps over nodes: [N, K]
-        eps_node = eps.unsqueeze(0)
+        eps_node = eps.unsqueeze(0)                     # [1, K]
 
-        mu_mid = torch.sigmoid(theta)
-        mu_L = torch.sigmoid(theta - eps_node)
-        mu_U = torch.sigmoid(theta + eps_node)
+        mu_mid = torch.sigmoid(theta)                   # [N, K]
+        mu_L   = torch.sigmoid(theta - eps_node)        # [N, K]
+        mu_U   = torch.sigmoid(theta + eps_node)        # [N, K]
 
-        fou_per_set = (mu_U - mu_L).clamp(min=0.0)  # [N, K]
-        fou_node = fou_per_set.mean(dim=-1)  # aggregate → [N]
+        # Per-set FOU → per-node scalar (for CellAttention, backward compat)
+        fou_per_set = (mu_U - mu_L).clamp(min=0.0)      # [N, K]
+        fou_node = fou_per_set.mean(dim=-1)              # [N]
 
-        R_mid = self._build_fuzzy_relation(mu_mid)
-        R_final = R_mid
+        # ── Edge-level FOU matrix (new: modulates main graph) ──
+        R_mid  = self._build_fuzzy_relation(mu_mid)     # Type-1 midpoint
+        R_low  = self._build_fuzzy_relation(mu_L)
+        R_high = self._build_fuzzy_relation(mu_U)
+        FOU_R  = (R_high - R_low).clamp(min=0.0)        # [N, N] edge uncertainty
+
+        # FOU gate: dampen high-uncertainty edges
+        alpha = self.fou_gate_alpha.sigmoid()            # learnable gate strength
+        R_gated = R_mid * (1.0 - alpha * FOU_R)
+        # Re-enforce reflexivity (self-loops always = 1)
+        diag_eye = torch.eye(self.num_nodes, device=R_gated.device, dtype=R_gated.dtype)
+        R_gated = R_gated + diag_eye * (1.0 - R_gated.diag().unsqueeze(-1))
+        R_eff = R_gated.clamp(0.0, 1.0)
+
+        # Static adjacency blend (on top of FOU-gated graph)
+        R_final = R_eff
         if self._has_static:
             blend = torch.sigmoid(self.blend_logit)
-            R_static = self.static_adjacency.to(device=R_mid.device, dtype=R_mid.dtype)
-            R_final = torch.max(R_mid * blend, R_static * (1.0 - blend))
-            diag = torch.eye(self.num_nodes, device=R_final.device, dtype=R_final.dtype)
-            R_final = R_final + diag * (1.0 - R_final.diag().unsqueeze(-1))
-        # apply closure only on mid/expectation graph (if configured)
+            R_static = self.static_adjacency.to(device=R_final.device, dtype=R_final.dtype)
+            R_final = torch.max(R_final * blend, R_static * (1.0 - blend))
+            R_final = R_final + diag_eye * (1.0 - R_final.diag().unsqueeze(-1))
+
+        # Apply closure only on mid/expectation graph (if configured)
         R_with_closure = self._apply_mid_closure(R_final)
 
         return R_with_closure, fou_node

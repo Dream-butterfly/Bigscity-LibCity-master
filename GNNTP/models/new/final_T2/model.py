@@ -45,6 +45,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
 
         self.use_fuzzy_graph = config.get("use_fuzzy_graph", True)
         self.fuzzy_num_sets = config.get("fuzzy_num_sets", 3)
+        self.uncertainty_alpha_init = config.get("uncertainty_alpha_init", -2.0)
 
         self.use_cell_attention = config.get("use_cell_attention", True)
         self.num_cells = config.get("num_cells", 8)
@@ -74,6 +75,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 static_adjacency=adjacency_matrix,
                 input_dim=self.feature_dim,
                 closure_steps=int(max(0, config.get("graph_closure_steps", 0))),
+                uncertainty_alpha_init=self.uncertainty_alpha_init,
             )
         else:
             self.fuzzy_graph = None
