@@ -9,6 +9,7 @@
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -112,7 +113,17 @@ def run_eval_checkpoint(
             "Please provide --artifact_id."
         )
 
-    merged_other_args = dict(other_args or {})
+    # 优先从 run 目录加载训练时保存的完整配置
+    _saved_path = Path(PROJECT_ROOT) / "outputs" / text_run_id / "effective_config.json"
+    if _saved_path.exists():
+        with open(_saved_path, "r", encoding="utf-8") as _f:
+            _base_config = json.load(_f)
+        for _key in ("task", "model", "dataset", "exp_id"):
+            _base_config.pop(_key, None)
+    else:
+        _base_config = {}
+    merged_other_args = dict(_base_config)
+    merged_other_args.update(other_args or {})
     merged_other_args["exp_id"] = text_run_id
     # 将 epoch 注入 config，executor.init 中 _epoch_num > 0 时自动调用 load_model_with_epoch
     merged_other_args["epoch"] = int(epoch)

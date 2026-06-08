@@ -294,9 +294,9 @@ def detect_checkpoint_model_params(checkpoint_path: str) -> dict[str, int]:
 
     detected: dict[str, int] = {}
 
-    # num_cells: 从 region_mu 形状检测 → shape = [num_cells, hidden_dim]
+    # num_cells: 从 region_mu / centers 形状检测 → shape = [num_cells, hidden_dim]
     for key in state_dict:
-        if key.endswith("cell_attention.region_mu"):
+        if key.endswith("cell_attention.region_mu") or key.endswith("cell_attention.centers"):
             tensor = state_dict[key]
             if hasattr(tensor, "ndim") and tensor.ndim >= 1:
                 detected["num_cells"] = int(tensor.shape[0])
