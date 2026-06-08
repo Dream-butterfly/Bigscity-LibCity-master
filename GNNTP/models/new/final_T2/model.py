@@ -191,7 +191,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             total = total + self.t2_explore_weight * (h_beta + sigma_diversity)
 
         # ── Type-2 gradient boost: amplify σ/r/β gradients post-backward ──
-        if self.t2_lr_boost != 1.0 and self.fuzzy_graph is not None:
+        if (self.t2_lr_boost != 1.0 and self.fuzzy_graph is not None
+                and total.requires_grad):
             _params = [
                 self.fuzzy_graph.log_sigma,
                 self.fuzzy_graph.log_radius_ratio,
