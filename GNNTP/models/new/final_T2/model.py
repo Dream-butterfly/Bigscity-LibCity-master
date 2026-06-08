@@ -62,9 +62,11 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         )
         self.physics_channel_idx = config.get("physics_channel_idx", 0)
         self.use_fuzzy_conservation = config.get("use_fuzzy_conservation", True)
-        # Type-2 exploration: force β sharpening + σ differentiation (default off)
-        self.t2_explore_weight = config.get("t2_explore_weight", 0.0)
-        # Type-2 gradient boost: multiply gradients of σ, r, β (default 1=off)
+        # Type-2 anti-collapse losses (all default 0 → backward compatible)
+        self.t2_entropy_weight   = config.get("t2_entropy_weight", 0.0)    # β entropy (keep β diverse)
+        self.t2_interval_weight  = config.get("t2_interval_weight", 0.0)   # σ gap (keep σ_low≠σ_high)
+        self.t2_fou_floor_weight = config.get("t2_fou_floor_weight", 0.0)  # FOU floor (keep μ interval)
+        # Type-2 gradient boost (default 1=off)
         self.t2_lr_boost = float(config.get("t2_lr_boost", 1.0))
         self._train_step_count = 0
 
@@ -179,16 +181,29 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             conservation_loss = self._fuzzy_conservation_loss(predicted_future, graph_matrix)
             total = total + effective_weight * conservation_loss
 
-        # ── Type-2 exploration: push β to sharpen, σ to differentiate ──
-        if self.t2_explore_weight > 0 and self.fuzzy_graph is not None:
+        # ── Type-2 anti-collapse losses ──
+        if self.fuzzy_graph is not None:
             g = self.fuzzy_graph
-            # β: encourage sharpening (minimize entropy, bounded [0, log(3)])
             beta = F.softmax(g.relation_mix_logits, dim=0)
-            h_beta = -(beta * (beta + 1e-8).log()).sum()
-            # σ_low diversity (hinge: only penalize if std < target)
-            sigma_low = F.softplus(g.log_sigma_low) + 1e-3
-            sigma_diversity = F.relu(1.0 - sigma_low.std())
-            total = total + self.t2_explore_weight * (h_beta + sigma_diversity)
+
+            # ① β entropy: maximize → keep all three views active
+            if self.t2_entropy_weight > 0:
+                h_beta = -(beta * (beta + 1e-8).log()).sum()
+                total = total + self.t2_entropy_weight * (-h_beta)
+
+            # ② Interval active: ensure σ_low < σ_high (functionally different)
+            if self.t2_interval_weight > 0:
+                sl = F.softplus(g.log_sigma_low) + 1e-3
+                sh = F.softplus(g.log_sigma_high) + 1e-3
+                # Penalize when ratio → 1 (σ_low ≈ σ_high)
+                s_ratio = (sl / (sh + 1e-8)).clamp(0, 1)
+                s_gap = F.relu(0.95 - s_ratio)  # penalize ratio > 0.95
+                total = total + self.t2_interval_weight * s_gap.mean()
+
+            # ③ FOU floor: keep membership interval from collapsing to 0
+            if self.t2_fou_floor_weight > 0 and self._current_fou is not None:
+                fou_gap = F.relu(0.01 - self._current_fou.mean())
+                total = total + self.t2_fou_floor_weight * fou_gap
 
         # ── Type-2 gradient boost: amplify σ/r/β gradients post-backward ──
         if (self.t2_lr_boost != 1.0 and self.fuzzy_graph is not None

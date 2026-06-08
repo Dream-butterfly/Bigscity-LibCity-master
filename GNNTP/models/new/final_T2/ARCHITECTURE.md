@@ -49,8 +49,8 @@ Input [B,T_in,N,F]
 | Parameter | Shape | Role |
 |-----------|-------|------|
 | `prototype_center` | [K, D] | *K* fuzzy prototypes in *D*-dimensional hidden space |
-| `log_sigma` | [K] | Per-set Gaussian width (positive via `softplus`) |
-| `log_radius_ratio` | [K] | Per-set interval half-width ratio, `r = sigmoid(log_r) ∈ (0,1)` |
+| `log_sigma_low` | [K] | Per-set lower Gaussian width (positive via `softplus`) |
+| `log_sigma_high` | [K] | Per-set upper Gaussian width (positive via `softplus`) |
 | `node_transform` | D→D | 2-layer MLP mapping raw node features to prototype space |
 | `blend_logit` | [1] | Fuzzy/static graph mixture weight, `sigmoid(blend_logit)` |
 | `relation_mix_logits` | [3] | β router: weight distribution over [R_low, R_mid, R_high] |
@@ -63,24 +63,31 @@ For each node *i* and fuzzy set *k*:
 
 1. Extract node representation: `node_latent = node_transform(raw_projection(history.mean_time))` → [N, D]
 2. Compute squared distances: `d²_ik = ||node_latent_i − prototype_k||²` → [N, K]
-3. Interval Type-2 Gaussian membership:
+3. **Genuine Interval Type-2** via independent dual widths:
 
 ```
-σ_k   = softplus(log_sigma_k) + 1e-3
-r_k   = sigmoid(log_radius_ratio_k)
-σ_low  = σ_k · (1 − r_k)    # narrower  → higher peak near center
-σ_high = σ_k · (1 + r_k)    # wider     → lower peak, slower decay
+σ_low  = softplus(log_sigma_low_k) + 1e-3      # ← independent, per-set
+σ_high = softplus(log_sigma_high_k) + 1e-3     # ← independent, per-set
+σ_low  = min(σ_low, σ_high)                     # enforce ordering
+σ_high = max(σ_low, σ_high)
 
-μ_narrow = exp(−d² / 2σ_low²)
-μ_wide   = exp(−d² / 2σ_high²)
+μ_lower_raw = exp(−d² / 2σ_high²)              # wider  → more connections, lower confidence
+μ_upper_raw = exp(−d² / 2σ_low²)               # narrower → fewer connections, higher confidence
 
-μ_upper  = max(μ_narrow, μ_wide)   # upper envelope
-μ_lower  = min(μ_narrow, μ_wide)   # lower envelope
-μ_mid    = exp(−d² / 2σ_k²)
+μ_upper = max(μ_lower_raw, μ_upper_raw)        # upper envelope
+μ_lower = min(μ_lower_raw, μ_upper_raw)        # lower envelope
+μ_mid   = (μ_lower + μ_upper) / 2              # midpoint
 ```
 
-**Degeneration**: If `r_k → 0`, then `σ_low → σ_high → σ_k`, and `μ_lower → μ_mid → μ_upper`.
-The Interval Type-2 Gaussian MF naturally collapses to a Type-1 Gaussian MF.
+Each fuzzy set has **independently learned** lower and upper Gaussian widths. Unlike the
+previous version which used a symmetric perturbation `σ·(1±r)`, the two widths are free
+to learn different scales from data. A set may have σ_low=1.8 (sharp) and σ_high=8.3 (diffuse),
+or σ_low=4.0 and σ_high=4.2 (nearly Type-1).
+
+**Degeneration**: If `σ_low → σ_high` for all sets, then `μ_lower → μ_upper` and the
+Interval Type-2 collapses to Type-1. This is not a training failure — it is the model
+autonomously determining that interval uncertainty provides no incremental value for the
+prediction task.
 
 ### 1.3 Fuzzy Relation Construction
 
