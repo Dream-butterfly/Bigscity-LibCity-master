@@ -224,6 +224,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             # Gradient norms for key Type-2 parameters
             g = self.fuzzy_graph
             for pname, grad_key in [
+                ('|∇β|', 'relation_mix_logits'),
                 ('|∇σ|', 'log_sigma'),
                 ('|∇r|', 'log_radius_ratio'),
                 ('|∇proto|', 'prototype_center'),
@@ -232,6 +233,13 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 if param is not None and param.grad is not None:
                     gn = param.grad.detach().abs().mean().item()
                     diag[grad_key + '_grad'] = gn
+            # Relation diffs (are the three graphs actually different?)
+            if hasattr(g, '_current_R_diff_lm'):
+                diag['R_diff_lm'] = round(g._current_R_diff_lm.item(), 4)
+                diag['R_diff_hm'] = round(g._current_R_diff_hm.item(), 4)
+            # Effective Type-2 width
+            if hasattr(g, '_current_eff_width'):
+                diag['eff_width'] = round(g._current_eff_width.item(), 4)
             # β entropy (interval mix diversity)
             beta = F.softmax(self.fuzzy_graph.relation_mix_logits, dim=0)
             h = -(beta * (beta + 1e-8).log()).sum().item()

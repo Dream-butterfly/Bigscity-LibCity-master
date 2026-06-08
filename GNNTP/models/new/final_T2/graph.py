@@ -288,6 +288,13 @@ class FuzzyRelationalGraphLearner(nn.Module):
         R_mid  = self._build_fuzzy_relation(mu_mid)       # midpoint
         R_high = self._build_fuzzy_relation(mu_upper)     # optimistic
 
+        # Cache relation diffs for diagnostics
+        self._current_R_diff_lm = (R_low - R_mid).abs().mean().detach()
+        self._current_R_diff_hm = (R_high - R_mid).abs().mean().detach()
+
+        # Cache effective Type-2 width (membership interval)
+        self._current_eff_width = (mu_upper - mu_lower).abs().mean().detach()
+
         # Learnable interval mix
         beta = F.softmax(self.relation_mix_logits, dim=0)  # [3]
         R_mixed = (beta[0] * R_low + beta[1] * R_mid + beta[2] * R_high)
