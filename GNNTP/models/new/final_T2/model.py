@@ -189,20 +189,22 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             # ① β entropy: maximize → keep all three views active
             if self.t2_entropy_weight > 0:
                 h_beta = -(beta * (beta + 1e-8).log()).sum()
+                self._t2_entropy_val = (-h_beta).detach()  # cache for diagnostics
                 total = total + self.t2_entropy_weight * (-h_beta)
 
             # ② Interval active: ensure σ_low < σ_high (functionally different)
             if self.t2_interval_weight > 0:
                 sl = F.softplus(g.log_sigma_low) + 1e-3
                 sh = F.softplus(g.log_sigma_high) + 1e-3
-                # Penalize when ratio → 1 (σ_low ≈ σ_high)
                 s_ratio = (sl / (sh + 1e-8)).clamp(0, 1)
-                s_gap = F.relu(0.95 - s_ratio)  # penalize ratio > 0.95
+                s_gap = F.relu(0.95 - s_ratio)
+                self._t2_gap_val = s_gap.mean().detach()
                 total = total + self.t2_interval_weight * s_gap.mean()
 
             # ③ FOU floor: keep membership interval from collapsing to 0
             if self.t2_fou_floor_weight > 0 and self._current_fou is not None:
                 fou_gap = F.relu(0.01 - self._current_fou.mean())
+                self._t2_fou_val = fou_gap.detach()
                 total = total + self.t2_fou_floor_weight * fou_gap
 
         # ── Type-2 gradient boost: amplify σ/r/β gradients post-backward ──
@@ -259,6 +261,18 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 diag['sigma_low_std']   = round(sl.std().item(), 4)
                 diag['sigma_high_mean'] = round(sh.mean().item(), 4)
                 diag['sigma_high_std']  = round(sh.std().item(), 4)
+                diag['sigma_ratio']     = round(
+                    (sl / (sh + 1e-8)).clamp(0, 1).mean().item(), 4)
+            # Anti-collapse loss values
+            if hasattr(self, '_t2_entropy_val'):
+                diag['t2_entropy_val']  = round(self._t2_entropy_val.item(), 4)
+                diag['t2_entropy_w']    = self.t2_entropy_weight
+            if hasattr(self, '_t2_gap_val'):
+                diag['t2_gap_val']      = round(self._t2_gap_val.item(), 4)
+                diag['t2_interval_w']   = self.t2_interval_weight
+            if hasattr(self, '_t2_fou_val'):
+                diag['t2_fou_val']      = round(self._t2_fou_val.item(), 4)
+                diag['t2_fou_floor_w']  = self.t2_fou_floor_weight
             # Gradient norms for key Type-2 parameters
             g = self.fuzzy_graph
             for pname, grad_key in [

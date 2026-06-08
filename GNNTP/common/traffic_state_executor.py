@@ -450,6 +450,16 @@ class TrafficStateExecutor(AbstractExecutor):
                                 parts2.append('σ_low={:.4f}±{:.4f} σ_high={:.4f}±{:.4f}'.format(
                                     diag['sigma_low_mean'], diag['sigma_low_std'],
                                     diag['sigma_high_mean'], diag['sigma_high_std']))
+                                if 'sigma_ratio' in diag:
+                                    parts2[-1] += ' r={:.4f}'.format(diag['sigma_ratio'])
+                            if 't2_entropy_val' in diag:
+                                parts2.append('ent={:.2f}×ent={:.2f} gap={:.2f}×gap={:.2f} fou={:.2f}×fou={:.2f}'.format(
+                                    diag.get('t2_entropy_w', 0),
+                                    diag['t2_entropy_val'],
+                                    diag.get('t2_interval_w', 0),
+                                    diag.get('t2_gap_val', 0),
+                                    diag.get('t2_fou_floor_w', 0),
+                                    diag.get('t2_fou_val', 0)))
                             if 'log_sigma_low_grad' in diag:
                                 parts3.append('∇β={:.2e} σ_low={:.2e} σ_high={:.2e} proto={:.2e}'.format(
                                     diag.get('relation_mix_logits_grad', 0),
