@@ -437,6 +437,8 @@ class TrafficStateExecutor(AbstractExecutor):
                                 parts.append('β=[{:.3f},{:.3f},{:.3f}]'.format(*diag['beta']))
                                 if 'beta_entropy' in diag:
                                     parts[-1] += ' H={:.3f}'.format(diag['beta_entropy'])
+                                if 'logits_std' in diag:
+                                    parts[-1] += ' lσ={:.4f}'.format(diag['logits_std'])
                             if 'blend' in diag:
                                 parts.append('blend={:.3f}'.format(diag['blend']))
                             if 'cell_blend' in diag:

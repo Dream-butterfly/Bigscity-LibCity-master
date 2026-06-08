@@ -185,7 +185,8 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self.blend_logit = nn.Parameter(torch.tensor(0.5))
 
         # Interval relation mixing: β = softmax(logits)
-        self.relation_mix_logits = nn.Parameter(torch.zeros(3))
+        self.relation_mix_logits = nn.Parameter(
+            torch.randn(3) * 1.0)  # random init to test if router learns
 
     # ═══════════════════════════════════════════════════════════════
     #  Interval Type-2 Membership Computation

@@ -236,6 +236,9 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             beta = F.softmax(self.fuzzy_graph.relation_mix_logits, dim=0)
             h = -(beta * (beta + 1e-8).log()).sum().item()
             diag['beta_entropy'] = round(h, 4)
+            # Raw logits std — tracks if router is converging
+            diag['logits_std'] = round(
+                self.fuzzy_graph.relation_mix_logits.detach().std().item(), 4)
         if self.use_cell_attention and hasattr(self, 'condition_encoder'):
             # Cell blend from first encoder block
             first_block = self.condition_encoder.blocks[0]
