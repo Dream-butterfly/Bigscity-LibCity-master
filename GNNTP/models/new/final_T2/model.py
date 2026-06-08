@@ -63,6 +63,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.use_fuzzy_conservation = config.get("use_fuzzy_conservation", True)
         # Type-2 exploration: force β sharpening + σ differentiation (default off)
         self.t2_explore_weight = config.get("t2_explore_weight", 0.0)
+        # Type-2 gradient boost: multiply gradients of σ, r, β (default 1=off)
+        self.t2_lr_boost = float(config.get("t2_lr_boost", 1.0))
         self._train_step_count = 0
 
         self.device = config.get("device", torch.device("cpu"))
@@ -185,6 +187,20 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             sigma = F.softplus(g.log_sigma) + 1e-3
             sigma_diversity = F.relu(1.0 - sigma.std())
             total = total + self.t2_explore_weight * (h_beta + sigma_diversity)
+
+        # ── Type-2 gradient boost: amplify σ/r/β gradients post-backward ──
+        if self.t2_lr_boost != 1.0 and self.fuzzy_graph is not None:
+            _params = [
+                self.fuzzy_graph.log_sigma,
+                self.fuzzy_graph.log_radius_ratio,
+                self.fuzzy_graph.relation_mix_logits,
+            ]
+            _boost = self.t2_lr_boost
+            def _amp_grad(_grad):
+                for p in _params:
+                    if p.grad is not None:
+                        p.grad.mul_(_boost)
+            total.register_hook(_amp_grad)
 
         return total
 
