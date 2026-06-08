@@ -185,17 +185,17 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             # β: encourage sharpening (minimize entropy, bounded [0, log(3)])
             beta = F.softmax(g.relation_mix_logits, dim=0)
             h_beta = -(beta * (beta + 1e-8).log()).sum()
-            # σ: encourage per-set diversity (hinge: only penalize if std < target)
-            sigma = F.softplus(g.log_sigma) + 1e-3
-            sigma_diversity = F.relu(1.0 - sigma.std())
+            # σ_low diversity (hinge: only penalize if std < target)
+            sigma_low = F.softplus(g.log_sigma_low) + 1e-3
+            sigma_diversity = F.relu(1.0 - sigma_low.std())
             total = total + self.t2_explore_weight * (h_beta + sigma_diversity)
 
         # ── Type-2 gradient boost: amplify σ/r/β gradients post-backward ──
         if (self.t2_lr_boost != 1.0 and self.fuzzy_graph is not None
                 and total.requires_grad):
             _params = [
-                self.fuzzy_graph.log_sigma,
-                self.fuzzy_graph.log_radius_ratio,
+                self.fuzzy_graph.log_sigma_low,
+                self.fuzzy_graph.log_sigma_high,
                 self.fuzzy_graph.relation_mix_logits,
             ]
             _boost = self.t2_lr_boost
@@ -236,31 +236,20 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 fou = self._current_fou.detach()
                 diag['fou_mean'] = round(fou.mean().item(), 4)
                 diag['fou_std'] = round(fou.std().item(), 4)
-            # Sigma width (Gaussian spread, per fuzzy set)
-            if hasattr(self.fuzzy_graph, '_current_sigma'):
-                s = self.fuzzy_graph._current_sigma
-                diag['sigma_mean'] = round(s.mean().item(), 4)
-                diag['sigma_std']  = round(s.std().item(), 4)
+            # Independent dual widths (genuine Type-2)
+            if hasattr(self.fuzzy_graph, '_current_sigma_low'):
                 sl = self.fuzzy_graph._current_sigma_low
                 sh = self.fuzzy_graph._current_sigma_high
                 diag['sigma_low_mean']  = round(sl.mean().item(), 4)
                 diag['sigma_low_std']   = round(sl.std().item(), 4)
                 diag['sigma_high_mean'] = round(sh.mean().item(), 4)
                 diag['sigma_high_std']  = round(sh.std().item(), 4)
-            # Radius ratio (Type-2 interval width control)
-            if hasattr(self.fuzzy_graph, 'log_radius_ratio'):
-                r = torch.sigmoid(
-                    self.fuzzy_graph.log_radius_ratio).detach()
-                diag['radius_mean'] = round(r.mean().item(), 4)
-                diag['radius_std']  = round(r.std().item(), 4)
-                diag['radius_min']  = round(r.min().item(), 4)
-                diag['radius_max']  = round(r.max().item(), 4)
             # Gradient norms for key Type-2 parameters
             g = self.fuzzy_graph
             for pname, grad_key in [
                 ('|∇β|', 'relation_mix_logits'),
-                ('|∇σ|', 'log_sigma'),
-                ('|∇r|', 'log_radius_ratio'),
+                ('|∇σ_low|', 'log_sigma_low'),
+                ('|∇σ_high|', 'log_sigma_high'),
                 ('|∇proto|', 'prototype_center'),
             ]:
                 param = getattr(g, grad_key, None)

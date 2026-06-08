@@ -446,20 +446,15 @@ class TrafficStateExecutor(AbstractExecutor):
                             if 'fou_mean' in diag:
                                 parts2.append('FOU(μ={:.4f},σ={:.4f})'.format(
                                     diag['fou_mean'], diag['fou_std']))
-                            if 'sigma_mean' in diag:
-                                parts2.append('σ={:.4f}±{:.4f} σ_low={:.4f}±{:.4f} σ_high={:.4f}±{:.4f}'.format(
-                                    diag['sigma_mean'], diag['sigma_std'],
+                            if 'sigma_low_mean' in diag:
+                                parts2.append('σ_low={:.4f}±{:.4f} σ_high={:.4f}±{:.4f}'.format(
                                     diag['sigma_low_mean'], diag['sigma_low_std'],
                                     diag['sigma_high_mean'], diag['sigma_high_std']))
-                            if 'radius_mean' in diag:
-                                parts2.append('r(μ={:.4f},σ={:.4f})[{:.3f},{:.3f}]'.format(
-                                    diag['radius_mean'], diag['radius_std'],
-                                    diag.get('radius_min', 0), diag.get('radius_max', 0)))
-                            if 'log_sigma_grad' in diag:
-                                parts3.append('∇β={:.2e} σ={:.2e} r={:.2e} proto={:.2e}'.format(
+                            if 'log_sigma_low_grad' in diag:
+                                parts3.append('∇β={:.2e} σ_low={:.2e} σ_high={:.2e} proto={:.2e}'.format(
                                     diag.get('relation_mix_logits_grad', 0),
-                                    diag['log_sigma_grad'],
-                                    diag['log_radius_ratio_grad'],
+                                    diag['log_sigma_low_grad'],
+                                    diag['log_sigma_high_grad'],
                                     diag['prototype_center_grad']))
                             if 'R_gap' in diag:
                                 parts3.append('R_gap={:.4f} w={:.4f}'.format(

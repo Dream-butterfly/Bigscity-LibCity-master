@@ -156,15 +156,16 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self.prototype_center = nn.Parameter(
             torch.randn(num_fuzzy_sets, hidden_dim, generator=_g) * 0.1)
 
-        # ── Interval width: σ_k (base), r_k (ratio) ──────────────
-        #   σ_low  = σ·(1−r)  → narrower  → optimistic (upper MF)
-        #   σ_high = σ·(1+r)  → wider     → pessimistic (lower MF)
-        #   Random init σ ∈ [1, 8] to test if 3.5 is a true attractor
-        _sigma_init = torch.rand(num_fuzzy_sets, generator=_g) * 3.0 + 2.5  # U(2.5,5.5)
-        self.log_sigma = nn.Parameter(
-            torch.log(torch.exp(_sigma_init) - 1))  # softplus$^{-1}$
-        self.log_radius_ratio = nn.Parameter(
-            torch.randn(num_fuzzy_sets, generator=_g) * 0.1)
+        # ── Independent dual widths: σ_low, σ_high (genuine Type-2) ─
+        #   Each fuzzy set k has its own lower and upper Gaussian width,
+        #   independently learned from data (not a symmetric perturbation).
+        #   Ordering enforced: σ_low ≤ σ_high at compute time.
+        _sigma_low_init  = torch.rand(num_fuzzy_sets, generator=_g) * 3.0 + 2.5
+        _sigma_high_init = torch.rand(num_fuzzy_sets, generator=_g) * 3.0 + 2.5
+        self.log_sigma_low = nn.Parameter(
+            torch.log(torch.exp(_sigma_low_init) - 1))
+        self.log_sigma_high = nn.Parameter(
+            torch.log(torch.exp(_sigma_high_init) - 1))
 
         # ── Input projection ──────────────────────────────────────
         if input_dim is not None and input_dim != hidden_dim:
@@ -227,27 +228,23 @@ class FuzzyRelationalGraphLearner(nn.Module):
             node_repr = self.raw_projection(node_repr)    # → [N, D]
         node_latent = self.node_transform(node_repr)      # → [N, D]
 
-        # 3. Interval width parameterization
-        sigma = F.softplus(self.log_sigma) + 1e-3           # [K], base width
-        r = torch.sigmoid(self.log_radius_ratio)             # [K], ratio ∈ (0,1)
-        sigma_low  = sigma * (1 - r)                         # narrower  → optimistic
-        sigma_high = sigma * (1 + r)                         # wider     → pessimistic
-        sigma_mid  = sigma
+        # 3. Independent dual widths (genuine Type-2)
+        sigma_low  = F.softplus(self.log_sigma_low) + 1e-3    # [K]
+        sigma_high = F.softplus(self.log_sigma_high) + 1e-3   # [K]
+        # Enforce interval order: σ_low ≤ σ_high
+        sigma_low  = torch.minimum(sigma_low, sigma_high)
+        sigma_high = torch.maximum(sigma_low, sigma_high)
         # Cache for diagnostics
-        self._current_sigma = sigma.detach()
         self._current_sigma_low = sigma_low.detach()
         self._current_sigma_high = sigma_high.detach()
 
         # 4. Gaussian membership: exp(−d² / 2σ²)
-        #    Narrow Gaussian: high near center, fast decay
-        #    Wide Gaussian:   low near center, slow decay
-        #    → the two curves cross. Upper/lower envelopes use max/min.
         d2 = torch.cdist(node_latent, self.prototype_center).pow(2)  # [N, K]
-        mu_narrow = torch.exp(-d2 / (2 * sigma_low.pow(2)))
-        mu_wide   = torch.exp(-d2 / (2 * sigma_high.pow(2)))
-        mu_upper  = torch.maximum(mu_narrow, mu_wide)
-        mu_lower  = torch.minimum(mu_narrow, mu_wide)
-        mu_mid    = torch.exp(-d2 / (2 * sigma_mid.pow(2)))
+        mu_low_raw  = torch.exp(-d2 / (2 * sigma_high.pow(2)))  # wide → low
+        mu_high_raw = torch.exp(-d2 / (2 * sigma_low.pow(2)))   # narrow → high
+        mu_upper = torch.maximum(mu_low_raw, mu_high_raw)
+        mu_lower = torch.minimum(mu_low_raw, mu_high_raw)
+        mu_mid   = (mu_lower + mu_upper) / 2
 
         return mu_lower, mu_upper, mu_mid
 
