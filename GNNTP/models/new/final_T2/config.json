@@ -44,5 +44,6 @@
   "use_early_stop": true,
   "patience": 30,
   "batch_size": 64,
-  "eval_batch_size": 64
+  "eval_batch_size": 64,
+  "graph_topk": 32
 }

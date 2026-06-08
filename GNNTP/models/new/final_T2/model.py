@@ -46,6 +46,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
 
         self.use_fuzzy_graph = config.get("use_fuzzy_graph", True)
         self.fuzzy_num_sets = config.get("fuzzy_num_sets", 3)
+        self.graph_topk = config.get("graph_topk", 32)
 
         self.use_cell_attention = config.get("use_cell_attention", True)
         self.num_cells = config.get("num_cells", 8)
@@ -75,6 +76,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 static_adjacency=adjacency_matrix,
                 input_dim=self.feature_dim,
                 closure_steps=int(max(0, config.get("graph_closure_steps", 0))),
+                topk=self.graph_topk,
             )
         else:
             self.fuzzy_graph = None
@@ -126,7 +128,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             fou = None
             self._current_fou = None
         graph_powers = FuzzyGraphConvolution.precompute_powers(
-            graph_matrix, k_hop=self.graph_k_hop)
+            graph_matrix, k_hop=self.graph_k_hop, topk=self.graph_topk)
         condition_features = self.condition_encoder(
             history_sequence, graph_matrix, graph_uncertainty=fou, powers=graph_powers)
         return condition_features, graph_matrix, fou, graph_powers

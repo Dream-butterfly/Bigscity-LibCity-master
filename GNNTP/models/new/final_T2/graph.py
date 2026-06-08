@@ -45,21 +45,35 @@ class GraphConvolution(nn.Module):
 
 
 class FuzzyGraphConvolution(nn.Module):
-    def __init__(self, hidden_dim, k_hop=2):
+    def __init__(self, hidden_dim, k_hop=2, topk=None):
         super().__init__()
         self.k_hop = k_hop
+        self.topk = topk
         self.projections = nn.ModuleList(
             [nn.Linear(hidden_dim, hidden_dim) for _ in range(k_hop + 1)]
         )
 
     @staticmethod
-    def _max_min_compose_2d(R, S):
+    def _max_min_compose_2d(R, S, topk=None):
+        if topk is not None and topk < R.size(0) - 1:
+            return FuzzyGraphConvolution._sparse_max_min_compose(R, S, topk)
         return torch.max(
             torch.min(R.unsqueeze(1), S.unsqueeze(0)), dim=-1
         ).values
 
     @staticmethod
-    def precompute_powers(R_base, k_hop):
+    def _sparse_max_min_compose(R, S, topk):
+        """Top-K sparse max-min compose: O(N^2*topk) instead of O(N^3)."""
+        _, idx = R.topk(topk, dim=-1)            # [N, topk]
+        R_topk = R.gather(1, idx)                 # [N, topk]
+        S_topk = S[idx]                           # [N, topk, N]
+        return torch.max(
+            torch.min(R_topk.unsqueeze(-1), S_topk),
+            dim=1
+        ).values  # [N, N]
+
+    @staticmethod
+    def precompute_powers(R_base, k_hop, topk=None):
         device = R_base.device
         dtype = R_base.dtype
         N = R_base.size(0)
@@ -68,7 +82,7 @@ class FuzzyGraphConvolution(nn.Module):
         current = R_base
         for _ in range(k_hop):
             powers.append(current)
-            current = FuzzyGraphConvolution._max_min_compose_2d(R_base, current)
+            current = FuzzyGraphConvolution._max_min_compose_2d(R_base, current, topk=topk)
         return powers
 
     def forward(self, node_features, fuzzy_relation, powers=None):
@@ -86,7 +100,7 @@ class FuzzyGraphConvolution(nn.Module):
                 R_base = fuzzy_relation.to(
                     device=node_features.device, dtype=node_features.dtype
                 )
-            R_powers = self.precompute_powers(R_base, self.k_hop)
+            R_powers = self.precompute_powers(R_base, self.k_hop, topk=self.topk)
 
         output = self.projections[0](node_features)
         for hop_index in range(1, self.k_hop + 1):
@@ -120,6 +134,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         static_adjacency: torch.Tensor | None = None,
         input_dim: int | None = None,
         closure_steps: int = 0,
+        topk: int | None = None,
     ):
         super().__init__()
         if num_fuzzy_sets < 2:
@@ -127,6 +142,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self.num_nodes = num_nodes
         self.num_fuzzy_sets = num_fuzzy_sets
         self.closure_steps = int(max(0, closure_steps))
+        self.topk = topk
 
         # ── Prototype centers c_k ∈ R^D ──────────────────────────
         self.prototype_center = nn.Parameter(
@@ -135,7 +151,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         # ── Interval width: σ_k (base), r_k (ratio) ──────────────
         #   σ_low  = σ·(1−r)  → narrower  → optimistic (upper MF)
         #   σ_high = σ·(1+r)  → wider     → pessimistic (lower MF)
-        self.log_sigma = nn.Parameter(torch.zeros(num_fuzzy_sets))
+        self.log_sigma = nn.Parameter(torch.full((num_fuzzy_sets,), 3.5))
         self.log_radius_ratio = nn.Parameter(
             torch.zeros(num_fuzzy_sets))  # sigmoid(0)=0.5，明显区间宽度
 
@@ -236,7 +252,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         R_current = R_mid
         R_list = [R_current]
         for _ in range(self.closure_steps):
-            R_current = FuzzyGraphConvolution._max_min_compose_2d(R_mid, R_current)
+            R_current = FuzzyGraphConvolution._max_min_compose_2d(R_mid, R_current, topk=self.topk)
             R_list.append(R_current)
         S = torch.stack(R_list, dim=0).amax(dim=0)
         diag = torch.eye(self.num_nodes, device=S.device, dtype=S.dtype)
