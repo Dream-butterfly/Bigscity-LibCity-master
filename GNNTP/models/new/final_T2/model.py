@@ -207,20 +207,31 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             # Sigma width (Gaussian spread, per fuzzy set)
             if hasattr(self.fuzzy_graph, '_current_sigma'):
                 s = self.fuzzy_graph._current_sigma
-                diag['sigma_mean'] = round(s.mean().item(), 2)
-                diag['sigma_std']  = round(s.std().item(), 2)
+                diag['sigma_mean'] = round(s.mean().item(), 4)
+                diag['sigma_std']  = round(s.std().item(), 4)
                 sl = self.fuzzy_graph._current_sigma_low
                 sh = self.fuzzy_graph._current_sigma_high
-                diag['sigma_low_mean']  = round(sl.mean().item(), 2)
-                diag['sigma_low_std']   = round(sl.std().item(), 2)
-                diag['sigma_high_mean'] = round(sh.mean().item(), 2)
-                diag['sigma_high_std']  = round(sh.std().item(), 2)
+                diag['sigma_low_mean']  = round(sl.mean().item(), 4)
+                diag['sigma_low_std']   = round(sl.std().item(), 4)
+                diag['sigma_high_mean'] = round(sh.mean().item(), 4)
+                diag['sigma_high_std']  = round(sh.std().item(), 4)
             # Radius ratio (Type-2 interval width control)
             if hasattr(self.fuzzy_graph, 'log_radius_ratio'):
                 r = torch.sigmoid(
                     self.fuzzy_graph.log_radius_ratio).detach()
                 diag['radius_mean'] = round(r.mean().item(), 4)
                 diag['radius_std']  = round(r.std().item(), 4)
+            # Gradient norms for key Type-2 parameters
+            g = self.fuzzy_graph
+            for pname, grad_key in [
+                ('|∇σ|', 'log_sigma'),
+                ('|∇r|', 'log_radius_ratio'),
+                ('|∇proto|', 'prototype_center'),
+            ]:
+                param = getattr(g, grad_key, None)
+                if param is not None and param.grad is not None:
+                    gn = param.grad.detach().abs().mean().item()
+                    diag[grad_key + '_grad'] = gn
             # β entropy (interval mix diversity)
             beta = F.softmax(self.fuzzy_graph.relation_mix_logits, dim=0)
             h = -(beta * (beta + 1e-8).log()).sum().item()
