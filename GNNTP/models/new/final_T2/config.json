@@ -9,7 +9,6 @@
   "graph_k_hop": 2,
   "use_fuzzy_graph": true,
   "fuzzy_num_sets": 3,
-  "uncertainty_alpha_init": -2.0,
   "use_cell_attention": true,
   "num_cells": 8,
   "use_hollow_kernel": true,
