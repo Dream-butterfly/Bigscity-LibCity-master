@@ -43,6 +43,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.use_spatiotemporal_attention = config.get("use_spatiotemporal_attention", True)
         self.use_temporal_position_embedding = config.get("use_temporal_position_embedding", True)
         self.use_gradient_checkpointing = config.get("use_gradient_checkpointing", False)
+        self.use_torch_compile = config.get("use_torch_compile", False)
 
         self.use_fuzzy_graph = config.get("use_fuzzy_graph", True)
         self.fuzzy_num_sets = config.get("fuzzy_num_sets", 3)
@@ -116,6 +117,15 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             use_hollow_kernel=self.use_hollow_kernel,
             cell_blend_init=self.cell_blend_init,
         )
+
+        # ── torch.compile each block (standard Transformer kernels fuse well) ──
+        if self.use_torch_compile:
+            for i, block in enumerate(self.condition_encoder.blocks):
+                self.condition_encoder.blocks[i] = torch.compile(
+                    block, mode="reduce-overhead")
+            for i, block in enumerate(self.future_decoder.blocks):
+                self.future_decoder.blocks[i] = torch.compile(
+                    block, mode="reduce-overhead")
 
     def encode_condition(self, history_sequence):
         if self.use_fuzzy_graph and self.fuzzy_graph is not None:
