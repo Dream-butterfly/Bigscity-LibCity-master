@@ -151,9 +151,11 @@ class FuzzyRelationalGraphLearner(nn.Module):
         # ── Interval width: σ_k (base), r_k (ratio) ──────────────
         #   σ_low  = σ·(1−r)  → narrower  → optimistic (upper MF)
         #   σ_high = σ·(1+r)  → wider     → pessimistic (lower MF)
-        self.log_sigma = nn.Parameter(torch.full((num_fuzzy_sets,), 3.5))
+        #   Add small noise so each fuzzy set learns a different width
+        self.log_sigma = nn.Parameter(
+            torch.full((num_fuzzy_sets,), 3.5) + torch.randn(num_fuzzy_sets) * 0.3)
         self.log_radius_ratio = nn.Parameter(
-            torch.zeros(num_fuzzy_sets))  # sigmoid(0)=0.5，明显区间宽度
+            torch.randn(num_fuzzy_sets) * 0.1)  # sigmoid(0±0.1)≈0.5±0.025
 
         # ── Input projection ──────────────────────────────────────
         if input_dim is not None and input_dim != hidden_dim:
