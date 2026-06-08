@@ -119,10 +119,14 @@ class FutureDecoder(nn.Module):
         self.output_window = output_window
         self.num_nodes = num_nodes
 
-        self.future_queries = nn.Parameter(
-            torch.zeros(1, output_window, num_nodes, hidden_dim)
-        )
-        nn.init.trunc_normal_(self.future_queries, std=0.02)
+        # Factorized future queries: horizon × node → T×N×D
+        #   saves ~91% params vs dense [1,T,N,D] (678k → 57k for PEMSD7)
+        self.horizon_embed = nn.Parameter(
+            torch.zeros(1, output_window, 1, hidden_dim))
+        self.node_embed = nn.Parameter(
+            torch.zeros(1, 1, num_nodes, hidden_dim))
+        nn.init.trunc_normal_(self.horizon_embed, std=0.02)
+        nn.init.trunc_normal_(self.node_embed, std=0.02)
 
         self.blocks = nn.ModuleList([
             DecoderBlock(
@@ -141,7 +145,8 @@ class FutureDecoder(nn.Module):
 
     def forward(self, condition_features, graph_matrix, graph_uncertainty=None, powers=None):
         batch_size = condition_features.shape[0]
-        queries = self.future_queries.expand(batch_size, -1, -1, -1)
+        queries = (self.horizon_embed + self.node_embed).expand(
+            batch_size, -1, -1, -1)
 
         for block in self.blocks:
             if self.use_gradient_checkpointing and self.training:
