@@ -59,8 +59,6 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         )
         self.physics_channel_idx = config.get("physics_channel_idx", 0)
         self.use_fuzzy_conservation = config.get("use_fuzzy_conservation", True)
-        self.fou_preservation_weight = config.get("fou_preservation_weight", 0.0)
-        self.fou_preservation_target = config.get("fou_preservation_target", 0.02)
         self._train_step_count = 0
 
         self.device = config.get("device", torch.device("cpu"))
@@ -162,22 +160,13 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             conservation_loss = self._fuzzy_conservation_loss(predicted_future, graph_matrix)
             total = total + effective_weight * conservation_loss
 
-        # ── FOU preservation: prevent Type-2 interval collapse ──
-        if (self.fou_preservation_weight > 0
-                and self.use_fuzzy_graph
-                and self._current_fou is not None):
-            fou_mean = self._current_fou.mean()
-            fou_penalty = F.relu(
-                self.fou_preservation_target - fou_mean)
-            total = total + self.fou_preservation_weight * fou_penalty
-
         return total
 
     def get_fuzzy_graph_stability(self, history_sequence=None):
         if self.fuzzy_graph is None:
             return None, None
-        H = self.fuzzy_graph.get_cell_entropy()
-        S = self.fuzzy_graph.get_margin_stability()
+        H = self.fuzzy_graph.get_cell_entropy(history_sequence)
+        S = self.fuzzy_graph.get_margin_stability(history_sequence)
         return H, S
 
     def get_type2_diagnostics(self):
@@ -202,6 +191,16 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 fou = self._current_fou.detach()
                 diag['fou_mean'] = round(fou.mean().item(), 4)
                 diag['fou_std'] = round(fou.std().item(), 4)
+            # Radius ratio (Type-2 interval width control)
+            if hasattr(self.fuzzy_graph, 'log_radius_ratio'):
+                r = torch.sigmoid(
+                    self.fuzzy_graph.log_radius_ratio).detach()
+                diag['radius_mean'] = round(r.mean().item(), 4)
+                diag['radius_std']  = round(r.std().item(), 4)
+            # β entropy (interval mix diversity)
+            beta = F.softmax(self.fuzzy_graph.relation_mix_logits, dim=0)
+            h = -(beta * (beta + 1e-8).log()).sum().item()
+            diag['beta_entropy'] = round(h, 4)
         if self.use_cell_attention and hasattr(self, 'condition_encoder'):
             # Cell blend from first encoder block
             first_block = self.condition_encoder.blocks[0]
