@@ -178,12 +178,12 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         # ── Type-2 exploration: push β to sharpen, σ to differentiate ──
         if self.t2_explore_weight > 0 and self.fuzzy_graph is not None:
             g = self.fuzzy_graph
-            # β: encourage sharpening (minimize entropy)
+            # β: encourage sharpening (minimize entropy, bounded [0, log(3)])
             beta = F.softmax(g.relation_mix_logits, dim=0)
             h_beta = -(beta * (beta + 1e-8).log()).sum()
-            # σ: encourage per-set diversity (maximize std)
+            # σ: encourage per-set diversity (hinge: only penalize if std < target)
             sigma = F.softplus(g.log_sigma) + 1e-3
-            sigma_diversity = -sigma.std()
+            sigma_diversity = F.relu(1.0 - sigma.std())
             total = total + self.t2_explore_weight * (h_beta + sigma_diversity)
 
         return total
