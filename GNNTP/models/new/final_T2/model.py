@@ -64,7 +64,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.use_fuzzy_conservation = config.get("use_fuzzy_conservation", True)
         # Type-2 anti-collapse losses (all default 0 → backward compatible)
         self.t2_entropy_weight   = config.get("t2_entropy_weight", 0.0)    # β entropy (keep β diverse)
-        self.t2_interval_weight  = config.get("t2_interval_weight", 0.0)   # σ gap (keep σ_low≠σ_high)
+        self.t2_interval_weight          = config.get("t2_interval_weight", 0.0)
+        self.t2_interval_ratio_threshold  = config.get("t2_interval_ratio_threshold", 0.90)
         self.t2_fou_floor_weight = config.get("t2_fou_floor_weight", 0.0)  # FOU floor (keep μ interval)
         # Type-2 gradient boost (default 1=off)
         self.t2_lr_boost = float(config.get("t2_lr_boost", 1.0))
@@ -197,7 +198,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 sl = F.softplus(g.log_sigma_low) + 1e-3
                 sh = F.softplus(g.log_sigma_high) + 1e-3
                 s_ratio = (sl / (sh + 1e-8)).clamp(0, 1)
-                s_gap = F.relu(0.95 - s_ratio)
+                s_gap = F.relu(s_ratio - self.t2_interval_ratio_threshold)
                 self._t2_gap_val = s_gap.mean().detach()
                 total = total + self.t2_interval_weight * s_gap.mean()
 
