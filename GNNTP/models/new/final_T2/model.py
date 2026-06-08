@@ -59,6 +59,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         )
         self.physics_channel_idx = config.get("physics_channel_idx", 0)
         self.use_fuzzy_conservation = config.get("use_fuzzy_conservation", True)
+        self.fou_preservation_weight = config.get("fou_preservation_weight", 0.0)
+        self.fou_preservation_target = config.get("fou_preservation_target", 0.02)
         self._train_step_count = 0
 
         self.device = config.get("device", torch.device("cpu"))
@@ -152,12 +154,24 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             condition_features, graph_matrix, graph_uncertainty=fou, powers=graph_powers)
 
         regression_loss = F.l1_loss(predicted_future, future_sequence)
+        total = regression_loss
 
+        # ── Conservation (if enabled) ──
         effective_weight = self._get_effective_conservation_weight()
         if effective_weight > 0:
             conservation_loss = self._fuzzy_conservation_loss(predicted_future, graph_matrix)
-            return regression_loss + effective_weight * conservation_loss
-        return regression_loss
+            total = total + effective_weight * conservation_loss
+
+        # ── FOU preservation: prevent Type-2 interval collapse ──
+        if (self.fou_preservation_weight > 0
+                and self.use_fuzzy_graph
+                and self._current_fou is not None):
+            fou_mean = self._current_fou.mean()
+            fou_penalty = F.relu(
+                self.fou_preservation_target - fou_mean)
+            total = total + self.fou_preservation_weight * fou_penalty
+
+        return total
 
     def get_fuzzy_graph_stability(self, history_sequence=None):
         if self.fuzzy_graph is None:

@@ -44,6 +44,7 @@
   "use_early_stop": true,
   "patience": 30,
   "batch_size": 64,
-  "eval_batch_size": 64
+  "eval_batch_size": 64,
+  "fou_preservation_weight": 0.01,
+  "fou_preservation_target": 0.02
 }
-
