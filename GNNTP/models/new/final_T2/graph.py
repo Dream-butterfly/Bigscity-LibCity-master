@@ -159,7 +159,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         #   σ_low  = σ·(1−r)  → narrower  → optimistic (upper MF)
         #   σ_high = σ·(1+r)  → wider     → pessimistic (lower MF)
         #   Random init σ ∈ [1, 8] to test if 3.5 is a true attractor
-        _sigma_init = torch.rand(num_fuzzy_sets, generator=_g) * 7.0 + 1.0  # U(1,8)
+        _sigma_init = torch.rand(num_fuzzy_sets, generator=_g) * 3.0 + 2.5  # U(2.5,5.5)
         self.log_sigma = nn.Parameter(
             torch.log(torch.exp(_sigma_init) - 1))  # softplus$^{-1}$
         self.log_radius_ratio = nn.Parameter(
