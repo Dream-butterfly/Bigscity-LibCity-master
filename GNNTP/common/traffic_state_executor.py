@@ -452,18 +452,20 @@ class TrafficStateExecutor(AbstractExecutor):
                                     diag['sigma_low_mean'], diag['sigma_low_std'],
                                     diag['sigma_high_mean'], diag['sigma_high_std']))
                             if 'radius_mean' in diag:
-                                parts2.append('r(μ={:.4f},σ={:.4f})'.format(
-                                    diag['radius_mean'], diag['radius_std']))
+                                parts2.append('r(μ={:.4f},σ={:.4f})[{:.3f},{:.3f}]'.format(
+                                    diag['radius_mean'], diag['radius_std'],
+                                    diag.get('radius_min', 0), diag.get('radius_max', 0)))
                             if 'log_sigma_grad' in diag:
                                 parts3.append('∇β={:.2e} σ={:.2e} r={:.2e} proto={:.2e}'.format(
                                     diag.get('relation_mix_logits_grad', 0),
                                     diag['log_sigma_grad'],
                                     diag['log_radius_ratio_grad'],
                                     diag['prototype_center_grad']))
-                            if 'R_diff_lm' in diag:
-                                parts3.append('ΔR(L,M)={:.4f} ΔR(H,M)={:.4f} w={:.4f}'.format(
-                                    diag['R_diff_lm'], diag['R_diff_hm'],
-                                    diag['eff_width']))
+                            if 'R_gap' in diag:
+                                parts3.append('R_gap={:.4f} w={:.4f}'.format(
+                                    diag['R_gap'], diag.get('eff_width', 0)))
+                            if 'beta_delta' in diag:
+                                parts3.append('Δβ={:.6f}'.format(diag['beta_delta']))
                             if parts:
                                 self._logger.info('  [T2] ' + ' | '.join(parts))
                             if parts2:

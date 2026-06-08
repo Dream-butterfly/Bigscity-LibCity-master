@@ -221,6 +221,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                     self.fuzzy_graph.log_radius_ratio).detach()
                 diag['radius_mean'] = round(r.mean().item(), 4)
                 diag['radius_std']  = round(r.std().item(), 4)
+                diag['radius_min']  = round(r.min().item(), 4)
+                diag['radius_max']  = round(r.max().item(), 4)
             # Gradient norms for key Type-2 parameters
             g = self.fuzzy_graph
             for pname, grad_key in [
@@ -237,9 +239,18 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             if hasattr(g, '_current_R_diff_lm'):
                 diag['R_diff_lm'] = round(g._current_R_diff_lm.item(), 4)
                 diag['R_diff_hm'] = round(g._current_R_diff_hm.item(), 4)
+            # R_gap: |R_high - R_low| / |R_mid| — Type-2 collapse indicator
+            if hasattr(g, '_current_R_gap'):
+                diag['R_gap'] = round(g._current_R_gap.item(), 4)
             # Effective Type-2 width
             if hasattr(g, '_current_eff_width'):
                 diag['eff_width'] = round(g._current_eff_width.item(), 4)
+            # β delta from previous epoch
+            if hasattr(self, '_last_beta'):
+                cur_beta = torch.tensor(diag['beta'])
+                diag['beta_delta'] = round(
+                    (cur_beta - self._last_beta).abs().mean().item(), 6)
+            self._last_beta = torch.tensor(diag['beta'])
             # β entropy (interval mix diversity)
             beta = F.softmax(self.fuzzy_graph.relation_mix_logits, dim=0)
             h = -(beta * (beta + 1e-8).log()).sum().item()

@@ -291,6 +291,9 @@ class FuzzyRelationalGraphLearner(nn.Module):
         # Cache relation diffs for diagnostics
         self._current_R_diff_lm = (R_low - R_mid).abs().mean().detach()
         self._current_R_diff_hm = (R_high - R_mid).abs().mean().detach()
+        # R_gap: relative interval size — directly measures Type-2 collapse
+        _R_mid_norm = R_mid.abs().mean().clamp_min(1e-8)
+        self._current_R_gap = (R_high - R_low).abs().mean().detach() / _R_mid_norm
 
         # Cache effective Type-2 width (membership interval)
         self._current_eff_width = (mu_upper - mu_lower).abs().mean().detach()
