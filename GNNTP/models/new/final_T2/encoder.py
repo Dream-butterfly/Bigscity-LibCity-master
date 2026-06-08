@@ -49,13 +49,13 @@ class STEncoderBlock(nn.Module):
             )
             self.norm_cell = nn.LayerNorm(hidden_dim)
 
-    def forward(self, sequence_features, graph_matrix, graph_uncertainty=None):
+    def forward(self, sequence_features, graph_matrix, graph_uncertainty=None, powers=None):
         temporal_output = apply_temporal_attention(sequence_features, self.temporal_attention)
         sequence_features = self.norm_temporal(sequence_features + self.dropout(temporal_output))
 
         batch_size, time_steps, num_nodes, hidden_dim = sequence_features.shape
         graph_input = sequence_features.reshape(batch_size * time_steps, num_nodes, hidden_dim)
-        graph_output = self.graph_convolution(graph_input, graph_matrix)
+        graph_output = self.graph_convolution(graph_input, graph_matrix, powers=powers)
         graph_output = graph_output.reshape(batch_size, time_steps, num_nodes, hidden_dim)
         sequence_features = self.norm_graph(sequence_features + self.dropout(graph_output))
 
@@ -120,7 +120,7 @@ class STEncoder(nn.Module):
             nn.init.trunc_normal_(self.temporal_position_embedding, std=0.02)
         self.final_norm = nn.LayerNorm(hidden_dim)
 
-    def forward(self, history_sequence, graph_matrix, graph_uncertainty=None):
+    def forward(self, history_sequence, graph_matrix, graph_uncertainty=None, powers=None):
         encoded_features = self.input_projection(history_sequence)
         if self.temporal_position_embedding is not None:
             history_steps = encoded_features.shape[1]
@@ -133,10 +133,10 @@ class STEncoder(nn.Module):
         for block in self.blocks:
             if self.use_gradient_checkpointing and self.training:
                 encoded_features = checkpoint(
-                    block, encoded_features, graph_matrix, graph_uncertainty, use_reentrant=False
+                    block, encoded_features, graph_matrix, graph_uncertainty, powers, use_reentrant=False
                 )
             else:
-                encoded_features = block(encoded_features, graph_matrix, graph_uncertainty)
+                encoded_features = block(encoded_features, graph_matrix, graph_uncertainty, powers=powers)
         encoded_features = self.final_norm(encoded_features)
         return encoded_features
 

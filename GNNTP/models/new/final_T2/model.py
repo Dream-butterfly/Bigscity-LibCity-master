@@ -16,7 +16,7 @@ from GNNTP.models.abstract_traffic_state_model import AbstractTrafficStateModel
 
 from .encoder import STEncoder
 from .decoder import FutureDecoder
-from .graph import FuzzyRelationalGraphLearner
+from .graph import FuzzyGraphConvolution, FuzzyRelationalGraphLearner
 from .utils import apply_temporal_attention
 
 
@@ -122,8 +122,11 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         else:
             graph_matrix = self.adjacency_matrix.to(history_sequence.device)
             fou = None
-        condition_features = self.condition_encoder(history_sequence, graph_matrix, graph_uncertainty=fou)
-        return condition_features, graph_matrix, fou
+        graph_powers = FuzzyGraphConvolution.precompute_powers(
+            graph_matrix, k_hop=self.graph_k_hop)
+        condition_features = self.condition_encoder(
+            history_sequence, graph_matrix, graph_uncertainty=fou, powers=graph_powers)
+        return condition_features, graph_matrix, fou, graph_powers
 
     def forward(self, batch):
         if self.training:
@@ -133,15 +136,17 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
 
     def predict(self, batch):
         history_sequence = batch["X"]
-        condition_features, graph_matrix, fou = self.encode_condition(history_sequence)
-        return self.future_decoder(condition_features, graph_matrix, graph_uncertainty=fou)
+        condition_features, graph_matrix, fou, graph_powers = self.encode_condition(history_sequence)
+        return self.future_decoder(
+            condition_features, graph_matrix, graph_uncertainty=fou, powers=graph_powers)
 
     def calculate_loss(self, batch):
         history_sequence = batch["X"]
         future_sequence = batch["y"][..., :self.output_dim]
 
-        condition_features, graph_matrix, fou = self.encode_condition(history_sequence)
-        predicted_future = self.future_decoder(condition_features, graph_matrix, graph_uncertainty=fou)
+        condition_features, graph_matrix, fou, graph_powers = self.encode_condition(history_sequence)
+        predicted_future = self.future_decoder(
+            condition_features, graph_matrix, graph_uncertainty=fou, powers=graph_powers)
 
         regression_loss = F.l1_loss(predicted_future, future_sequence)
 

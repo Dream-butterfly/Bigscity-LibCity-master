@@ -25,7 +25,7 @@ class GraphConvolution(nn.Module):
             [nn.Linear(hidden_dim, hidden_dim) for _ in range(k_hop + 1)]
         )
 
-    def forward(self, node_features, adjacency_matrix):
+    def forward(self, node_features, adjacency_matrix, **kwargs):
         batch_size, num_nodes, _ = node_features.shape
         adjacency_matrix = expand_adjacency_batch(adjacency_matrix, batch_size).to(
             device=node_features.device, dtype=node_features.dtype
@@ -58,24 +58,35 @@ class FuzzyGraphConvolution(nn.Module):
             torch.min(R.unsqueeze(1), S.unsqueeze(0)), dim=-1
         ).values
 
-    def forward(self, node_features, fuzzy_relation):
+    @staticmethod
+    def precompute_powers(R_base, k_hop):
+        device = R_base.device
+        dtype = R_base.dtype
+        N = R_base.size(0)
+        I = torch.eye(N, device=device, dtype=dtype)
+        powers = [I]
+        current = R_base
+        for _ in range(k_hop):
+            powers.append(current)
+            current = FuzzyGraphConvolution._max_min_compose_2d(R_base, current)
+        return powers
+
+    def forward(self, node_features, fuzzy_relation, powers=None):
         batch_size, num_nodes, _ = node_features.shape
 
-        if fuzzy_relation.dim() == 3:
-            R_base = fuzzy_relation[0].to(
-                device=node_features.device, dtype=node_features.dtype
-            )
+        if powers is not None:
+            R_powers = [p.to(device=node_features.device, dtype=node_features.dtype)
+                        for p in powers]
         else:
-            R_base = fuzzy_relation.to(
-                device=node_features.device, dtype=node_features.dtype
-            )
-
-        I = torch.eye(num_nodes, device=node_features.device, dtype=node_features.dtype)
-        R_powers = [I]
-        current = R_base
-        for _ in range(self.k_hop):
-            R_powers.append(current)
-            current = self._max_min_compose_2d(R_base, current)
+            if fuzzy_relation.dim() == 3:
+                R_base = fuzzy_relation[0].to(
+                    device=node_features.device, dtype=node_features.dtype
+                )
+            else:
+                R_base = fuzzy_relation.to(
+                    device=node_features.device, dtype=node_features.dtype
+                )
+            R_powers = self.precompute_powers(R_base, self.k_hop)
 
         output = self.projections[0](node_features)
         for hop_index in range(1, self.k_hop + 1):

@@ -61,13 +61,13 @@ class DecoderBlock(nn.Module):
             )
             self.norm_cell = nn.LayerNorm(hidden_dim)
 
-    def forward(self, queries, condition_features, graph_matrix, graph_uncertainty=None):
+    def forward(self, queries, condition_features, graph_matrix, graph_uncertainty=None, powers=None):
         temporal_output = apply_temporal_attention(queries, self.temporal_attention)
         queries = self.norm_temporal(queries + self.dropout(temporal_output))
 
         batch_size, time_steps, num_nodes, hidden_dim = queries.shape
         graph_input = queries.reshape(batch_size * time_steps, num_nodes, hidden_dim)
-        graph_output = self.graph_convolution(graph_input, graph_matrix)
+        graph_output = self.graph_convolution(graph_input, graph_matrix, powers=powers)
         graph_output = graph_output.reshape(batch_size, time_steps, num_nodes, hidden_dim)
         queries = self.norm_graph(queries + self.dropout(graph_output))
 
@@ -139,17 +139,17 @@ class FutureDecoder(nn.Module):
         self.final_norm = nn.LayerNorm(hidden_dim)
         self.output_projection = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, condition_features, graph_matrix, graph_uncertainty=None):
+    def forward(self, condition_features, graph_matrix, graph_uncertainty=None, powers=None):
         batch_size = condition_features.shape[0]
         queries = self.future_queries.expand(batch_size, -1, -1, -1)
 
         for block in self.blocks:
             if self.use_gradient_checkpointing and self.training:
                 queries = checkpoint(
-                    block, queries, condition_features, graph_matrix, graph_uncertainty, use_reentrant=False
+                    block, queries, condition_features, graph_matrix, graph_uncertainty, powers, use_reentrant=False
                 )
             else:
-                queries = block(queries, condition_features, graph_matrix, graph_uncertainty)
+                queries = block(queries, condition_features, graph_matrix, graph_uncertainty, powers=powers)
 
         queries = self.final_norm(queries)
         return self.output_projection(queries)
