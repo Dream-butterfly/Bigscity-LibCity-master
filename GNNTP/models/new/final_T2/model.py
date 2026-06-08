@@ -8,6 +8,7 @@ Key engineering choices implemented here follow your specification:
 from logging import getLogger
 
 import numpy as np
+import torch.nn.functional as F
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -119,9 +120,11 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             graph_matrix, fou = self.fuzzy_graph.get_type2_info(history_sequence)
             graph_matrix = graph_matrix.to(history_sequence.device)
             fou = fou.to(history_sequence.device)
+            self._current_fou = fou  # cache for diagnostics
         else:
             graph_matrix = self.adjacency_matrix.to(history_sequence.device)
             fou = None
+            self._current_fou = None
         graph_powers = FuzzyGraphConvolution.precompute_powers(
             graph_matrix, k_hop=self.graph_k_hop)
         condition_features = self.condition_encoder(
@@ -162,6 +165,37 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         H = self.fuzzy_graph.get_cell_entropy()
         S = self.fuzzy_graph.get_margin_stability()
         return H, S
+
+    def get_type2_diagnostics(self):
+        """Return Type-2 diagnostic values for epoch-end logging.
+
+        Returns:
+            dict with keys:
+              beta:         [β_low, β_mid, β_high] interval mix weights
+              blend:        sigmoid(blend_logit) fuzzy-static mix
+              fou_norm:     mean FOU norm (per-node), or None
+        """
+        diag = {}
+        if self.fuzzy_graph is not None:
+            # Interval mix weights
+            beta = F.softmax(self.fuzzy_graph.relation_mix_logits, dim=0).detach()
+            diag['beta'] = [round(b.item(), 3) for b in beta]
+            # Fuzzy-static blend
+            diag['blend'] = round(
+                torch.sigmoid(self.fuzzy_graph.blend_logit).item(), 3)
+            # FOU statistics (from last forward)
+            if hasattr(self, '_current_fou') and self._current_fou is not None:
+                fou = self._current_fou.detach()
+                diag['fou_mean'] = round(fou.mean().item(), 4)
+                diag['fou_std'] = round(fou.std().item(), 4)
+        if self.use_cell_attention and hasattr(self, 'condition_encoder'):
+            # Cell blend from first encoder block
+            first_block = self.condition_encoder.blocks[0]
+            if hasattr(first_block, 'cell_attention'):
+                cb = torch.sigmoid(
+                    first_block.cell_attention.cell_blend).detach().item()
+                diag['cell_blend'] = round(cb, 3)
+        return diag
 
     def get_cell_attention_stability(self, history_sequence):
         metrics = []

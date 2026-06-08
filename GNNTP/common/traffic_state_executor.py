@@ -424,6 +424,26 @@ class TrafficStateExecutor(AbstractExecutor):
                 message = 'Epoch [{}/{}] train_loss: {:.4f}, val_loss: {:.4f}, lr: {:.6f}, {:.2f}s'. \
                     format(epoch_idx, self.epochs, np.mean(losses), val_loss, log_lr, (end_time - start_time))
                 self._logger.info(message)
+                # Type-2 diagnostics (if model supports it)
+                try:
+                    unwrapped = self._unwrap_model()
+                    if hasattr(unwrapped, 'get_type2_diagnostics'):
+                        diag = unwrapped.get_type2_diagnostics()
+                        if diag:
+                            parts = []
+                            if 'beta' in diag:
+                                parts.append('β=[{:.3f},{:.3f},{:.3f}]'.format(*diag['beta']))
+                            if 'blend' in diag:
+                                parts.append('blend={:.3f}'.format(diag['blend']))
+                            if 'cell_blend' in diag:
+                                parts.append('cell_b={:.3f}'.format(diag['cell_blend']))
+                            if 'fou_mean' in diag:
+                                parts.append('FOU(μ={:.4f},σ={:.4f})'.format(
+                                    diag['fou_mean'], diag['fou_std']))
+                            if parts:
+                                self._logger.info('  [T2] ' + ' | '.join(parts))
+                except Exception:
+                    pass  # diagnostics should never crash training
 
             if self.hyper_tune and self._is_rank0():
                 # use ray tune to checkpoint
