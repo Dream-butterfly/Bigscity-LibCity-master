@@ -120,12 +120,13 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
 
         # ── torch.compile each block (standard Transformer kernels fuse well) ──
         if self.use_torch_compile:
+            torch.set_float32_matmul_precision('high')  # enable TF32, ~2× speed on Ampere+
             for i, block in enumerate(self.condition_encoder.blocks):
                 self.condition_encoder.blocks[i] = torch.compile(
-                    block, mode="reduce-overhead")
+                    block, mode="default")
             for i, block in enumerate(self.future_decoder.blocks):
                 self.future_decoder.blocks[i] = torch.compile(
-                    block, mode="reduce-overhead")
+                    block, mode="default")
 
     def encode_condition(self, history_sequence):
         if self.use_fuzzy_graph and self.fuzzy_graph is not None:
