@@ -200,6 +200,8 @@ class FuzzyRelationalGraphLearner(nn.Module):
         use_competition: bool = False,
         membership_temperature: float = 1.0,
         use_gumbel: bool = False,
+        blend_logit_init: float = 0.5,
+        uncertainty_alpha_init: float = 0.0,
     ):
         super().__init__()
         if num_fuzzy_sets < 2:
@@ -260,8 +262,12 @@ class FuzzyRelationalGraphLearner(nn.Module):
             self._has_static = False
 
         # Blend between fuzzy relation and static adjacency
-        # init: sigmoid(0.5) ≈ 0.62 weight on fuzzy relation
-        self.blend_logit = nn.Parameter(torch.tensor(0.5))
+        # init: sigmoid(-1.5) ≈ 0.18 — weak dynamic graph initially
+        self.blend_logit = nn.Parameter(torch.tensor(blend_logit_init))
+
+        # Learnable FOU gating sensitivity
+        #   alpha = sigmoid(init) → low → weak gating at start → model learns
+        self.uncertainty_alpha = nn.Parameter(torch.tensor(uncertainty_alpha_init))
 
     # ═══════════════════════════════════════════════════════════════
     #  Interval Membership Computation
@@ -556,7 +562,9 @@ class FuzzyRelationalGraphLearner(nn.Module):
             S_eff = (S_low + S_high) / 2.0
         elif mode == "fou_gated":
             # High-uncertainty relations → dampened propagation
-            confidence = 1.0 / (1.0 + FOU * fou_gate_scale)
+            # α = sigmoid(learnable) → controls gating sensitivity
+            alpha = torch.sigmoid(self.uncertainty_alpha)
+            confidence = alpha / (alpha + FOU * fou_gate_scale)
             S_eff = (S_high * confidence).clamp(0.0, 1.0)
             # Re-enforce reflexivity after gating
             S_eff = self._enforce_reflexivity(S_eff)

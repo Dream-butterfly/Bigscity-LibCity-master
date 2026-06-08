@@ -106,8 +106,10 @@ const PARAM_DESCRIPTIONS = {
   // ====== 模糊集/区域(Fuzzy/Region) ======
   fuzzy_num_sets:      '每个节点的模糊集合数(隶属函数个数)。推荐: 4。可选: 2/3/4/6/8',
   num_cells:           '模糊区域单元数(空间聚类数)。推荐: 8。可选: 4/8/12/16',
-  cell_blend_init:     '区域混合初始化值(0=硬划分,>0=软划分)。推荐: 0.0。可选: 0.0~0.5',
-  band_center_init:    '模糊带中心初始化值(GMM均值缩放)。推荐: 1.1。可选: 0.5~2.0',
+  cell_blend_init:       '区域混合初始化值(0=硬划分,>0=软划分)。推荐: 0.0。可选: 0.0~0.5',
+  blend_logit_init:      '模糊-静态图混合logit初始值(sigmoid变换)。推荐: -1.5(静态优先)。可选: -3.0~1.0',
+  uncertainty_alpha_init:'FOU门控敏感度logit初始值(sigmoid变换)。推荐: -2.0(弱门控)。可选: -4.0~1.0',
+  band_center_init:      '模糊带中心初始化值(GMM均值缩放)。推荐: 1.1。可选: 0.5~2.0',
   band_width_init:     '模糊带宽度初始化值(GMM标准差缩放)。推荐: 0.7。可选: 0.3~1.5',
   fir_mode:            '模糊推理模式。推荐: lukasiewicz(Łukasiewicz逻辑)。可选: lukasiewicz/godel/product',
   use_cell_attention:  '是否使用区域注意力(new_fuzzy_cellattention)。推荐: true。可选: true/false',

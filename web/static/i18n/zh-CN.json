@@ -175,6 +175,8 @@
     "fuzzy_num_sets": "模糊集合数",
     "num_cells": "区域单元数",
     "cell_blend_init": "区域混合初始值",
+    "blend_logit_init": "模糊-静态图混合初值",
+    "uncertainty_alpha_init": "FOU门控敏感度初值",
     "band_center_init": "模糊带中心初始值",
     "band_width_init": "模糊带宽度初始值",
     "region_transformer_layers": "区域Transformer层数",

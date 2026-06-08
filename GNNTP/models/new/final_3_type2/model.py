@@ -100,6 +100,8 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
         self.fuzzy_num_sets = config.get("fuzzy_num_sets", 4)
         self.num_cells = config.get("num_cells", 8)
         self.cell_blend_init = config.get("cell_blend_init", 0.3)
+        self.blend_logit_init = config.get("blend_logit_init", -1.5)
+        self.uncertainty_alpha_init = config.get("uncertainty_alpha_init", -2.0)
         self.band_center_init = config.get("band_center_init", 1.1)
         self.band_width_init = config.get("band_width_init", 0.7)
         self.region_transformer_layers = config.get(
@@ -213,6 +215,8 @@ class NewFuzzyCellAttention3_Type2(AbstractTrafficStateModel):
             use_competition=self.use_membership_competition,
             membership_temperature=self.membership_temperature,
             use_gumbel=self.use_membership_gumbel,
+            blend_logit_init=self.blend_logit_init,
+            uncertainty_alpha_init=self.uncertainty_alpha_init,
         )
 
         # ── Submodules ────────────────────────────────────────

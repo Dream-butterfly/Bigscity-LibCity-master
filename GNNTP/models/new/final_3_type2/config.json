@@ -10,6 +10,8 @@
   "fuzzy_num_sets": 6,
   "num_cells": 8,
   "cell_blend_init": 0.1,
+  "blend_logit_init": -1.5,
+  "uncertainty_alpha_init": -2.0,
   "band_center_init": 1.1,
   "band_width_init": 0.7,
   "region_transformer_layers": 1,
