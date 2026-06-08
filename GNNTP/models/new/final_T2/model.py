@@ -193,6 +193,17 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 fou = self._current_fou.detach()
                 diag['fou_mean'] = round(fou.mean().item(), 4)
                 diag['fou_std'] = round(fou.std().item(), 4)
+            # Sigma width (Gaussian spread, per fuzzy set)
+            if hasattr(self.fuzzy_graph, '_current_sigma'):
+                s = self.fuzzy_graph._current_sigma
+                diag['sigma_mean'] = round(s.mean().item(), 2)
+                diag['sigma_std']  = round(s.std().item(), 2)
+                sl = self.fuzzy_graph._current_sigma_low
+                sh = self.fuzzy_graph._current_sigma_high
+                diag['sigma_low_mean']  = round(sl.mean().item(), 2)
+                diag['sigma_low_std']   = round(sl.std().item(), 2)
+                diag['sigma_high_mean'] = round(sh.mean().item(), 2)
+                diag['sigma_high_std']  = round(sh.std().item(), 2)
             # Radius ratio (Type-2 interval width control)
             if hasattr(self.fuzzy_graph, 'log_radius_ratio'):
                 r = torch.sigmoid(

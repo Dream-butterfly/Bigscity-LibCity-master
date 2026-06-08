@@ -431,6 +431,7 @@ class TrafficStateExecutor(AbstractExecutor):
                         diag = unwrapped.get_type2_diagnostics()
                         if diag:
                             parts = []
+                            parts2 = []
                             if 'beta' in diag:
                                 parts.append('β=[{:.3f},{:.3f},{:.3f}]'.format(*diag['beta']))
                                 if 'beta_entropy' in diag:
@@ -440,13 +441,20 @@ class TrafficStateExecutor(AbstractExecutor):
                             if 'cell_blend' in diag:
                                 parts.append('cell_b={:.3f}'.format(diag['cell_blend']))
                             if 'fou_mean' in diag:
-                                parts.append('FOU(μ={:.4f},σ={:.4f})'.format(
+                                parts2.append('FOU(μ={:.4f},σ={:.4f})'.format(
                                     diag['fou_mean'], diag['fou_std']))
+                            if 'sigma_mean' in diag:
+                                parts2.append('σ={:.1f}±{:.1f} σ_low={:.1f}±{:.1f} σ_high={:.1f}±{:.1f}'.format(
+                                    diag['sigma_mean'], diag['sigma_std'],
+                                    diag['sigma_low_mean'], diag['sigma_low_std'],
+                                    diag['sigma_high_mean'], diag['sigma_high_std']))
                             if 'radius_mean' in diag:
-                                parts.append('r(μ={:.4f},σ={:.4f})'.format(
+                                parts2.append('r(μ={:.4f},σ={:.4f})'.format(
                                     diag['radius_mean'], diag['radius_std']))
                             if parts:
                                 self._logger.info('  [T2] ' + ' | '.join(parts))
+                            if parts2:
+                                self._logger.info('  [T2σ] ' + ' | '.join(parts2))
                 except Exception:
                     pass  # diagnostics should never crash training
 

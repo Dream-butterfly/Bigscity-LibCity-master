@@ -220,6 +220,10 @@ class FuzzyRelationalGraphLearner(nn.Module):
         sigma_low  = sigma * (1 - r)                         # narrower  → optimistic
         sigma_high = sigma * (1 + r)                         # wider     → pessimistic
         sigma_mid  = sigma
+        # Cache for diagnostics
+        self._current_sigma = sigma.detach()
+        self._current_sigma_low = sigma_low.detach()
+        self._current_sigma_high = sigma_high.detach()
 
         # 4. Gaussian membership: exp(−d² / 2σ²)
         #    Narrow Gaussian: high near center, fast decay
