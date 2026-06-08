@@ -46,5 +46,6 @@
   "batch_size": 64,
   "eval_batch_size": 64,
   "graph_topk": 32,
-  "use_torch_compile": true
+  "use_torch_compile": true,
+  "t2_explore_weight": 0.0
 }

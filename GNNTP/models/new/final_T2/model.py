@@ -61,6 +61,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         )
         self.physics_channel_idx = config.get("physics_channel_idx", 0)
         self.use_fuzzy_conservation = config.get("use_fuzzy_conservation", True)
+        # Type-2 exploration: force β sharpening + σ differentiation (default off)
+        self.t2_explore_weight = config.get("t2_explore_weight", 0.0)
         self._train_step_count = 0
 
         self.device = config.get("device", torch.device("cpu"))
@@ -172,6 +174,17 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         if effective_weight > 0:
             conservation_loss = self._fuzzy_conservation_loss(predicted_future, graph_matrix)
             total = total + effective_weight * conservation_loss
+
+        # ── Type-2 exploration: push β to sharpen, σ to differentiate ──
+        if self.t2_explore_weight > 0 and self.fuzzy_graph is not None:
+            g = self.fuzzy_graph
+            # β: encourage sharpening (minimize entropy)
+            beta = F.softmax(g.relation_mix_logits, dim=0)
+            h_beta = -(beta * (beta + 1e-8).log()).sum()
+            # σ: encourage per-set diversity (maximize std)
+            sigma = F.softplus(g.log_sigma) + 1e-3
+            sigma_diversity = -sigma.std()
+            total = total + self.t2_explore_weight * (h_beta + sigma_diversity)
 
         return total
 
