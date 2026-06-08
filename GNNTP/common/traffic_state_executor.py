@@ -433,6 +433,8 @@ class TrafficStateExecutor(AbstractExecutor):
                             parts = []
                             if 'beta' in diag:
                                 parts.append('β=[{:.3f},{:.3f},{:.3f}]'.format(*diag['beta']))
+                                if 'beta_entropy' in diag:
+                                    parts[-1] += ' H={:.3f}'.format(diag['beta_entropy'])
                             if 'blend' in diag:
                                 parts.append('blend={:.3f}'.format(diag['blend']))
                             if 'cell_blend' in diag:
@@ -440,6 +442,9 @@ class TrafficStateExecutor(AbstractExecutor):
                             if 'fou_mean' in diag:
                                 parts.append('FOU(μ={:.4f},σ={:.4f})'.format(
                                     diag['fou_mean'], diag['fou_std']))
+                            if 'radius_mean' in diag:
+                                parts.append('r(μ={:.4f},σ={:.4f})'.format(
+                                    diag['radius_mean'], diag['radius_std']))
                             if parts:
                                 self._logger.info('  [T2] ' + ' | '.join(parts))
                 except Exception:

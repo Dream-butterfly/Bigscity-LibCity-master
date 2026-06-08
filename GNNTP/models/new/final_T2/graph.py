@@ -100,10 +100,16 @@ class FuzzyGraphConvolution(nn.Module):
 
 
 class FuzzyRelationalGraphLearner(nn.Module):
-    """Learns fuzzy relation and exposes Type-2 FOU for gating.
+    """Interval Type-2 Fuzzy Relational Graph Learner.
 
-    Forward keeps backward-compatible behavior (returns mid graph), and
-    a separate method `get_type2_info` returns (R_mid, fou_vector).
+    Uses Gaussian IT2 membership functions with uncertain standard deviation:
+        μ̃_k(x) = exp(−||x−c_k||² / 2σ̃_k²),   σ̃_k ∈ [σ_k·(1−r_k), σ_k·(1+r_k)]
+
+    Upper membership (narrower, optimistic): σ_low  = σ·(1−r)
+    Lower membership (wider,   pessimistic): σ_high = σ·(1+r)
+
+    Degeneration theorem:
+        r_k → 0  ⇒  μ_lower → μ_upper  ⇒  Type-2 collapses to Type-1
     """
 
     def __init__(
@@ -122,27 +128,32 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self.num_fuzzy_sets = num_fuzzy_sets
         self.closure_steps = int(max(0, closure_steps))
 
-        # raw logits θ (we will apply sigmoid when forming expectations)
-        self.base_memberships = nn.Parameter(
-            torch.zeros(num_nodes, num_fuzzy_sets)
-        )
-        nn.init.trunc_normal_(self.base_memberships, std=0.05)
+        # ── Prototype centers c_k ∈ R^D ──────────────────────────
+        self.prototype_center = nn.Parameter(
+            torch.randn(num_fuzzy_sets, hidden_dim) * 0.1)
 
+        # ── Interval width: σ_k (base), r_k (ratio) ──────────────
+        #   σ_low  = σ·(1−r)  → narrower  → optimistic (upper MF)
+        #   σ_high = σ·(1+r)  → wider     → pessimistic (lower MF)
+        self.log_sigma = nn.Parameter(torch.zeros(num_fuzzy_sets))
+        self.log_radius_ratio = nn.Parameter(
+            torch.full((num_fuzzy_sets,), -2.0))  # sigmoid(−2)≈0.12
+
+        # ── Input projection ──────────────────────────────────────
         if input_dim is not None and input_dim != hidden_dim:
             self.raw_projection = nn.Linear(input_dim, hidden_dim)
         else:
             self.raw_projection = None
 
-        self.feature_to_membership = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim // 2),
+        # ── Feature transform (maps node repr to prototype space) ─
+        self.node_transform = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
             nn.GELU(),
-            nn.Linear(hidden_dim // 2, num_fuzzy_sets),
+            nn.Linear(hidden_dim, hidden_dim),
         )
 
-        self.fuzzy_prototypes = nn.Parameter(
-            torch.randn(num_fuzzy_sets, hidden_dim) * 0.02
-        )
-
+        # ── Static adjacency ──────────────────────────────────────
         if static_adjacency is not None:
             static_adj = static_adjacency.to(dtype=torch.float32)
             static_adj = torch.relu(static_adj) + torch.eye(num_nodes, device=static_adj.device)
@@ -155,31 +166,56 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
         self.blend_logit = nn.Parameter(torch.tensor(0.5))
 
-        # Type-2 scale per fuzzy set (log space for positivity)
-        self.log_epsilon = nn.Parameter(torch.log(torch.full((num_fuzzy_sets,), 0.08)))
-
-        # Interval relation mixing: β = softmax(logits) → R_eff = β·[R_low, R_mid, R_high]
-        #   Init: zeros → uniform [⅓, ⅓, ⅓] — equal weight, training learns the mix
+        # Interval relation mixing: β = softmax(logits)
         self.relation_mix_logits = nn.Parameter(torch.zeros(3))
 
-    # ── Internal: membership logits (θ) ──────────────────────────
+    # ═══════════════════════════════════════════════════════════════
+    #  Interval Type-2 Membership Computation
+    # ═══════════════════════════════════════════════════════════════
 
-    def _compute_membership_logits(self, node_features=None):
-        theta_base = self.base_memberships  # raw logits [N, K]
+    def _compute_memberships(self, node_features):
+        """Compute IT2 Gaussian memberships [μ_lower, μ_upper, μ_mid].
+
+        Returns:
+            mu_lower:  [N, K]  pessimistic (wider Gaussian)
+            mu_upper:  [N, K]  optimistic  (narrower Gaussian)
+            mu_mid:    [N, K]  midpoint
+        """
+        # 1. Node representation extraction
         if node_features is not None:
-            if node_features.dim() == 4:   # [B, T, N, D]
-                node_feat = node_features.mean(dim=(0, 1))   # → [N, D]
-            elif node_features.dim() == 3:  # [B, N, D]
-                node_feat = node_features.mean(dim=0)         # → [N, D]
+            if node_features.dim() == 4:          # [B, T, N, D]
+                node_repr = node_features.mean(dim=(0, 1))
+            elif node_features.dim() == 3:        # [B, N, D]
+                node_repr = node_features.mean(dim=0)
             else:
-                node_feat = node_features
-            if self.raw_projection is not None:
-                node_feat = self.raw_projection(node_feat)
-            theta_feat = self.feature_to_membership(node_feat)  # [N, K]
-            theta = theta_base + theta_feat
+                node_repr = node_features
         else:
-            theta = theta_base
-        return theta
+            raise ValueError(
+                "node_features is required for prototype-based membership")
+
+        # 2. Project to hidden space + transform for prototype matching
+        if self.raw_projection is not None:
+            node_repr = self.raw_projection(node_repr)    # → [N, D]
+        node_latent = self.node_transform(node_repr)      # → [N, D]
+
+        # 3. Interval width parameterization
+        sigma = F.softplus(self.log_sigma) + 1e-3           # [K], base width
+        r = torch.sigmoid(self.log_radius_ratio)             # [K], ratio ∈ (0,1)
+        sigma_low  = sigma * (1 - r)                         # narrower  → optimistic
+        sigma_high = sigma * (1 + r)                         # wider     → pessimistic
+        sigma_mid  = sigma
+
+        # 4. Gaussian membership: exp(−d² / 2σ²)
+        d2 = torch.cdist(node_latent, self.prototype_center).pow(2)  # [N, K]
+        mu_lower = torch.exp(-d2 / (2 * sigma_high.pow(2)))
+        mu_upper = torch.exp(-d2 / (2 * sigma_low.pow(2)))
+        mu_mid   = torch.exp(-d2 / (2 * sigma_mid.pow(2)))
+
+        return mu_lower, mu_upper, mu_mid
+
+    # ═══════════════════════════════════════════════════════════════
+    #  Fuzzy Relation Construction
+    # ═══════════════════════════════════════════════════════════════
 
     def _build_fuzzy_relation(self, memberships):
         mu_i = memberships.unsqueeze(1)  # [N, 1, K]
@@ -202,27 +238,28 @@ class FuzzyRelationalGraphLearner(nn.Module):
         S = S + diag * (1.0 - S.diag().unsqueeze(-1))
         return S.clamp(0.0, 1.0)
 
-    # ── Public Type-2 info: mid graph + per-node FOU scalar ──────
+    # ═══════════════════════════════════════════════════════════════
+    #  Graph Construction
+    # ═══════════════════════════════════════════════════════════════
 
-    def get_type2_info(self, node_features=None):
-        theta = self._compute_membership_logits(node_features)  # [N, K]
-        eps = self.log_epsilon.exp().clamp_min(1e-6)  # [K]
-        eps_node = eps.unsqueeze(0)                     # [1, K]
+    def get_type2_info(self, node_features):
+        """Build interval-valued fuzzy graph with per-node FOU.
 
-        mu_mid = torch.sigmoid(theta)                   # [N, K]
-        mu_L   = torch.sigmoid(theta - eps_node)        # [N, K]
-        mu_U   = torch.sigmoid(theta + eps_node)        # [N, K]
+        Returns:
+            R_with_closure: [N, N] effective fuzzy relation
+            fou_node:       [N]    per-node FOU scalar
+        """
+        mu_lower, mu_upper, mu_mid = self._compute_memberships(node_features)
 
-        # Per-node FOU scalar (for CellAttention, backward compat)
-        fou_per_set = (mu_U - mu_L).clamp(min=0.0)      # [N, K]
-        fou_node = fou_per_set.mean(dim=-1)              # [N]
+        # Per-node FOU (for CellAttention, backward compat)
+        fou_node = (mu_upper - mu_lower).clamp(min=0.0).mean(dim=-1)  # [N]
 
-        # ── Interval-valued relation propagation ──
-        R_low  = self._build_fuzzy_relation(mu_L)       # pessimistic
-        R_mid  = self._build_fuzzy_relation(mu_mid)     # midpoint
-        R_high = self._build_fuzzy_relation(mu_U)       # optimistic
+        # ── Interval-valued relations ──
+        R_low  = self._build_fuzzy_relation(mu_lower)     # pessimistic
+        R_mid  = self._build_fuzzy_relation(mu_mid)       # midpoint
+        R_high = self._build_fuzzy_relation(mu_upper)     # optimistic
 
-        # Learnable mix: softmax(logits) → β sums to 1
+        # Learnable interval mix
         beta = F.softmax(self.relation_mix_logits, dim=0)  # [3]
         R_mixed = (beta[0] * R_low + beta[1] * R_mid + beta[2] * R_high)
 
@@ -235,29 +272,39 @@ class FuzzyRelationalGraphLearner(nn.Module):
             diag = torch.eye(self.num_nodes, device=R_final.device, dtype=R_final.dtype)
             R_final = R_final + diag * (1.0 - R_final.diag().unsqueeze(-1))
 
-        # Apply closure (if configured)
+        # Closure (if configured)
         R_with_closure = self._apply_mid_closure(R_final)
 
         return R_with_closure, fou_node
 
-    # Keep backward-compatible forward (returns mid graph only)
-    def forward(self, node_features=None):
+    # ── Backward-compatible interface ─────────────────────────────
+
+    def forward(self, node_features):
         R, _ = self.get_type2_info(node_features)
         return R
 
-    def get_memberships(self):
-        return torch.sigmoid(self.base_memberships)
+    def get_memberships(self, node_features=None):
+        """Return midpoint memberships for backward compatibility."""
+        if node_features is None:
+            with torch.no_grad():
+                dummy = torch.zeros(1, 1, self.num_nodes,
+                                    self.prototype_center.size(1),
+                                    device=self.prototype_center.device)
+            _, _, mu_mid = self._compute_memberships(dummy)
+        else:
+            _, _, mu_mid = self._compute_memberships(node_features)
+        return mu_mid
 
     def get_prototypes(self):
-        return self.fuzzy_prototypes
+        return self.prototype_center
 
-    def get_cell_entropy(self):
-        mu = torch.sigmoid(self.base_memberships)
+    def get_cell_entropy(self, node_features=None):
+        mu = self.get_memberships(node_features)
         mu = mu / mu.sum(dim=-1, keepdim=True).clamp_min(1e-8)
         return -(mu * mu.log()).sum(dim=-1)
 
-    def get_margin_stability(self):
-        mu = torch.sigmoid(self.base_memberships)
+    def get_margin_stability(self, node_features=None):
+        mu = self.get_memberships(node_features)
         top2 = mu.topk(2, dim=-1).values
         return top2[:, 0] - top2[:, 1]
 
