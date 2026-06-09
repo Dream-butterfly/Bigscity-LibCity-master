@@ -250,6 +250,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self._current_d2_std  = _d2_d.std()
         self._current_proto_norm = self.prototype_center.norm(dim=-1).mean().detach()
         self._current_latent_norm = node_latent.detach().norm(dim=-1).mean()
+        self._current_transform_weight = self.node_transform[-1].weight.norm().detach()
         _pc_mean = self.prototype_center.mean(dim=0)
         _nl_mean = node_latent.detach().mean(dim=0)
         self._current_center_dist = (_nl_mean - _pc_mean).norm()

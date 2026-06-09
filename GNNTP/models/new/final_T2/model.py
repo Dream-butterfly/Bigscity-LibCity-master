@@ -325,6 +325,9 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                     self.fuzzy_graph._current_latent_norm.item(), 2)
                 diag['center_dist'] = round(
                     self.fuzzy_graph._current_center_dist.item(), 2)
+            if hasattr(self.fuzzy_graph, '_current_transform_weight'):
+                diag['transform_w'] = round(
+                    self.fuzzy_graph._current_transform_weight.item(), 2)
             if hasattr(self.fuzzy_graph, '_current_sigma_delta_mean'):
                 diag['sigma_delta_mean'] = round(
                     self.fuzzy_graph._current_sigma_delta_mean.item(), 4)

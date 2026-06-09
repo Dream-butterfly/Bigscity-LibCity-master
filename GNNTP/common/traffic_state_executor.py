@@ -471,9 +471,10 @@ class TrafficStateExecutor(AbstractExecutor):
                                     diag.get('sigma_delta_mean', 0),
                                     diag.get('mu_diff_mean', 0), diag.get('mu_diff_max', 0)))
                             if 'proto_norm' in diag:
-                                parts2.append('|proto|={:.1f} |latent|={:.1f} Δcenter={:.1f}'.format(
+                                parts2.append('|proto|={:.1f} |latent|={:.1f} Δc={:.1f} |W|={:.1f}'.format(
                                     diag['proto_norm'], diag['latent_norm'],
-                                    diag['center_dist']))
+                                    diag['center_dist'],
+                                    diag.get('transform_w', 0)))
                             if 'log_sigma_low_grad' in diag:
                                 parts3.append('∇β={:.2e} σ_low={:.2e} δ={:.2e} proto={:.2e}'.format(
                                     diag.get('relation_mix_logits_grad', 0),
