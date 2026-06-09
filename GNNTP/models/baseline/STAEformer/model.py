@@ -177,9 +177,9 @@ class STAEformer(AbstractTrafficStateModel):
         batch_size = x.shape[0]
 
         if self.add_time_in_day:
-            tod = x[..., 1]
+            tod = x[..., self.input_dim]
         if self.add_day_in_week:
-            dow = x[..., 2]
+            dow = x[..., self.input_dim + 1]
         x = x[..., : self.input_dim]
 
         x = self.input_proj(x)
