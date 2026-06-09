@@ -1,20 +1,20 @@
-# new_diffusion_fuzzy/INFO.md
+# new_diffusion_fuzzy — Conditional Diffusion with Fuzzy Graph
 
-## 目录职责
+当前核心实验模型：模糊图学习 + 模糊守恒损失 + 条件扩散（DDIM/DDPM 采样），有专用 Executor。
 
-实现 `new_diffusion_fuzzy` 条件扩散时空预测模型：模糊图学习 + 模糊守恒损失 + 条件扩散。
+通过工件流水线运行：`run_train_artifact.py --model new_diffusion_fuzzy --dataset <dataset> --artifact_id <id>`
 
 ## 关键文件
 
 | 文件 | 作用 |
-| --- | --- |
-| `model.py` | 模型结构、训练损失、DDIM/DDPM 采样 |
-| `executor.py` | 专属 Executor（DDP-safe 训练） |
+|------|------|
+| `model.py` | 模型结构、训练损失、DDIM/DDPM 采样（621行） |
+| `executor.py` | DiffusionTrafficStateExecutor（DDP-safe 训练） |
 | `utils/adjacency.py` | 邻接矩阵归一化与批量扩展 |
 | `utils/attention_ops.py` | 时空/时序/cross-attention 张量变换 |
 | `utils/time_embedding.py` | 正弦时间步嵌入 |
 | `config.json` | 默认实验参数 |
-| `manifest.json` | 模型注册元信息 |
+| `manifest.json` | 注册信息 |
 
 ## 架构概览
 

@@ -1,32 +1,31 @@
-# DCRNN/INFO.md
+# DCRNN — Traffic Speed Prediction
 
-## 目录职责
-
-实现 DCRNN 交通速度预测模型及其专用执行器逻辑。
+扩散卷积 + 门控循环单元（GRU）交通速度预测模型，有专用执行器。
 
 ## 关键文件
 
 | 文件 | 作用 |
-| --- | --- |
-| `model.py` | DCRNN 网络结构与前向逻辑 |
-| `executor.py` | DCRNN 训练执行流程（训练、评估、保存） |
-| `config.json` | 默认超参数配置 |
-| `manifest.json` | 模型注册元信息 |
-| `executor.json` | 执行器注册元信息 |
+|------|------|
+| `model.py` | DCRNN 网络结构（扩散卷积层 + 编码器-解码器 GRU）与前向逻辑 |
+| `executor.py` | DCRNNExecutor（专用训练流程） |
+| `config.json` | 默认超参数（diffusion_steps、rnn_units 等） |
+| `manifest.json` | 注册信息 |
+| `executor.json` | 执行器注册信息 |
 
 ## 输入/输出
 
-- **输入**：速度时序数据、图结构相关特征和训练配置。
-- **输出**：预测序列、损失值、评估指标和模型缓存。
+- **输入**：速度时序数据 + 图结构特征 + data_feature + config
+- **输出**：预测序列 → evaluate metrics
 
 ## 调用关系
 
-1. `models.locator` 按模型名定位到本目录模型实现。
-2. `common.registry_executor` 依据 `executor.json` 选择本目录执行器。
+1. `manifest.json` → `models/locator.py` 定位模型
+2. `executor.json` → `common/registry_executor` 定位本目录的 DCRNNExecutor
+3. 运行入口：`run_train_artifact.py --model DCRNN --dataset <dataset> --artifact_id <id>`
 
 ## 修改注意事项
 
-1. 图扩散相关参数改动需同步检查数据侧邻接矩阵构建逻辑。
-2. 执行器行为改动要保持与通用日志和输出目录规范一致。
-3. `config.json` 参数名与代码读取名必须一致，避免静默不生效。
+1. 图扩散相关参数改动需同步检查数据侧邻接矩阵构建逻辑
+2. 执行器行为改动要保持与通用日志和输出目录规范一致
+3. `config.json` 参数名与代码读取名必须一致
 

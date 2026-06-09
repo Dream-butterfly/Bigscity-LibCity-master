@@ -1,30 +1,23 @@
-# new_diffusion/INFO.md
+# new_diffusion（v1）— Experimental
 
-## 目录职责
-
-实现 `new_diffusion` 扩散类实验模型（v1）。
+扩散类实验模型 v1，通过主流程或独立实验脚本运行。
 
 ## 关键文件
 
 | 文件 | 作用 |
-| --- | --- |
-| `model.py` | 模型结构与前向逻辑 |
+|------|------|
+| `model.py` | 扩散模型结构与前向逻辑 |
 | `config.json` | 默认实验参数 |
-| `manifest.json` | 模型注册元信息 |
+| `manifest.json` | 注册信息（可用 `--model new_diffusion` 通过主流程调用） |
 
-## 输入/输出
+## 参考
 
-- **输入**：交通时空批数据、扩散相关超参数和训练配置。
-- **输出**：预测结果、训练损失和中间状态。
-
-## 调用关系
-
-1. 可通过主流程注册机制加载。
-2. 也可通过 `scripts/experiments/train_new_diffusion.py` 独立训练。
+- 独立实验入口：`scripts/experiments/train_new_diffusion.py`
+- 主流程入口：`run_train_artifact.py --model new_diffusion --dataset <dataset>`
 
 ## 修改注意事项
 
-1. 输入格式或字段调整时，需同步独立实验脚本与数据准备逻辑。
-2. 扩散相关参数改动应在 `config.json` 与代码读取逻辑保持一致。
-3. 与 `new_diffusion_2` 的差异点建议在提交记录中显式说明。
+1. 输入格式或字段调整时需同步独立实验脚本
+2. 扩散参数改动保持 `config.json` 与代码读取一致性
+3. 与 `new_diffusion_2` / `new_diffusion_fuzzy` 的差异建议在提交记录中说明
 
