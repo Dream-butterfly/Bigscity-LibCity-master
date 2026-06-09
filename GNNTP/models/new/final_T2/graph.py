@@ -160,12 +160,12 @@ class FuzzyRelationalGraphLearner(nn.Module):
         #   Each fuzzy set k has its own lower and upper Gaussian width,
         #   independently learned from data (not a symmetric perturbation).
         #   Ordering enforced: σ_low ≤ σ_high at compute time.
-        _sigma_low_init = torch.rand(num_fuzzy_sets, generator=_g) * 3.0 + 2.5
-        _sigma_high_init = torch.rand(num_fuzzy_sets, generator=_g) * 3.0 + 2.5
+        _sigma_low_init   = torch.rand(num_fuzzy_sets, generator=_g) * 3.0 + 2.5
+        _sigma_delta_init = torch.rand(num_fuzzy_sets, generator=_g) * 1.0 + 0.5
         self.log_sigma_low = nn.Parameter(
             torch.log(torch.exp(_sigma_low_init) - 1))
-        self.log_sigma_high = nn.Parameter(
-            torch.log(torch.exp(_sigma_high_init) - 1))
+        self.log_sigma_delta = nn.Parameter(
+            torch.log(torch.exp(_sigma_delta_init) - 1))
 
         # ── Input projection ──────────────────────────────────────
         if input_dim is not None and input_dim != hidden_dim:
@@ -228,12 +228,10 @@ class FuzzyRelationalGraphLearner(nn.Module):
             node_repr = self.raw_projection(node_repr)  # → [N, D]
         node_latent = self.node_transform(node_repr)  # → [N, D]
 
-        # 3. Independent dual widths (genuine Type-2)
-        sigma_low = F.softplus(self.log_sigma_low) + 1e-3  # [K]
-        sigma_high = F.softplus(self.log_sigma_high) + 1e-3  # [K]
-        # Enforce interval order: σ_low ≤ σ_high
-        sigma_low = torch.minimum(sigma_low, sigma_high)
-        sigma_high = torch.maximum(sigma_low, sigma_high)
+        # 3. Delta parameterization: σ_high = σ_low + δ (guaranteed order)
+        sigma_low   = F.softplus(self.log_sigma_low) + 1e-3   # [K], base
+        sigma_delta = F.softplus(self.log_sigma_delta) + 1e-3 # [K], δ ≥ 0
+        sigma_high  = sigma_low + sigma_delta                  # guaranteed σ_low ≤ σ_high
         # Cache for diagnostics
         self._current_sigma_low = sigma_low.detach()
         self._current_sigma_high = sigma_high.detach()

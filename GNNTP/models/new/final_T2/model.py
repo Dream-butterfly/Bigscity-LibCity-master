@@ -217,7 +217,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             # ② Interval active: ensure σ_low < σ_high (functionally different)
             if self.t2_interval_weight > 0:
                 sl = F.softplus(g.log_sigma_low) + 1e-3
-                sh = F.softplus(g.log_sigma_high) + 1e-3
+                sh = sl + F.softplus(g.log_sigma_delta) + 1e-3
                 s_ratio = (sl / (sh + 1e-8)).clamp(0, 1)
                 s_gap = F.relu(s_ratio - self.t2_interval_ratio_threshold)
                 self._raw_gap = s_gap.mean().detach()
@@ -236,7 +236,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 and total.requires_grad):
             _params = [
                 self.fuzzy_graph.log_sigma_low,
-                self.fuzzy_graph.log_sigma_high,
+                self.fuzzy_graph.log_sigma_delta,
                 self.fuzzy_graph.relation_mix_logits,
             ]
             _boost = self.t2_lr_boost
@@ -311,7 +311,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             for pname, grad_key in [
                 ('|∇β|', 'relation_mix_logits'),
                 ('|∇σ_low|', 'log_sigma_low'),
-                ('|∇σ_high|', 'log_sigma_high'),
+                ('|∇δ|', 'log_sigma_delta'),
                 ('|∇proto|', 'prototype_center'),
             ]:
                 param = getattr(g, grad_key, None)

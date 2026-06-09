@@ -447,9 +447,11 @@ class TrafficStateExecutor(AbstractExecutor):
                                 parts2.append('FOU(μ={:.1e},σ={:.1e})'.format(
                                     diag['fou_mean'], diag['fou_std']))
                             if 'sigma_low_mean' in diag:
-                                parts2.append('σ_low={:.4f}±{:.4f} σ_high={:.4f}±{:.4f}'.format(
+                                parts2.append('σ_low={:.4f}±{:.4f} σ_high={:.4f}±{:.4f} σ_δ={:.4f}±{:.4f}'.format(
                                     diag['sigma_low_mean'], diag['sigma_low_std'],
-                                    diag['sigma_high_mean'], diag['sigma_high_std']))
+                                    diag['sigma_high_mean'], diag['sigma_high_std'],
+                                    diag['sigma_high_mean'] - diag['sigma_low_mean'],
+                                    diag.get('sigma_high_std', 0)))
                                 if 'sigma_ratio' in diag:
                                     parts2[-1] += ' r={:.4f}'.format(diag['sigma_ratio'])
                             if 'loss_mae' in diag:
@@ -466,10 +468,10 @@ class TrafficStateExecutor(AbstractExecutor):
                                 parts2.append('μΔ(m={:.4f},M={:.4f})'.format(
                                     diag['mu_diff_mean'], diag['mu_diff_max']))
                             if 'log_sigma_low_grad' in diag:
-                                parts3.append('∇β={:.2e} σ_low={:.2e} σ_high={:.2e} proto={:.2e}'.format(
+                                parts3.append('∇β={:.2e} σ_low={:.2e} δ={:.2e} proto={:.2e}'.format(
                                     diag.get('relation_mix_logits_grad', 0),
                                     diag['log_sigma_low_grad'],
-                                    diag['log_sigma_high_grad'],
+                                    diag.get('log_sigma_delta_grad', 0),
                                     diag['prototype_center_grad']))
                             if 'R_gap' in diag:
                                 parts3.append('R_gap={:.2f} w={:.1e}'.format(
