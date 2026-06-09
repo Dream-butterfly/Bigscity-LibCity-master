@@ -200,6 +200,9 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self._loss_ent = torch.tensor(0.0)
         self._loss_gap = torch.tensor(0.0)
         self._loss_fou = torch.tensor(0.0)
+        self._raw_ent = torch.tensor(0.0)
+        self._raw_gap = torch.tensor(0.0)
+        self._raw_fou = torch.tensor(0.0)
         if self.fuzzy_graph is not None:
             g = self.fuzzy_graph
             beta = F.softmax(g.relation_mix_logits, dim=0)
@@ -207,6 +210,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             # ① β entropy: maximize → keep all three views active
             if self.t2_entropy_weight > 0:
                 h_beta = -(beta * (beta + 1e-8).log()).sum()
+                self._raw_ent = (-h_beta).detach()
                 self._loss_ent = (self.t2_entropy_weight * (-h_beta)).detach()
                 total = total + self.t2_entropy_weight * (-h_beta)
 
@@ -216,12 +220,14 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 sh = F.softplus(g.log_sigma_high) + 1e-3
                 s_ratio = (sl / (sh + 1e-8)).clamp(0, 1)
                 s_gap = F.relu(s_ratio - self.t2_interval_ratio_threshold)
+                self._raw_gap = s_gap.mean().detach()
                 self._loss_gap = (self.t2_interval_weight * s_gap.mean()).detach()
                 total = total + self.t2_interval_weight * s_gap.mean()
 
             # ③ FOU floor: keep membership interval from collapsing to 0
             if self.t2_fou_floor_weight > 0 and self._current_fou is not None:
                 fou_gap = F.relu(0.01 - self._current_fou.mean())
+                self._raw_fou = fou_gap.detach()
                 self._loss_fou = (self.t2_fou_floor_weight * fou_gap).detach()
                 total = total + self.t2_fou_floor_weight * fou_gap
 
@@ -282,13 +288,24 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 diag['sigma_ratio']     = round(
                     (sl / (sh + 1e-8)).clamp(0, 1).mean().item(), 4)
             # Anti-collapse loss values
-            # Loss breakdown (weighted contributions)
+            # Weighted contributions for L=[] display
             if hasattr(self, '_loss_mae'):
                 diag['loss_mae']  = round(self._loss_mae.item(), 4)
                 diag['loss_consv'] = round(self._loss_consv.item(), 4)
                 diag['loss_ent']   = round(self._loss_ent.item(), 4)
                 diag['loss_gap']   = round(self._loss_gap.item(), 4)
                 diag['loss_fou']   = round(self._loss_fou.item(), 4)
+            # Raw (unweighted) anti-collapse loss values
+            if hasattr(self, '_raw_ent'):
+                diag['raw_ent'] = round(self._raw_ent.item(), 4)
+                diag['raw_gap'] = round(self._raw_gap.item(), 4)
+                diag['raw_fou'] = round(self._raw_fou.item(), 4)
+            # Membership-level interval stats
+            if hasattr(self.fuzzy_graph, '_current_mu_diff_mean'):
+                diag['mu_diff_mean'] = round(
+                    self.fuzzy_graph._current_mu_diff_mean.item(), 4)
+                diag['mu_diff_max'] = round(
+                    self.fuzzy_graph._current_mu_diff_max.item(), 4)
             # Gradient norms for key Type-2 parameters
             g = self.fuzzy_graph
             for pname, grad_key in [

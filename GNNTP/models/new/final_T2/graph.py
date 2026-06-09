@@ -246,6 +246,12 @@ class FuzzyRelationalGraphLearner(nn.Module):
         mu_lower = torch.minimum(mu_low_raw, mu_high_raw)
         mu_mid = (mu_lower + mu_upper) / 2
 
+        # Cache membership-level interval stats for diagnostics
+        _diff = (mu_upper - mu_lower).detach()
+        self._current_mu_diff_mean = _diff.mean()
+        self._current_mu_diff_max = _diff.max()
+        self._current_mu_diff_min = _diff.min()
+
         return mu_lower, mu_upper, mu_mid
 
     # ═══════════════════════════════════════════════════════════════

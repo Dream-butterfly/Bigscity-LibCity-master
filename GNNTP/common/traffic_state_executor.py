@@ -459,6 +459,12 @@ class TrafficStateExecutor(AbstractExecutor):
                                     diag.get('loss_gap', 0),
                                     diag.get('loss_fou', 0),
                                     diag.get('loss_consv', 0)))
+                            if 'raw_ent' in diag:
+                                parts2.append('raw=[ent={:.3f} gap={:.4f} fou={:.4f}]'.format(
+                                    diag['raw_ent'], diag['raw_gap'], diag['raw_fou']))
+                            if 'mu_diff_mean' in diag:
+                                parts2.append('μΔ(m={:.4f},M={:.4f})'.format(
+                                    diag['mu_diff_mean'], diag['mu_diff_max']))
                             if 'log_sigma_low_grad' in diag:
                                 parts3.append('∇β={:.2e} σ_low={:.2e} σ_high={:.2e} proto={:.2e}'.format(
                                     diag.get('relation_mix_logits_grad', 0),
