@@ -306,6 +306,20 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                     self.fuzzy_graph._current_mu_diff_mean.item(), 4)
                 diag['mu_diff_max'] = round(
                     self.fuzzy_graph._current_mu_diff_max.item(), 4)
+            # Distance & raw membership stats
+            if hasattr(self.fuzzy_graph, '_current_d2_mean'):
+                diag['d2_mean'] = round(
+                    self.fuzzy_graph._current_d2_mean.item(), 2)
+                diag['d2_std'] = round(
+                    self.fuzzy_graph._current_d2_std.item(), 2)
+            if hasattr(self.fuzzy_graph, '_current_mu_raw_low_mean'):
+                diag['mu_raw_low']  = round(
+                    self.fuzzy_graph._current_mu_raw_low_mean.item(), 4)
+                diag['mu_raw_high'] = round(
+                    self.fuzzy_graph._current_mu_raw_high_mean.item(), 4)
+            if hasattr(self.fuzzy_graph, '_current_sigma_delta_mean'):
+                diag['sigma_delta_mean'] = round(
+                    self.fuzzy_graph._current_sigma_delta_mean.item(), 4)
             # Gradient norms for key Type-2 parameters
             g = self.fuzzy_graph
             for pname, grad_key in [
