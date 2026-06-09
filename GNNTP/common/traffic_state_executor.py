@@ -465,11 +465,15 @@ class TrafficStateExecutor(AbstractExecutor):
                                 parts2.append('raw=[ent={:.3f} gap={:.4f} fou={:.4f}]'.format(
                                     diag['raw_ent'], diag['raw_gap'], diag['raw_fou']))
                             if 'd2_mean' in diag:
-                                parts2.append('d²={:.1f}±{:.1f} μ_raw(L={:.3f},H={:.3f}) δ_mean={:.2f} μΔ(m={:.4f},M={:.4f})'.format(
+                                parts2.append('d²={:.1f}±{:.1f} μ_raw(L={:.3f},H={:.3f}) δ={:.2f} μΔ(m={:.4f},M={:.4f})'.format(
                                     diag['d2_mean'], diag['d2_std'],
                                     diag.get('mu_raw_low', 0), diag.get('mu_raw_high', 0),
                                     diag.get('sigma_delta_mean', 0),
                                     diag.get('mu_diff_mean', 0), diag.get('mu_diff_max', 0)))
+                            if 'proto_norm' in diag:
+                                parts2.append('|proto|={:.1f} |latent|={:.1f} Δcenter={:.1f}'.format(
+                                    diag['proto_norm'], diag['latent_norm'],
+                                    diag['center_dist']))
                             if 'log_sigma_low_grad' in diag:
                                 parts3.append('∇β={:.2e} σ_low={:.2e} δ={:.2e} proto={:.2e}'.format(
                                     diag.get('relation_mix_logits_grad', 0),

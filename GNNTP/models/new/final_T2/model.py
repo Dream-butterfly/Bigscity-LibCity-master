@@ -317,6 +317,14 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                     self.fuzzy_graph._current_mu_raw_low_mean.item(), 4)
                 diag['mu_raw_high'] = round(
                     self.fuzzy_graph._current_mu_raw_high_mean.item(), 4)
+            # Prototype drift diagnostics
+            if hasattr(self.fuzzy_graph, '_current_proto_norm'):
+                diag['proto_norm'] = round(
+                    self.fuzzy_graph._current_proto_norm.item(), 2)
+                diag['latent_norm'] = round(
+                    self.fuzzy_graph._current_latent_norm.item(), 2)
+                diag['center_dist'] = round(
+                    self.fuzzy_graph._current_center_dist.item(), 2)
             if hasattr(self.fuzzy_graph, '_current_sigma_delta_mean'):
                 diag['sigma_delta_mean'] = round(
                     self.fuzzy_graph._current_sigma_delta_mean.item(), 4)
