@@ -453,7 +453,7 @@ class TrafficStateExecutor(AbstractExecutor):
                                 if 'sigma_ratio' in diag:
                                     parts2[-1] += ' r={:.4f}'.format(diag['sigma_ratio'])
                             if 'loss_mae' in diag:
-                                parts2.append('L=[mae={:.4f} ent={:.4f} gap={:.4f} fou={:.4f} consv={:.4f}]'.format(
+                                parts2.append('L=[mae={:.4f} ent={:.1e} gap={:.1e} fou={:.1e} consv={:.1e}]'.format(
                                     diag['loss_mae'],
                                     diag.get('loss_ent', 0),
                                     diag.get('loss_gap', 0),
