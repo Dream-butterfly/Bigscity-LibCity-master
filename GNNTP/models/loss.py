@@ -178,11 +178,12 @@ def r2_score_torch(preds, labels, null_val=None):
     R² = 1 − SS_res / SS_tot.  Mask domain Ω follows _build_valid_mask so
     that R² is computed on the same sample set as other masked metrics.
     """
-    mask = _build_valid_mask(labels, null_val) & ~torch.isnan(preds)
-    if mask.sum() == 0:
+    mask = _build_valid_mask(labels, null_val) * (~torch.isnan(preds)).float()
+    mask_bool = mask.bool()
+    if mask_bool.sum() == 0:
         return torch.tensor(0.0, device=preds.device, dtype=torch.float32)
-    p = preds[mask].float()
-    l = labels[mask].float()
+    p = preds[mask_bool].float()
+    l = labels[mask_bool].float()
     ss_res = ((l - p) ** 2).sum()
     ss_tot = ((l - l.mean()) ** 2).sum()
     if ss_tot == 0:
@@ -195,11 +196,12 @@ def explained_variance_score_torch(preds, labels, null_val=None):
 
     Mask domain follows _build_valid_mask for consistency with other metrics.
     """
-    mask = _build_valid_mask(labels, null_val) & ~torch.isnan(preds)
-    if mask.sum() == 0:
+    mask = _build_valid_mask(labels, null_val) * (~torch.isnan(preds)).float()
+    mask_bool = mask.bool()
+    if mask_bool.sum() == 0:
         return torch.tensor(0.0, device=preds.device, dtype=torch.float32)
-    p = preds[mask].float()
-    l = labels[mask].float()
+    p = preds[mask_bool].float()
+    l = labels[mask_bool].float()
     diff = l - p
     var_res = diff.var(unbiased=False)
     var_tot = l.var(unbiased=False)
@@ -278,11 +280,12 @@ def masked_smape_np(preds, labels, null_val=None, eps=1e-5, mask_val=None):
 
 def r2_score_np(preds, labels, null_val=None):
     """R² (NumPy), over valid samples (consistent with _build_valid_mask_np)."""
-    mask = _build_valid_mask_np(labels, null_val) & ~np.isnan(preds)
-    if mask.sum() == 0:
+    mask = _build_valid_mask_np(labels, null_val) * (~np.isnan(preds)).astype(np.float32)
+    mask_bool = mask.astype(bool)
+    if not mask_bool.any():
         return 0.0
-    p = preds[mask].flatten()
-    l = labels[mask].flatten()
+    p = preds[mask_bool].flatten()
+    l = labels[mask_bool].flatten()
     ss_res = np.sum((l - p) ** 2)
     ss_tot = np.sum((l - l.mean()) ** 2)
     if ss_tot == 0:
@@ -292,11 +295,12 @@ def r2_score_np(preds, labels, null_val=None):
 
 def explained_variance_score_np(preds, labels, null_val=None):
     """Explained variance score (NumPy), over valid samples (consistent with _build_valid_mask_np)."""
-    mask = _build_valid_mask_np(labels, null_val) & ~np.isnan(preds)
-    if mask.sum() == 0:
+    mask = _build_valid_mask_np(labels, null_val) * (~np.isnan(preds)).astype(np.float32)
+    mask_bool = mask.astype(bool)
+    if not mask_bool.any():
         return 0.0
-    p = preds[mask].flatten()
-    l = labels[mask].flatten()
+    p = preds[mask_bool].flatten()
+    l = labels[mask_bool].flatten()
     diff = l - p
     var_res = np.var(diff)
     var_tot = np.var(l)

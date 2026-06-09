@@ -66,9 +66,9 @@ class FuzzyGraphConvolution(nn.Module):
     @staticmethod
     def _sparse_max_min_compose(R, S, topk):
         """Top-K sparse max-min compose: O(N^2*topk) instead of O(N^3)."""
-        _, idx = R.topk(topk, dim=-1)            # [N, topk]
-        R_topk = R.gather(1, idx)                 # [N, topk]
-        S_topk = S[idx]                           # [N, topk, N]
+        _, idx = R.topk(topk, dim=-1)  # [N, topk]
+        R_topk = R.gather(1, idx)  # [N, topk]
+        S_topk = S[idx]  # [N, topk, N]
         return torch.max(
             torch.min(R_topk.unsqueeze(-1), S_topk),
             dim=1
@@ -129,15 +129,15 @@ class FuzzyRelationalGraphLearner(nn.Module):
     """
 
     def __init__(
-        self,
-        num_nodes: int,
-        hidden_dim: int,
-        num_fuzzy_sets: int = 3,
-        static_adjacency: torch.Tensor | None = None,
-        input_dim: int | None = None,
-        closure_steps: int = 0,
-        topk: int | None = None,
-        beta_init_random: bool = False,
+            self,
+            num_nodes: int,
+            hidden_dim: int,
+            num_fuzzy_sets: int = 3,
+            static_adjacency: torch.Tensor | None = None,
+            input_dim: int | None = None,
+            closure_steps: int = 0,
+            topk: int | None = None,
+            beta_init_random: bool = False,
     ):
         super().__init__()
         if num_fuzzy_sets < 2:
@@ -148,7 +148,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self.topk = topk
 
         # ── Random init with time+pid seed (different per run) ─────
-        _seed = int((time.time() * 1e6) % (2**31)) ^ (os.getpid() % (2**16))
+        _seed = int((time.time() * 1e6) % (2 ** 31)) ^ (os.getpid() % (2 ** 16))
         _g = torch.Generator()
         _g.manual_seed(_seed)
 
@@ -160,7 +160,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         #   Each fuzzy set k has its own lower and upper Gaussian width,
         #   independently learned from data (not a symmetric perturbation).
         #   Ordering enforced: σ_low ≤ σ_high at compute time.
-        _sigma_low_init  = torch.rand(num_fuzzy_sets, generator=_g) * 3.0 + 2.5
+        _sigma_low_init = torch.rand(num_fuzzy_sets, generator=_g) * 3.0 + 2.5
         _sigma_high_init = torch.rand(num_fuzzy_sets, generator=_g) * 3.0 + 2.5
         self.log_sigma_low = nn.Parameter(
             torch.log(torch.exp(_sigma_low_init) - 1))
@@ -213,9 +213,9 @@ class FuzzyRelationalGraphLearner(nn.Module):
         """
         # 1. Node representation extraction
         if node_features is not None:
-            if node_features.dim() == 4:          # [B, T, N, D]
+            if node_features.dim() == 4:  # [B, T, N, D]
                 node_repr = node_features.mean(dim=(0, 1))
-            elif node_features.dim() == 3:        # [B, N, D]
+            elif node_features.dim() == 3:  # [B, N, D]
                 node_repr = node_features.mean(dim=0)
             else:
                 node_repr = node_features
@@ -225,14 +225,14 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
         # 2. Project to hidden space + transform for prototype matching
         if self.raw_projection is not None:
-            node_repr = self.raw_projection(node_repr)    # → [N, D]
-        node_latent = self.node_transform(node_repr)      # → [N, D]
+            node_repr = self.raw_projection(node_repr)  # → [N, D]
+        node_latent = self.node_transform(node_repr)  # → [N, D]
 
         # 3. Independent dual widths (genuine Type-2)
-        sigma_low  = F.softplus(self.log_sigma_low) + 1e-3    # [K]
-        sigma_high = F.softplus(self.log_sigma_high) + 1e-3   # [K]
+        sigma_low = F.softplus(self.log_sigma_low) + 1e-3  # [K]
+        sigma_high = F.softplus(self.log_sigma_high) + 1e-3  # [K]
         # Enforce interval order: σ_low ≤ σ_high
-        sigma_low  = torch.minimum(sigma_low, sigma_high)
+        sigma_low = torch.minimum(sigma_low, sigma_high)
         sigma_high = torch.maximum(sigma_low, sigma_high)
         # Cache for diagnostics
         self._current_sigma_low = sigma_low.detach()
@@ -240,11 +240,11 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
         # 4. Gaussian membership: exp(−d² / 2σ²)
         d2 = torch.cdist(node_latent, self.prototype_center).pow(2)  # [N, K]
-        mu_low_raw  = torch.exp(-d2 / (2 * sigma_high.pow(2)))  # wide → low
-        mu_high_raw = torch.exp(-d2 / (2 * sigma_low.pow(2)))   # narrow → high
+        mu_low_raw = torch.exp(-d2 / (2 * sigma_high.pow(2)))  # wide → low
+        mu_high_raw = torch.exp(-d2 / (2 * sigma_low.pow(2)))  # narrow → high
         mu_upper = torch.maximum(mu_low_raw, mu_high_raw)
         mu_lower = torch.minimum(mu_low_raw, mu_high_raw)
-        mu_mid   = (mu_lower + mu_upper) / 2
+        mu_mid = (mu_lower + mu_upper) / 2
 
         return mu_lower, mu_upper, mu_mid
 
@@ -290,9 +290,9 @@ class FuzzyRelationalGraphLearner(nn.Module):
         fou_node = (mu_upper - mu_lower).clamp(min=0.0).mean(dim=-1)  # [N]
 
         # ── Interval-valued relations ──
-        R_low  = self._build_fuzzy_relation(mu_lower)     # pessimistic
-        R_mid  = self._build_fuzzy_relation(mu_mid)       # midpoint
-        R_high = self._build_fuzzy_relation(mu_upper)     # optimistic
+        R_low = self._build_fuzzy_relation(mu_lower)  # pessimistic
+        R_mid = self._build_fuzzy_relation(mu_mid)  # midpoint
+        R_high = self._build_fuzzy_relation(mu_upper)  # optimistic
 
         # Cache relation diffs for diagnostics
         self._current_R_diff_lm = (R_low - R_mid).abs().mean().detach()
@@ -352,4 +352,3 @@ class FuzzyRelationalGraphLearner(nn.Module):
         mu = self.get_memberships(node_features)
         top2 = mu.topk(2, dim=-1).values
         return top2[:, 0] - top2[:, 1]
-
