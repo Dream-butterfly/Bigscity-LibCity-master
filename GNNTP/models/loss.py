@@ -1,9 +1,10 @@
 """
-Loss functions for traffic prediction models — v3 (mask-semantic fix).
+Loss functions for traffic prediction models — v4 (null_val support).
 
 Design principles:
-- Mask domain Ω = {i | labels[i] is not NaN}.  Zero is real traffic data
-  (congestion = 0 mph, night-time flow = 0 vph) and MUST be included.
+- Mask domain Ω = {i | labels[i] is NaN-free}.  By default (null_val=None)
+  zero is treated as real traffic data and MUST be included in evaluation.
+  Pass null_val=0 to exclude zeros (masked_* variants).
 - Mean is computed as sum(loss · mask) / (mask.sum() + ε) — directly over
   valid samples, batch-to-batch comparable.
 - mask_val is a data-filtering preprocessor, not part of the loss definition.
@@ -17,16 +18,31 @@ import numpy as np
 
 # ── Core mask helper ──────────────────────────────────────────────
 
-def _build_valid_mask(labels):
-    """Build a binary validity mask: NaN positions are invalid.
+def _build_valid_mask(labels, null_val=None):
+    """Build a binary validity mask.
 
-    IMPORTANT: Zero is NOT treated as missing. In traffic data, speed=0 is
-    congestion (real signal), flow=0 is valid night-time data. Only NaN,
-    originating from sensor dropouts or padding, is excluded.
+    Always excludes NaN positions. When *null_val* is a finite number
+    (e.g. 0), those positions are excluded in addition to NaN.
 
-    Returns a float tensor of same shape as labels: 1.0 = valid, 0.0 = NaN.
+    Args:
+        labels:   (...,) tensor of ground-truth values.
+        null_val: Value to treat as missing data.
+                  - None :  only NaN is excluded (eval default).
+                  - 0    :  NaN and zero are excluded (masked_* metrics).
+                  - np.nan: same as None (NaN-only).
+
+    Returns:
+        Float tensor of same shape, 1.0 = valid, 0.0 = invalid.
     """
-    return (~torch.isnan(labels)).float()
+    mask = ~torch.isnan(labels)
+    if null_val is not None:
+        try:
+            is_nan = np.isnan(null_val)
+        except TypeError:
+            is_nan = False
+        if not is_nan:
+            mask = mask & labels.ne(null_val)
+    return mask.float()
 
 
 def _reduce_masked(loss, mask, eps=1e-8):
@@ -65,14 +81,14 @@ def masked_mae_torch(preds, labels, null_val=None, reduce=True, mask_val=None):
     Mask domain Ω = {i | labels[i] is not NaN}. Zero values are included.
 
     Args:
-        null_val:  Deprecated. Kept for API compatibility; NaN-only masking.
+        null_val:  Value to exclude (e.g. 0 for masked_* metrics). None = NaN-only.
         mask_val:  Optional data-filtering threshold. When set, only samples
                    with |label| ≥ mask_val are evaluated (D → D').
                    Must be documented in the paper as a preprocessing choice.
         reduce:    If True, returns scalar mean over valid samples.
                    If False, returns per-element masked loss tensor.
     """
-    mask = _build_valid_mask(labels)
+    mask = _build_valid_mask(labels, null_val)
     if mask_val is not None:
         mask = mask * labels.ge(mask_val).float()
     loss = torch.abs(preds - labels)
@@ -85,7 +101,7 @@ def masked_mae_torch(preds, labels, null_val=None, reduce=True, mask_val=None):
 
 def masked_mse_torch(preds, labels, null_val=None, mask_val=None):
     """Masked MSE (torch). Same mask semantics as masked_mae_torch."""
-    mask = _build_valid_mask(labels)
+    mask = _build_valid_mask(labels, null_val)
     if mask_val is not None:
         mask = mask * labels.ge(mask_val).float()
     loss = torch.square(preds - labels)
@@ -109,7 +125,7 @@ def masked_mape_torch(preds, labels, null_val=None, eps=1e-5, mask_val=None):
     numerically unreliable (e.g. speed < 5 mph). This is a data-filtering
     strategy, not part of the loss definition — document it if used.
     """
-    mask = _build_valid_mask(labels)
+    mask = _build_valid_mask(labels, null_val)
     if mask_val is not None:
         mask = mask * labels.ge(mask_val).float()
     if mask.sum() == 0:
@@ -126,7 +142,7 @@ def masked_smape_torch(preds, labels, null_val=None, eps=1e-5, mask_val=None):
     Bounded [0, 200]. Does not favour under/over-prediction. Does not
     explode for small |label| because denominator includes |pred|.
     """
-    mask = _build_valid_mask(labels)
+    mask = _build_valid_mask(labels, null_val)
     if mask_val is not None:
         mask = mask * labels.ge(mask_val).float()
     if mask.sum() == 0:
@@ -193,10 +209,23 @@ def explained_variance_score_torch(preds, labels):
 
 # ── NumPy losses (for non-torch evaluation paths) ─────────────────
 
+def _build_valid_mask_np(labels, null_val=None):
+    """NumPy version of _build_valid_mask."""
+    mask = ~np.isnan(labels)
+    if null_val is not None:
+        try:
+            is_nan = np.isnan(null_val)
+        except TypeError:
+            is_nan = False
+        if not is_nan:
+            mask = mask & (labels != null_val)
+    return mask.astype(np.float32)
+
+
 def masked_mae_np(preds, labels, null_val=None):
-    """Masked MAE (NumPy). NaN-only masking; zero is valid traffic data."""
+    """Masked MAE (NumPy)."""
     with np.errstate(divide='ignore', invalid='ignore'):
-        mask = (~np.isnan(labels)).astype(np.float32)
+        mask = _build_valid_mask_np(labels, null_val)
         loss = np.abs(np.subtract(preds, labels)).astype(np.float32)
         loss = np.nan_to_num(loss * mask)
         s = mask.sum()
@@ -204,9 +233,9 @@ def masked_mae_np(preds, labels, null_val=None):
 
 
 def masked_mse_np(preds, labels, null_val=None):
-    """Masked MSE (NumPy). NaN-only masking."""
+    """Masked MSE (NumPy)."""
     with np.errstate(divide='ignore', invalid='ignore'):
-        mask = (~np.isnan(labels)).astype(np.float32)
+        mask = _build_valid_mask_np(labels, null_val)
         loss = np.square(np.subtract(preds, labels)).astype(np.float32)
         loss = np.nan_to_num(loss * mask)
         s = mask.sum()
@@ -221,7 +250,7 @@ def masked_rmse_np(preds, labels, null_val=None):
 def masked_mape_np(preds, labels, null_val=None, eps=1e-5, mask_val=None):
     """Masked MAPE (NumPy). Same definition as masked_mape_torch."""
     with np.errstate(divide='ignore', invalid='ignore'):
-        mask = (~np.isnan(labels)).astype(np.float32)
+        mask = _build_valid_mask_np(labels, null_val)
         if mask_val is not None:
             mask = mask * (labels >= mask_val).astype(np.float32)
         s = mask.sum()
@@ -235,7 +264,7 @@ def masked_mape_np(preds, labels, null_val=None, eps=1e-5, mask_val=None):
 def masked_smape_np(preds, labels, null_val=None, eps=1e-5, mask_val=None):
     """Masked sMAPE (NumPy). Same definition as masked_smape_torch."""
     with np.errstate(divide='ignore', invalid='ignore'):
-        mask = (~np.isnan(labels)).astype(np.float32)
+        mask = _build_valid_mask_np(labels, null_val)
         if mask_val is not None:
             mask = mask * (labels >= mask_val).astype(np.float32)
         s = mask.sum()
