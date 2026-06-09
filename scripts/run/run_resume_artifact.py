@@ -194,7 +194,7 @@ if __name__ == "__main__":
     parser.add_argument("--force_reuse", type=str2bool, default=False, help="force reuse even if signature mismatch")
     parser.add_argument("--epoch", type=int, default=None, help="resume epoch")
     parser.add_argument("--exp_id", type=str, default=None, help="unused, run_id controls output directory")
-    parser.add_argument("--seed", type=int, default=0, help="random seed")
+    parser.add_argument("--seed", type=int, default=None, help="random seed")
     add_general_args(parser)
     args = parser.parse_args()
     dict_args = vars(args)
