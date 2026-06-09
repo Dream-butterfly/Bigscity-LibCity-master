@@ -50,15 +50,18 @@ def _reduce_masked(loss, mask, eps=1e-8):
 
     L = (1 / |Ω|) Σ_{i∈Ω} ℓ_i,  where Ω = {i | mask[i] = 1}.
 
+    Uses nan_to_num to guard against NaN · 0 = NaN at invalid positions
+    (a floating-point edge case when loss itself is NaN).
+
     Args:
-        loss:  per-element loss tensor (already multiplied by mask).
+        loss:  per-element loss tensor (unmasked — this function applies mask).
         mask:  binary float mask. 1=valid, 0=invalid.
         eps:   guard against all-invalid edge case.
     """
     s = mask.sum()
     if s == 0:
         return loss.new_tensor(0.0)
-    return (loss * mask).sum() / (s + eps)
+    return torch.nan_to_num(loss * mask).sum() / (s + eps)
 
 
 # ── Torch losses ──────────────────────────────────────────────────
@@ -90,23 +93,19 @@ def masked_mae_torch(preds, labels, null_val=None, reduce=True, mask_val=None):
     """
     mask = _build_valid_mask(labels, null_val)
     if mask_val is not None:
-        mask = mask * labels.ge(mask_val).float()
+        mask = mask * labels.abs().ge(mask_val).float()
     loss = torch.abs(preds - labels)
-    loss = loss * mask
-    loss = torch.where(torch.isnan(loss), torch.zeros_like(loss), loss)
     if reduce:
         return _reduce_masked(loss, mask)
-    return loss
+    return loss * mask
 
 
 def masked_mse_torch(preds, labels, null_val=None, mask_val=None):
     """Masked MSE (torch). Same mask semantics as masked_mae_torch."""
     mask = _build_valid_mask(labels, null_val)
     if mask_val is not None:
-        mask = mask * labels.ge(mask_val).float()
+        mask = mask * labels.abs().ge(mask_val).float()
     loss = torch.square(preds - labels)
-    loss = loss * mask
-    loss = torch.where(torch.isnan(loss), torch.zeros_like(loss), loss)
     return _reduce_masked(loss, mask)
 
 
@@ -127,7 +126,7 @@ def masked_mape_torch(preds, labels, null_val=None, eps=1e-5, mask_val=None):
     """
     mask = _build_valid_mask(labels, null_val)
     if mask_val is not None:
-        mask = mask * labels.ge(mask_val).float()
+        mask = mask * labels.abs().ge(mask_val).float()
     if mask.sum() == 0:
         return torch.tensor(0.0, device=preds.device, dtype=preds.dtype)
     loss = torch.abs((preds - labels) / (labels + eps))
@@ -144,7 +143,7 @@ def masked_smape_torch(preds, labels, null_val=None, eps=1e-5, mask_val=None):
     """
     mask = _build_valid_mask(labels, null_val)
     if mask_val is not None:
-        mask = mask * labels.ge(mask_val).float()
+        mask = mask * labels.abs().ge(mask_val).float()
     if mask.sum() == 0:
         return torch.tensor(0.0, device=preds.device, dtype=preds.dtype)
     loss = 200.0 * torch.abs(preds - labels) / (torch.abs(preds) + torch.abs(labels) + eps)
@@ -173,14 +172,13 @@ def quantile_loss(preds, labels, delta=0.25):
     return torch.mean(torch.where(condition, large_res, small_res))
 
 
-def r2_score_torch(preds, labels):
+def r2_score_torch(preds, labels, null_val=None):
     """R² (coefficient of determination), computed on-device over valid samples.
 
-    R² = 1 − SS_res / SS_tot, evaluated only on Ω = {i | labels[i], preds[i]
-    are not NaN}.  This yields the conditional R² on the observed set, not a
-    mixture R² contaminated by invalid positions.
+    R² = 1 − SS_res / SS_tot.  Mask domain Ω follows _build_valid_mask so
+    that R² is computed on the same sample set as other masked metrics.
     """
-    mask = ~torch.isnan(labels) & ~torch.isnan(preds)
+    mask = _build_valid_mask(labels, null_val) & ~torch.isnan(preds)
     if mask.sum() == 0:
         return torch.tensor(0.0, device=preds.device, dtype=torch.float32)
     p = preds[mask].float()
@@ -192,9 +190,12 @@ def r2_score_torch(preds, labels):
     return 1.0 - ss_res / ss_tot
 
 
-def explained_variance_score_torch(preds, labels):
-    """Explained variance score, computed on-device over valid samples."""
-    mask = ~torch.isnan(labels) & ~torch.isnan(preds)
+def explained_variance_score_torch(preds, labels, null_val=None):
+    """Explained variance score, computed on-device over valid samples.
+
+    Mask domain follows _build_valid_mask for consistency with other metrics.
+    """
+    mask = _build_valid_mask(labels, null_val) & ~torch.isnan(preds)
     if mask.sum() == 0:
         return torch.tensor(0.0, device=preds.device, dtype=torch.float32)
     p = preds[mask].float()
@@ -252,7 +253,7 @@ def masked_mape_np(preds, labels, null_val=None, eps=1e-5, mask_val=None):
     with np.errstate(divide='ignore', invalid='ignore'):
         mask = _build_valid_mask_np(labels, null_val)
         if mask_val is not None:
-            mask = mask * (labels >= mask_val).astype(np.float32)
+            mask = mask * (np.abs(labels) >= mask_val).astype(np.float32)
         s = mask.sum()
         if s == 0:
             return 0.0
@@ -266,7 +267,7 @@ def masked_smape_np(preds, labels, null_val=None, eps=1e-5, mask_val=None):
     with np.errstate(divide='ignore', invalid='ignore'):
         mask = _build_valid_mask_np(labels, null_val)
         if mask_val is not None:
-            mask = mask * (labels >= mask_val).astype(np.float32)
+            mask = mask * (np.abs(labels) >= mask_val).astype(np.float32)
         s = mask.sum()
         if s == 0:
             return 0.0
@@ -275,9 +276,9 @@ def masked_smape_np(preds, labels, null_val=None, eps=1e-5, mask_val=None):
         return float(loss.sum() / (s + 1e-8))
 
 
-def r2_score_np(preds, labels):
-    """R² (NumPy), over valid (non-NaN) samples only."""
-    mask = ~np.isnan(labels) & ~np.isnan(preds)
+def r2_score_np(preds, labels, null_val=None):
+    """R² (NumPy), over valid samples (consistent with _build_valid_mask_np)."""
+    mask = _build_valid_mask_np(labels, null_val) & ~np.isnan(preds)
     if mask.sum() == 0:
         return 0.0
     p = preds[mask].flatten()
@@ -289,9 +290,9 @@ def r2_score_np(preds, labels):
     return float(1.0 - ss_res / ss_tot)
 
 
-def explained_variance_score_np(preds, labels):
-    """Explained variance score (NumPy), over valid samples only."""
-    mask = ~np.isnan(labels) & ~np.isnan(preds)
+def explained_variance_score_np(preds, labels, null_val=None):
+    """Explained variance score (NumPy), over valid samples (consistent with _build_valid_mask_np)."""
+    mask = _build_valid_mask_np(labels, null_val) & ~np.isnan(preds)
     if mask.sum() == 0:
         return 0.0
     p = preds[mask].flatten()
