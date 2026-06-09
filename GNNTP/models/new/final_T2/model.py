@@ -62,6 +62,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         )
         self.physics_channel_idx = config.get("physics_channel_idx", 0)
         self.use_fuzzy_conservation = config.get("use_fuzzy_conservation", True)
+        self.loss_mode = config.get("loss_mode", "mae")  # mae | mse | huber
+        self.huber_delta = config.get("huber_delta", 1.0)
         # Type-2 anti-collapse losses (all default 0 → backward compatible)
         self.t2_entropy_weight   = config.get("t2_entropy_weight", 0.0)    # β entropy (keep β diverse)
         self.t2_interval_weight          = config.get("t2_interval_weight", 0.0)
@@ -173,7 +175,14 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         predicted_future = self.future_decoder(
             condition_features, graph_matrix, graph_uncertainty=fou, powers=graph_powers)
 
-        regression_loss = F.l1_loss(predicted_future, future_sequence)
+        # ── Regression loss ──
+        if self.loss_mode == "mse":
+            regression_loss = F.mse_loss(predicted_future, future_sequence)
+        elif self.loss_mode == "huber":
+            regression_loss = F.smooth_l1_loss(
+                predicted_future, future_sequence, beta=self.huber_delta)
+        else:  # "mae" (default, backward compatible)
+            regression_loss = F.l1_loss(predicted_future, future_sequence)
         total = regression_loss
         self._loss_mae = regression_loss.detach()  # cache for diagnostics
 
@@ -260,8 +269,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             # FOU statistics (from last forward)
             if hasattr(self, '_current_fou') and self._current_fou is not None:
                 fou = self._current_fou.detach()
-                diag['fou_mean'] = round(fou.mean().item(), 4)
-                diag['fou_std'] = round(fou.std().item(), 4)
+                diag['fou_mean'] = fou.mean().item()
+                diag['fou_std'] = fou.std().item()
             # Independent dual widths (genuine Type-2)
             if hasattr(self.fuzzy_graph, '_current_sigma_low'):
                 sl = self.fuzzy_graph._current_sigma_low

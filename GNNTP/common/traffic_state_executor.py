@@ -444,7 +444,7 @@ class TrafficStateExecutor(AbstractExecutor):
                             if 'cell_blend' in diag:
                                 parts.append('cell_b={:.3f}'.format(diag['cell_blend']))
                             if 'fou_mean' in diag:
-                                parts2.append('FOU(μ={:.4f},σ={:.4f})'.format(
+                                parts2.append('FOU(μ={:.1e},σ={:.1e})'.format(
                                     diag['fou_mean'], diag['fou_std']))
                             if 'sigma_low_mean' in diag:
                                 parts2.append('σ_low={:.4f}±{:.4f} σ_high={:.4f}±{:.4f}'.format(
@@ -466,7 +466,7 @@ class TrafficStateExecutor(AbstractExecutor):
                                     diag['log_sigma_high_grad'],
                                     diag['prototype_center_grad']))
                             if 'R_gap' in diag:
-                                parts3.append('R_gap={:.4f} w={:.4f}'.format(
+                                parts3.append('R_gap={:.2f} w={:.1e}'.format(
                                     diag['R_gap'], diag.get('eff_width', 0)))
                             if 'beta_delta' in diag:
                                 parts3.append('Δβ={:.6f}'.format(diag['beta_delta']))
