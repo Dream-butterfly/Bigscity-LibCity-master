@@ -160,8 +160,8 @@ class FuzzyRelationalGraphLearner(nn.Module):
         #   Each fuzzy set k has its own lower and upper Gaussian width,
         #   independently learned from data (not a symmetric perturbation).
         #   Ordering enforced: σ_low ≤ σ_high at compute time.
-        _sigma_low_init   = torch.rand(num_fuzzy_sets, generator=_g) * 3.0 + 2.5
-        _sigma_delta_init = torch.rand(num_fuzzy_sets, generator=_g) * 1.0 + 0.5
+        _sigma_low_init   = torch.rand(num_fuzzy_sets, generator=_g) * 1.0 + 0.5   # U(0.5,1.5)
+        _sigma_delta_init = torch.rand(num_fuzzy_sets, generator=_g) * 0.3 + 0.2   # U(0.2,0.5)
         self.log_sigma_low = nn.Parameter(
             torch.log(torch.exp(_sigma_low_init) - 1))
         self.log_sigma_delta = nn.Parameter(
@@ -228,6 +228,10 @@ class FuzzyRelationalGraphLearner(nn.Module):
             node_repr = self.raw_projection(node_repr)  # → [N, D]
         node_latent = self.node_transform(node_repr)  # → [N, D]
 
+        # ── Hyperspherical projection: normalize to unit sphere ──
+        node_latent_norm = F.normalize(node_latent, dim=-1)          # [N, D], ||·||=1
+        proto_norm = F.normalize(self.prototype_center, dim=-1)      # [K, D], ||·||=1
+
         # 3. Delta parameterization: σ_high = σ_low + δ (guaranteed order)
         sigma_low   = F.softplus(self.log_sigma_low) + 1e-3   # [K], base
         sigma_delta = F.softplus(self.log_sigma_delta) + 1e-3 # [K], δ ≥ 0
@@ -236,8 +240,9 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self._current_sigma_low = sigma_low.detach()
         self._current_sigma_high = sigma_high.detach()
 
-        # 4. Gaussian membership: exp(−d² / 2σ²)
-        d2 = torch.cdist(node_latent, self.prototype_center).pow(2)  # [N, K]
+        # 4. Gaussian membership: exp(−d² / 2σ²) on hypersphere
+        #    d² = 2 − 2·cos(θ) ∈ [0, 4] → bounded, non-collapsing
+        d2 = torch.cdist(node_latent_norm, proto_norm).pow(2)  # [N, K]
         mu_low_raw = torch.exp(-d2 / (2 * sigma_high.pow(2)))  # wide → low
         mu_high_raw = torch.exp(-d2 / (2 * sigma_low.pow(2)))  # narrow → high
         mu_upper = torch.maximum(mu_low_raw, mu_high_raw)
@@ -251,7 +256,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self._current_proto_norm = self.prototype_center.norm(dim=-1).mean().detach()
         self._current_latent_norm = node_latent.detach().norm(dim=-1).mean()
         self._current_transform_weight = self.node_transform[-1].weight.norm().detach()
-        # Per-step movement tracking
+        # Per-step movement tracking (on raw vectors, pre-normalize)
         _pc = self.prototype_center.detach()
         _nl = node_latent.detach()
         if hasattr(self, '_prev_proto'):
