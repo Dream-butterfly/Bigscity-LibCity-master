@@ -455,7 +455,6 @@ class TrafficStateExecutor(AbstractExecutor):
                                     diag.get('tau_low', 1.0),
                                     diag.get('tau_mid', 1.0),
                                     diag.get('tau_high', 1.0)))
-                                    diag.get('sigma_delta_mean', 0)))
                                 if 'sigma_ratio' in diag:
                                     parts2[-1] += ' r={:.4f}'.format(diag['sigma_ratio'])
                             if 'loss_mae' in diag:
