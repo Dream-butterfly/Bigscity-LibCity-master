@@ -499,8 +499,8 @@ class TrafficStateExecutor(AbstractExecutor):
                             if 'R_corr_lm' in diag:
                                 self._logger.info('  [R_corr] ρ(L,M)={:.4f} ρ(L,H)={:.4f} ρ(M,H)={:.4f}'.format(
                                     diag['R_corr_lm'], diag['R_corr_lh'], diag['R_corr_mh']))
-                except Exception:
-                    pass  # diagnostics should never crash training
+                except Exception as e:
+                    self._logger.warning(f'T2 diagnostics failed: {e}', exc_info=True)
 
             if self.hyper_tune and self._is_rank0():
                 # use ray tune to checkpoint
