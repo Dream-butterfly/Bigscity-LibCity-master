@@ -179,9 +179,13 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
         # Per-view learnable temperature: sharpens/flattens each view's
         # membership independently → different R even with inner product.
-        self.log_tau_low  = nn.Parameter(torch.tensor(0.0))  # τ=1 at init
+        # τ init: low=sharp(0.3), mid=normal(0.8), high=flat(1.5)
+        # Different sharpness → different R even with inner product.
+        # τ init: low=sharp(0.2), mid=normal(0.8), high=flat(1.5)
+        # 6x range → immediate R differentiation even with inner product.
+        self.log_tau_low  = nn.Parameter(torch.tensor(-2.0))
         self.log_tau_mid  = nn.Parameter(torch.tensor(0.0))
-        self.log_tau_high = nn.Parameter(torch.tensor(0.0))
+        self.log_tau_high = nn.Parameter(torch.tensor(1.5))
 
         # ── Input projection ──────────────────────────────────────
         if input_dim is not None and input_dim != hidden_dim:
