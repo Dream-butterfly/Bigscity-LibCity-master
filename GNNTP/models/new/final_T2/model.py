@@ -306,8 +306,11 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             sim_mh = (p_mid @ p_high.T).mean()
             sim_lh = (p_low @ p_high.T).mean()
             cross_sim = (sim_lm + sim_mh + sim_lh) / 3
-            self._loss_proto_div = (self._proto_diversity_weight * cross_sim).detach()
-            total = total + self._proto_diversity_weight * cross_sim
+            # Only penalize positive similarity (prototypes too close);
+            # negative / near-zero sim means they're already diverged.
+            cross_sim_clamped = F.relu(cross_sim)
+            self._loss_proto_div = (self._proto_diversity_weight * cross_sim_clamped).detach()
+            total = total + self._proto_diversity_weight * cross_sim_clamped
 
         # ── Type-2 gradient boost: amplify σ/r/β gradients post-backward ──
         if (self.t2_lr_boost != 1.0 and self.fuzzy_graph is not None
