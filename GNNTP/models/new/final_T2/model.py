@@ -306,9 +306,9 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             sim_mh = (p_mid @ p_high.T).mean()
             sim_lh = (p_low @ p_high.T).mean()
             cross_sim = (sim_lm + sim_mh + sim_lh) / 3
-            # Only penalize positive similarity (prototypes too close);
-            # negative / near-zero sim means they're already diverged.
-            cross_sim_clamped = F.relu(cross_sim)
+            # Penalize ANY deviation from orthogonality (both + and −).
+            # Without this, prototypes drift back to similar positions.
+            cross_sim_clamped = cross_sim.abs()
             self._loss_proto_div = (self._proto_diversity_weight * cross_sim_clamped).detach()
             total = total + self._proto_diversity_weight * cross_sim_clamped
 
