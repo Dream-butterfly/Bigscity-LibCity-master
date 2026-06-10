@@ -257,16 +257,15 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 self._loss_fou = (self.t2_fou_floor_weight * fou_gap).detach()
                 total = total + self.t2_fou_floor_weight * fou_gap
 
-        # ── Prototype norm regularization: prevent |prototype_center| → 0 ──
+        # ── Prototype norm regularization: attract |prototype_center| → 1.0 ──
         self._loss_proto_norm = torch.tensor(0.0)
         if self.proto_norm_reg_weight > 0 and self.fuzzy_graph is not None:
             proto_norms = self.fuzzy_graph.prototype_center.norm(dim=-1)  # [K]
-            # Penalize if prototype norm deviates far from 1.0 (ideal for hypersphere)
-            proto_norm_hinge = F.relu(0.3 - proto_norms.mean())
-            self._loss_proto_norm = (self.proto_norm_reg_weight * proto_norm_hinge).detach()
-            total = total + self.proto_norm_reg_weight * proto_norm_hinge
+            proto_norm_loss = (proto_norms.mean() - 1.0).pow(2)  # attract to 1.0
+            self._loss_proto_norm = (self.proto_norm_reg_weight * proto_norm_loss).detach()
+            total = total + self.proto_norm_reg_weight * proto_norm_loss
 
-        # ── Latent norm regularization: prevent node_transform weights → 0 ──
+        # ── Latent norm regularization: attract |node_latent| → 2.0 ──
         # LayerNorm kills gradient on magnitude; this compensates.
         self._loss_latent_norm = torch.tensor(0.0)
         if (hasattr(self, '_latent_norm_reg_weight')
@@ -274,9 +273,9 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 and self.fuzzy_graph is not None
                 and hasattr(self.fuzzy_graph, '_node_latent_for_reg')):
             latent_norms = self.fuzzy_graph._node_latent_for_reg.norm(dim=-1).mean()
-            latent_norm_hinge = F.relu(1.0 - latent_norms)
-            self._loss_latent_norm = (self._latent_norm_reg_weight * latent_norm_hinge).detach()
-            total = total + self._latent_norm_reg_weight * latent_norm_hinge
+            latent_norm_loss = (latent_norms - 2.0).pow(2)  # attract to 2.0
+            self._loss_latent_norm = (self._latent_norm_reg_weight * latent_norm_loss).detach()
+            total = total + self._latent_norm_reg_weight * latent_norm_loss
 
         # ── Type-2 gradient boost: amplify σ/r/β gradients post-backward ──
         if (self.t2_lr_boost != 1.0 and self.fuzzy_graph is not None
