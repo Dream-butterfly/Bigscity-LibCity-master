@@ -16,7 +16,7 @@
   "use_spatiotemporal_attention": true,
   "use_temporal_position_embedding": true,
   "use_proto_adaptive_embed": false,
-  "relation_mode": "maxmin",
+  "relation_mode": "inner",
   "use_gradient_checkpointing": false,
   "use_amp": true,
   "dropout": 0.1,
