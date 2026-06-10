@@ -344,10 +344,9 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
     def _build_fuzzy_relation(self, memberships):
         if self.relation_mode == "inner":
-            # Inner product: use ALL K dimensions, not just the peak.
-            # L1-normalize to probability simplex → soft cluster assignment.
-            mu_norm = F.normalize(memberships, p=1, dim=-1)     # [N, K]
-            R = mu_norm @ mu_norm.T                            # [N, N]
+            # Inner product ÷ K: all K prototypes contribute, values in [0,1].
+            K = memberships.size(-1)
+            R = (memberships @ memberships.T) / K              # [N, N]
         else:  # "maxmin" (default)
             mu_i = memberships.unsqueeze(1)  # [N, 1, K]
             mu_j = memberships.unsqueeze(0)  # [1, N, K]
