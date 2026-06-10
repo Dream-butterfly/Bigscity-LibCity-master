@@ -177,6 +177,12 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self.log_sigma_delta = nn.Parameter(
             torch.log(torch.exp(_sigma_delta_init) - 1))
 
+        # Per-view learnable temperature: sharpens/flattens each view's
+        # membership independently → different R even with inner product.
+        self.log_tau_low  = nn.Parameter(torch.tensor(0.0))  # τ=1 at init
+        self.log_tau_mid  = nn.Parameter(torch.tensor(0.0))
+        self.log_tau_high = nn.Parameter(torch.tensor(0.0))
+
         # ── Input projection ──────────────────────────────────────
         if input_dim is not None and input_dim != hidden_dim:
             self.raw_projection = nn.Linear(input_dim, hidden_dim)
@@ -267,10 +273,15 @@ class FuzzyRelationalGraphLearner(nn.Module):
         d2_mid  = torch.cdist(node_latent_norm, proto_mid_norm).pow(2)   # [N, K]
         d2_high = torch.cdist(node_latent_norm, proto_high_norm).pow(2)  # [N, K]
 
-        # Gaussian membership on each view's own geometry
-        mu_low_raw  = torch.exp(-d2_low  / (2 * sigma_high.pow(2)))   # wide  σ → pessimistic
-        mu_mid_raw  = torch.exp(-d2_mid  / (2 * sigma_mid.pow(2)))    # mid   σ → midpoint
-        mu_high_raw = torch.exp(-d2_high / (2 * sigma_low.pow(2)))    # narrow σ → optimistic
+        # Per-view temperature: τ ≠ 1 → different membership sharpness per view
+        tau_low  = F.softplus(self.log_tau_low) + 0.1   # τ ∈ (0.1, ∞), init=1
+        tau_mid  = F.softplus(self.log_tau_mid) + 0.1
+        tau_high = F.softplus(self.log_tau_high) + 0.1
+
+        # Gaussian membership on each view's own geometry × own temperature
+        mu_low_raw  = torch.exp(-d2_low  / (2 * sigma_high.pow(2) * tau_low))
+        mu_mid_raw  = torch.exp(-d2_mid  / (2 * sigma_mid.pow(2)  * tau_mid))
+        mu_high_raw = torch.exp(-d2_high / (2 * sigma_low.pow(2)  * tau_high))
 
         # Type-2 envelope: upper/lower across three independent views
         mu_upper = torch.maximum(torch.maximum(mu_low_raw, mu_mid_raw), mu_high_raw)
@@ -310,6 +321,9 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self._current_mu_raw_mid_mean  = mu_mid_raw.detach().mean()
         self._current_mu_raw_high_mean = mu_high_raw.detach().mean()
         self._current_sigma_delta_mean = sigma_delta.detach().mean()
+        self._current_tau_low  = tau_low.detach().mean()
+        self._current_tau_mid  = tau_mid.detach().mean()
+        self._current_tau_high = tau_high.detach().mean()
 
         return mu_lower, mu_upper, mu_mid, mu_low_raw, mu_mid_raw, mu_high_raw
 

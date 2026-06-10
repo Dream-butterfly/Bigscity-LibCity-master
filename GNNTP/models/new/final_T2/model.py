@@ -352,6 +352,9 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 self.fuzzy_graph.prototype_center_low,
                 self.fuzzy_graph.prototype_center_mid,
                 self.fuzzy_graph.prototype_center_high,
+                self.fuzzy_graph.log_tau_low,
+                self.fuzzy_graph.log_tau_mid,
+                self.fuzzy_graph.log_tau_high,
             ]
             _boost = self.t2_lr_boost
             def _amp_grad(_grad):
@@ -458,6 +461,10 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             if hasattr(self.fuzzy_graph, '_current_sigma_delta_mean'):
                 diag['sigma_delta_mean'] = round(
                     self.fuzzy_graph._current_sigma_delta_mean.item(), 4)
+            if hasattr(self.fuzzy_graph, '_current_tau_low'):
+                diag['tau_low']  = round(self.fuzzy_graph._current_tau_low.item(), 2)
+                diag['tau_mid']  = round(self.fuzzy_graph._current_tau_mid.item(), 2)
+                diag['tau_high'] = round(self.fuzzy_graph._current_tau_high.item(), 2)
             # Gradient norms for key Type-2 parameters
             g = self.fuzzy_graph
             for pname, grad_key in [

@@ -447,10 +447,14 @@ class TrafficStateExecutor(AbstractExecutor):
                                 parts2.append('FOU(μ={:.1e},σ={:.1e})'.format(
                                     diag['fou_mean'], diag['fou_std']))
                             if 'sigma_low_mean' in diag:
-                                parts2.append('σ_low={:.4f} σ_mid={:.4f} σ_high={:.4f} δ={:.4f}'.format(
+                                parts2.append('σ_low={:.4f} σ_mid={:.4f} σ_high={:.4f} δ={:.4f} τ={:.2f}/{:.2f}/{:.2f}'.format(
                                     diag['sigma_low_mean'],
                                     diag.get('sigma_mid_mean', 0),
                                     diag['sigma_high_mean'],
+                                    diag.get('sigma_delta_mean', 0),
+                                    diag.get('tau_low', 1.0),
+                                    diag.get('tau_mid', 1.0),
+                                    diag.get('tau_high', 1.0)))
                                     diag.get('sigma_delta_mean', 0)))
                                 if 'sigma_ratio' in diag:
                                     parts2[-1] += ' r={:.4f}'.format(diag['sigma_ratio'])
