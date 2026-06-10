@@ -54,5 +54,7 @@
   "t2_interval_weight": 0.005,
   "t2_fou_floor_weight": 0.01,
   "t2_interval_ratio_threshold": 0.9,
-  "graph_sparsify_topk": 0
+  "graph_sparsify_topk": 0,
+  "lr_T_max": 100,
+  "lr_eta_min": 1e-6
 }
