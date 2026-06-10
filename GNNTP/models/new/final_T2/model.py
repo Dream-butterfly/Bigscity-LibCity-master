@@ -54,6 +54,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.proto_norm_reg_weight = config.get("proto_norm_reg_weight", 0.01)
         self._latent_norm_reg_weight = config.get("latent_norm_reg_weight", 0.01)
         self.decoder_node_mode = config.get("decoder_node_mode", "embed")
+        self._proto_diversity_weight = config.get("proto_diversity_weight", 0.0)
 
         self.use_cell_attention = config.get("use_cell_attention", True)
         self.num_cells = config.get("num_cells", 8)
@@ -289,6 +290,24 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             self._loss_latent_norm = (self._latent_norm_reg_weight * latent_norm_hinge).detach()
             total = total + self._latent_norm_reg_weight * latent_norm_hinge
 
+        # ── Cross-view prototype diversity: force three views to diverge ──
+        self._loss_proto_div = torch.tensor(0.0)
+        if (hasattr(self, '_proto_diversity_weight')
+                and self._proto_diversity_weight > 0
+                and self.fuzzy_graph is not None
+                and hasattr(self.fuzzy_graph, 'prototype_center_low')):
+            g = self.fuzzy_graph
+            p_low  = F.normalize(g.prototype_center_low, dim=-1)   # (K, D)
+            p_mid  = F.normalize(g.prototype_center_mid, dim=-1)
+            p_high = F.normalize(g.prototype_center_high, dim=-1)
+            # Mean inter-view cosine similarity — penalize high values
+            sim_lm = (p_low @ p_mid.T).mean()
+            sim_mh = (p_mid @ p_high.T).mean()
+            sim_lh = (p_low @ p_high.T).mean()
+            cross_sim = (sim_lm + sim_mh + sim_lh) / 3
+            self._loss_proto_div = (self._proto_diversity_weight * cross_sim).detach()
+            total = total + self._proto_diversity_weight * cross_sim
+
         # ── Type-2 gradient boost: amplify σ/r/β gradients post-backward ──
         if (self.t2_lr_boost != 1.0 and self.fuzzy_graph is not None
                 and total.requires_grad):
@@ -361,6 +380,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 diag['loss_fou']   = round(self._loss_fou.item(), 4)
                 diag['loss_proto_norm'] = round(self._loss_proto_norm.item(), 4)
                 diag['loss_latent_norm'] = round(self._loss_latent_norm.item(), 4)
+                diag['loss_proto_div'] = round(self._loss_proto_div.item(), 4)
             # Raw (unweighted) anti-collapse loss values
             if hasattr(self, '_raw_ent'):
                 diag['raw_ent'] = round(self._raw_ent.item(), 4)
