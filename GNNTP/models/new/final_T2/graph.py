@@ -366,6 +366,13 @@ class FuzzyRelationalGraphLearner(nn.Module):
         _R_mid_norm = R_mid.abs().mean().clamp_min(1e-8)
         self._current_R_gap = (R_high - R_low).abs().mean().detach() / _R_mid_norm
 
+        # Cache relation correlations — are the three views structurally different?
+        R_flat = lambda R: R.flatten().detach()
+        _rl, _rm, _rh = R_flat(R_low), R_flat(R_mid), R_flat(R_high)
+        self._current_R_corr_lm = torch.corrcoef(torch.stack([_rl, _rm]))[0, 1]
+        self._current_R_corr_lh = torch.corrcoef(torch.stack([_rl, _rh]))[0, 1]
+        self._current_R_corr_mh = torch.corrcoef(torch.stack([_rm, _rh]))[0, 1]
+
         # Cache effective Type-2 width (membership interval)
         self._current_eff_width = (mu_upper - mu_lower).abs().mean().detach()
 

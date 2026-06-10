@@ -414,6 +414,11 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             # Effective Type-2 width
             if hasattr(g, '_current_eff_width'):
                 diag['eff_width'] = round(g._current_eff_width.item(), 4)
+            # R correlations: are the three views structurally different?
+            if hasattr(g, '_current_R_corr_lm'):
+                diag['R_corr_lm'] = round(g._current_R_corr_lm.item(), 4)
+                diag['R_corr_lh'] = round(g._current_R_corr_lh.item(), 4)
+                diag['R_corr_mh'] = round(g._current_R_corr_mh.item(), 4)
             # β delta from previous epoch
             if hasattr(self, '_last_beta'):
                 cur_beta = torch.tensor(diag['beta'])

@@ -496,6 +496,9 @@ class TrafficStateExecutor(AbstractExecutor):
                                 self._logger.info('  [T2σ] ' + ' | '.join(parts2))
                             if parts3:
                                 self._logger.info('  [T2∇] ' + ' | '.join(parts3))
+                            if 'R_corr_lm' in diag:
+                                self._logger.info('  [R_corr] ρ(L,M)={:.4f} ρ(L,H)={:.4f} ρ(M,H)={:.4f}'.format(
+                                    diag['R_corr_lm'], diag['R_corr_lh'], diag['R_corr_mh']))
                 except Exception:
                     pass  # diagnostics should never crash training
 
