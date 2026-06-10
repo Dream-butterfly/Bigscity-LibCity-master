@@ -15,7 +15,8 @@
   "cell_blend_init": 0.4,
   "use_spatiotemporal_attention": true,
   "use_temporal_position_embedding": true,
-  "use_proto_adaptive_embed": true,
+  "use_proto_adaptive_embed": false,
+  "relation_mode": "maxmin",
   "use_gradient_checkpointing": false,
   "use_amp": true,
   "dropout": 0.1,
@@ -58,6 +59,6 @@
   "output_dim": 1,
   "lr_T_max": 100,
   "lr_eta_min": 1e-6,
-  "decoder_node_mode": "both",
+  "decoder_node_mode": "proto",
   "use_static_blend": false
 }

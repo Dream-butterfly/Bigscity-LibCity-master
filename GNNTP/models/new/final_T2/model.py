@@ -96,6 +96,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 closure_steps=int(max(0, config.get("graph_closure_steps", 0))),
                 topk=self.graph_topk,
                 beta_init_random=self.beta_init_random,
+                relation_mode=config.get("relation_mode", "maxmin"),
             )
             self.fuzzy_graph.graph_sparsify_topk = (
                 self.graph_sparsify_topk if self.graph_sparsify_topk > 0 else None)
@@ -106,7 +107,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         # Each of K fuzzy prototypes learns a D-dim spatial signature.
         # Node embedding = membership-weighted mixture (N×K @ K×D → N×D).
         # 3×hidden_dim parameters total — cannot become a shortcut.
-        if self.use_proto_adaptive_embed:
+        if self.use_proto_adaptive_embed or self.decoder_node_mode in ("proto", "both"):
             self.proto_embed = nn.Parameter(
                 torch.zeros(1, self.fuzzy_num_sets, self.hidden_dim))
             nn.init.trunc_normal_(self.proto_embed, std=0.02)
@@ -146,7 +147,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             use_hollow_kernel=self.use_hollow_kernel,
             cell_blend_init=self.cell_blend_init,
             node_mode=self.decoder_node_mode,
-            proto_embed=self.proto_embed if self.use_proto_adaptive_embed else None,
+            proto_embed=self.proto_embed if hasattr(self, 'proto_embed') else None,
         )
 
         # ── torch.compile each block (standard Transformer kernels fuse well) ──

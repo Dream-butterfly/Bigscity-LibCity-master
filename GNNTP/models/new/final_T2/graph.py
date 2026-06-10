@@ -138,11 +138,13 @@ class FuzzyRelationalGraphLearner(nn.Module):
             closure_steps: int = 0,
             topk: int | None = None,
             beta_init_random: bool = False,
+            relation_mode: str = "maxmin",
     ):
         super().__init__()
         if num_fuzzy_sets < 2:
             raise ValueError("num_fuzzy_sets must be >= 2.")
         self.num_nodes = num_nodes
+        self.relation_mode = relation_mode
         self.num_fuzzy_sets = num_fuzzy_sets
         self.closure_steps = int(max(0, closure_steps))
         self.topk = topk
@@ -341,9 +343,15 @@ class FuzzyRelationalGraphLearner(nn.Module):
     # ═══════════════════════════════════════════════════════════════
 
     def _build_fuzzy_relation(self, memberships):
-        mu_i = memberships.unsqueeze(1)  # [N, 1, K]
-        mu_j = memberships.unsqueeze(0)  # [1, N, K]
-        R = torch.max(torch.min(mu_i, mu_j), dim=-1).values  # [N, N]
+        if self.relation_mode == "inner":
+            # Inner product: use ALL K dimensions, not just the peak.
+            # L1-normalize to probability simplex → soft cluster assignment.
+            mu_norm = F.normalize(memberships, p=1, dim=-1)     # [N, K]
+            R = mu_norm @ mu_norm.T                            # [N, N]
+        else:  # "maxmin" (default)
+            mu_i = memberships.unsqueeze(1)  # [N, 1, K]
+            mu_j = memberships.unsqueeze(0)  # [1, N, K]
+            R = torch.max(torch.min(mu_i, mu_j), dim=-1).values  # [N, N]
         diag = torch.eye(self.num_nodes, device=R.device, dtype=R.dtype)
         R = R + diag * (1.0 - R.diag().unsqueeze(-1))
         return R.clamp(0.0, 1.0)
