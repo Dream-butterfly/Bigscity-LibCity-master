@@ -54,6 +54,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.proto_norm_reg_weight = config.get("proto_norm_reg_weight", 0.01)
         self._latent_norm_reg_weight = config.get("latent_norm_reg_weight", 0.01)
         self.decoder_node_mode = config.get("decoder_node_mode", "embed")
+        self.use_static_blend = config.get("use_static_blend", True)
         self._proto_diversity_weight = config.get("proto_diversity_weight", 0.0)
 
         self.use_cell_attention = config.get("use_cell_attention", True)
@@ -90,7 +91,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 num_nodes=self.num_nodes,
                 hidden_dim=self.hidden_dim,
                 num_fuzzy_sets=self.fuzzy_num_sets,
-                static_adjacency=adjacency_matrix,
+                static_adjacency=adjacency_matrix if self.use_static_blend else None,
                 input_dim=self.feature_dim,
                 closure_steps=int(max(0, config.get("graph_closure_steps", 0))),
                 topk=self.graph_topk,
@@ -286,9 +287,9 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 and self.fuzzy_graph is not None
                 and hasattr(self.fuzzy_graph, '_node_latent_for_reg')):
             latent_norms = self.fuzzy_graph._node_latent_for_reg.norm(dim=-1).mean()
-            latent_norm_hinge = F.relu(1.0 - latent_norms)
-            self._loss_latent_norm = (self._latent_norm_reg_weight * latent_norm_hinge).detach()
-            total = total + self._latent_norm_reg_weight * latent_norm_hinge
+            latent_norm_loss = (latent_norms - 2.0).pow(2)
+            self._loss_latent_norm = (self._latent_norm_reg_weight * latent_norm_loss).detach()
+            total = total + self._latent_norm_reg_weight * latent_norm_loss
 
         # ── Cross-view prototype diversity: force three views to diverge ──
         self._loss_proto_div = torch.tensor(0.0)
