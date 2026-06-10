@@ -301,14 +301,16 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             p_low  = F.normalize(g.prototype_center_low, dim=-1)   # (K, D)
             p_mid  = F.normalize(g.prototype_center_mid, dim=-1)
             p_high = F.normalize(g.prototype_center_high, dim=-1)
-            # Mean inter-view cosine similarity — penalize high values
-            sim_lm = (p_low @ p_mid.T).mean()
-            sim_mh = (p_mid @ p_high.T).mean()
-            sim_lh = (p_low @ p_high.T).mean()
-            cross_sim = (sim_lm + sim_mh + sim_lh) / 3
-            # Penalize ANY deviation from orthogonality (both + and −).
-            # Without this, prototypes drift back to similar positions.
-            cross_sim_clamped = cross_sim.abs()
+            # Max inter-view cosine — trigger if ANY prototype pair correlates
+            # Mean() drowns the signal (256 pairs avg → ~0±0.005 in 128D).
+            # Max() catches even a single correlated pair.
+            sim_lm_mat = p_low @ p_mid.T    # (K, K) cosine similarity matrix
+            sim_mh_mat = p_mid @ p_high.T
+            sim_lh_mat = p_low @ p_high.T
+            cross_sim = torch.max(torch.stack([
+                sim_lm_mat.max(), sim_mh_mat.max(), sim_lh_mat.max()
+            ]))
+            cross_sim_clamped = F.relu(cross_sim - 0.3)  # allow up to 0.3, penalize above
             self._loss_proto_div = (self._proto_diversity_weight * cross_sim_clamped).detach()
             total = total + self._proto_diversity_weight * cross_sim_clamped
 
