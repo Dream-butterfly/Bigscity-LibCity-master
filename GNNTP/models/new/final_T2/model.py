@@ -108,9 +108,19 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         # Node embedding = membership-weighted mixture (N×K @ K×D → N×D).
         # 3×hidden_dim parameters total — cannot become a shortcut.
         if self.use_proto_adaptive_embed or self.decoder_node_mode in ("proto", "both"):
-            self.proto_embed = nn.Parameter(
+            # Per-view prototype embeddings:  β-weighted routing injects
+            # Type-2 uncertainty into spatial identity (not just μ_mid).
+            self.proto_embed_low  = nn.Parameter(
                 torch.zeros(1, self.fuzzy_num_sets, self.hidden_dim))
-            nn.init.trunc_normal_(self.proto_embed, std=0.02)
+            self.proto_embed_mid  = nn.Parameter(
+                torch.zeros(1, self.fuzzy_num_sets, self.hidden_dim))
+            self.proto_embed_high = nn.Parameter(
+                torch.zeros(1, self.fuzzy_num_sets, self.hidden_dim))
+            nn.init.trunc_normal_(self.proto_embed_low, std=0.02)
+            nn.init.trunc_normal_(self.proto_embed_mid, std=0.02)
+            nn.init.trunc_normal_(self.proto_embed_high, std=0.02)
+            # Backward-compat alias (encoder adaptive embed uses mid)
+            self.proto_embed = self.proto_embed_mid
 
         self.condition_encoder = STEncoder(
             input_dim=self.feature_dim,
@@ -147,7 +157,9 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             use_hollow_kernel=self.use_hollow_kernel,
             cell_blend_init=self.cell_blend_init,
             node_mode=self.decoder_node_mode,
-            proto_embed=self.proto_embed if hasattr(self, 'proto_embed') else None,
+            proto_embed_low=self.proto_embed_low if hasattr(self, 'proto_embed_low') else None,
+            proto_embed_mid=self.proto_embed_mid if hasattr(self, 'proto_embed_mid') else None,
+            proto_embed_high=self.proto_embed_high if hasattr(self, 'proto_embed_high') else None,
         )
 
         # ── torch.compile each block (standard Transformer kernels fuse well) ──
@@ -162,12 +174,21 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
 
     def encode_condition(self, history_sequence):
         if self.use_fuzzy_graph and self.fuzzy_graph is not None:
-            graph_matrix, fou, mu_mid = self.fuzzy_graph.get_type2_info(history_sequence)
+            (graph_matrix, fou, mu_mid,
+             mu_low_raw, mu_mid_raw, mu_high_raw, beta
+            ) = self.fuzzy_graph.get_type2_info(history_sequence)
             graph_matrix = graph_matrix.to(history_sequence.device)
             fou = fou.to(history_sequence.device)
             mu_mid = mu_mid.to(history_sequence.device)
-            self._current_fou = fou  # cache for diagnostics
-            self._current_mu_mid = mu_mid  # cache for diagnostics
+            mu_low_raw = mu_low_raw.to(history_sequence.device)
+            mu_mid_raw = mu_mid_raw.to(history_sequence.device)
+            mu_high_raw = mu_high_raw.to(history_sequence.device)
+            self._current_fou = fou
+            self._current_mu_mid = mu_mid
+            self._current_mu_low_raw = mu_low_raw
+            self._current_mu_mid_raw = mu_mid_raw
+            self._current_mu_high_raw = mu_high_raw
+            self._current_beta = beta.detach()
         else:
             graph_matrix = self.adjacency_matrix.to(history_sequence.device)
             fou = None
@@ -196,20 +217,26 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
     def predict(self, batch):
         history_sequence = batch["X"]
         condition_features, graph_matrix, fou, graph_powers = self.encode_condition(history_sequence)
-        mu_mid = getattr(self, '_current_mu_mid', None)
         return self.future_decoder(
             condition_features, graph_matrix, graph_uncertainty=fou,
-            powers=graph_powers, mu_mid=mu_mid)
+            powers=graph_powers,
+            mu_low=getattr(self, '_current_mu_low_raw', None),
+            mu_mid=getattr(self, '_current_mu_mid_raw', None),
+            mu_high=getattr(self, '_current_mu_high_raw', None),
+            beta=getattr(self, '_current_beta', None))
 
     def calculate_loss(self, batch):
         history_sequence = batch["X"]
         future_sequence = batch["y"][..., :self.output_dim]
 
         condition_features, graph_matrix, fou, graph_powers = self.encode_condition(history_sequence)
-        mu_mid = getattr(self, '_current_mu_mid', None)
         predicted_future = self.future_decoder(
             condition_features, graph_matrix, graph_uncertainty=fou,
-            powers=graph_powers, mu_mid=mu_mid)
+            powers=graph_powers,
+            mu_low=getattr(self, '_current_mu_low_raw', None),
+            mu_mid=getattr(self, '_current_mu_mid_raw', None),
+            mu_high=getattr(self, '_current_mu_high_raw', None),
+            beta=getattr(self, '_current_beta', None))
 
         # ── Regression loss ──
         if self.loss_mode == "mse":
@@ -493,7 +520,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         metrics = []
         with torch.no_grad():
             if self.use_fuzzy_graph and self.fuzzy_graph is not None:
-                graph_matrix, fou, _ = self.fuzzy_graph.get_type2_info(history_sequence)
+                graph_matrix, fou, *_ = self.fuzzy_graph.get_type2_info(history_sequence)
                 graph_matrix = graph_matrix.to(history_sequence.device)
                 fou = fou.to(history_sequence.device)
             else:

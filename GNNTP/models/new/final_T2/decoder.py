@@ -114,7 +114,9 @@ class FutureDecoder(nn.Module):
         use_hollow_kernel=True,
         cell_blend_init=0.3,
         node_mode="embed",
-        proto_embed=None,
+        proto_embed_low=None,
+        proto_embed_mid=None,
+        proto_embed_high=None,
     ):
         super().__init__()
         self.use_gradient_checkpointing = use_gradient_checkpointing
@@ -136,7 +138,12 @@ class FutureDecoder(nn.Module):
         else:
             self.node_embed = None
 
-        self.proto_embed = proto_embed  # shared from model layer
+        # Per-view prototype embeddings (shared from model layer)
+        self.proto_embed_low  = proto_embed_low
+        self.proto_embed_mid  = proto_embed_mid
+        self.proto_embed_high = proto_embed_high
+        # Backward-compat
+        self.proto_embed = proto_embed_mid
 
         self.blocks = nn.ModuleList([
             DecoderBlock(
@@ -154,24 +161,35 @@ class FutureDecoder(nn.Module):
         self.output_projection = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, condition_features, graph_matrix, graph_uncertainty=None,
-                powers=None, mu_mid=None):
+                powers=None, mu_low=None, mu_mid=None, mu_high=None, beta=None):
         batch_size = condition_features.shape[0]
 
         # ── Node identity component ──
         if self.node_mode == "embed":
-            node_comp = self.node_embed  # (1, 1, N, D) — per-node shortcut
+            node_comp = self.node_embed
         elif self.node_mode == "proto":
-            # Route through Type-2 membership: no per-node parameters
-            if mu_mid is None:
-                raise ValueError("mu_mid required for node_mode='proto'")
-            # mu_mid(N,K) @ proto_embed(K,D) → (N,D) → (1,1,N,D)
-            node_comp = torch.matmul(
-                mu_mid, self.proto_embed.squeeze(0)).unsqueeze(0).unsqueeze(0)
+            # β-weighted per-view routing: each view's membership × its own proto embed
+            # node_comp = β₀·(μ_low @ E_low) + β₁·(μ_mid @ E_mid) + β₂·(μ_high @ E_high)
+            if mu_low is None or beta is None:
+                raise ValueError("mu_low/mu_mid/mu_high/beta required for node_mode='proto'")
+            beta_d = beta.detach()  # avoid double gradient (β already in R_mixed)
+            def _route(mu, pe):
+                return torch.matmul(mu, pe.squeeze(0))  # (N,K)@(K,D) → (N,D)
+            node_comp = (beta_d[0] * _route(mu_low,  self.proto_embed_low) +
+                         beta_d[1] * _route(mu_mid,  self.proto_embed_mid) +
+                         beta_d[2] * _route(mu_high, self.proto_embed_high))
+            node_comp = node_comp.unsqueeze(0).unsqueeze(0)  # → (1,1,N,D)
         elif self.node_mode == "both":
             node_comp = self.node_embed
-            if mu_mid is not None:
-                node_comp = node_comp + torch.matmul(
-                    mu_mid, self.proto_embed.squeeze(0)).unsqueeze(0).unsqueeze(0)
+            if mu_low is not None and beta is not None:
+                beta_d = beta.detach()
+                def _route(mu, pe):
+                    return torch.matmul(mu, pe.squeeze(0))
+                node_comp = node_comp + (
+                    beta_d[0] * _route(mu_low,  self.proto_embed_low) +
+                    beta_d[1] * _route(mu_mid,  self.proto_embed_mid) +
+                    beta_d[2] * _route(mu_high, self.proto_embed_high)
+                ).unsqueeze(0).unsqueeze(0)
         else:
             node_comp = self.node_embed
 
