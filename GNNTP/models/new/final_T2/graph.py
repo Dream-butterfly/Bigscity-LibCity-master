@@ -153,9 +153,16 @@ class FuzzyRelationalGraphLearner(nn.Module):
         _g = torch.Generator()
         _g.manual_seed(_seed)
 
-        # ── Prototype centers c_k ∈ R^D ──────────────────────────
-        self.prototype_center = nn.Parameter(
+        # ── Independent prototype centers per view ─────────────────
+        #   Three views → three geometry templates → genuinely different relations
+        self.prototype_center_low  = nn.Parameter(
             torch.randn(num_fuzzy_sets, hidden_dim, generator=_g) * 0.1)
+        self.prototype_center_mid  = nn.Parameter(
+            torch.randn(num_fuzzy_sets, hidden_dim, generator=_g) * 0.1)
+        self.prototype_center_high = nn.Parameter(
+            torch.randn(num_fuzzy_sets, hidden_dim, generator=_g) * 0.1)
+        # Backward-compat alias
+        self.prototype_center = self.prototype_center_mid
 
         # ── Independent dual widths: σ_low, σ_high (genuine Type-2) ─
         #   Each fuzzy set k has its own lower and upper Gaussian width,
@@ -207,12 +214,18 @@ class FuzzyRelationalGraphLearner(nn.Module):
     # ═══════════════════════════════════════════════════════════════
 
     def _compute_memberships(self, node_features):
-        """Compute IT2 Gaussian memberships [μ_lower, μ_upper, μ_mid].
+        """Compute IT2 Gaussian memberships with independent prototype geometry per view.
+
+        Three views → three prototype sets → three distance fields → three
+        structurally different relation matrices (not just scaled copies).
 
         Returns:
-            mu_lower:  [N, K]  pessimistic (wider Gaussian)
-            mu_upper:  [N, K]  optimistic  (narrower Gaussian)
-            mu_mid:    [N, K]  midpoint
+            mu_lower_raw:  [N, K]  pessimistic (wider Gaussian, proto_low)
+            mu_mid_raw:    [N, K]  midpoint     (mid Gaussian,  proto_mid)
+            mu_high_raw:   [N, K]  optimistic   (narrow Gaussian, proto_high)
+            mu_upper:      [N, K]  max over three raw
+            mu_lower:      [N, K]  min over three raw
+            mu_mid:        [N, K]  (upper+lower)/2
         """
         # 1. Node representation extraction
         if node_features is not None:
@@ -233,35 +246,49 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
         # ── Hyperspherical projection: normalize to unit sphere ──
         node_latent_norm = F.normalize(node_latent, dim=-1)          # [N, D], ||·||=1
-        proto_norm = F.normalize(self.prototype_center, dim=-1)      # [K, D], ||·||=1
+        proto_low_norm  = F.normalize(self.prototype_center_low, dim=-1)   # [K, D]
+        proto_mid_norm  = F.normalize(self.prototype_center_mid, dim=-1)   # [K, D]
+        proto_high_norm = F.normalize(self.prototype_center_high, dim=-1)  # [K, D]
 
-        # 3. Delta parameterization: σ_high = σ_low + δ (guaranteed order)
-        sigma_low   = F.softplus(self.log_sigma_low) + 1e-3   # [K], base
+        # 3. Three sigma levels (single delta parameterization, three views)
+        sigma_low   = F.softplus(self.log_sigma_low) + 1e-3   # [K], narrowest
         sigma_delta = F.softplus(self.log_sigma_delta) + 1e-3 # [K], δ ≥ 0
-        sigma_high  = sigma_low + sigma_delta                  # guaranteed σ_low ≤ σ_high
+        sigma_mid   = sigma_low + sigma_delta * 0.5           # [K], middle
+        sigma_high  = sigma_low + sigma_delta                  # [K], widest
         # Cache for diagnostics
         self._current_sigma_low = sigma_low.detach()
+        self._current_sigma_mid = sigma_mid.detach()
         self._current_sigma_high = sigma_high.detach()
 
-        # 4. Gaussian membership: exp(−d² / 2σ²) on hypersphere
-        #    d² = 2 − 2·cos(θ) ∈ [0, 4] → bounded, non-collapsing
-        d2 = torch.cdist(node_latent_norm, proto_norm).pow(2)  # [N, K]
-        mu_low_raw = torch.exp(-d2 / (2 * sigma_high.pow(2)))  # wide → low
-        mu_high_raw = torch.exp(-d2 / (2 * sigma_low.pow(2)))  # narrow → high
-        mu_upper = torch.maximum(mu_low_raw, mu_high_raw)
-        mu_lower = torch.minimum(mu_low_raw, mu_high_raw)
-        mu_mid = (mu_lower + mu_upper) / 2
+        # 4. Three independent distance fields → genuinely different geometries
+        d2_low  = torch.cdist(node_latent_norm, proto_low_norm).pow(2)   # [N, K]
+        d2_mid  = torch.cdist(node_latent_norm, proto_mid_norm).pow(2)   # [N, K]
+        d2_high = torch.cdist(node_latent_norm, proto_high_norm).pow(2)  # [N, K]
+
+        # Gaussian membership on each view's own geometry
+        mu_low_raw  = torch.exp(-d2_low  / (2 * sigma_high.pow(2)))   # wide  σ → pessimistic
+        mu_mid_raw  = torch.exp(-d2_mid  / (2 * sigma_mid.pow(2)))    # mid   σ → midpoint
+        mu_high_raw = torch.exp(-d2_high / (2 * sigma_low.pow(2)))    # narrow σ → optimistic
+
+        # Type-2 envelope: upper/lower across three independent views
+        mu_upper = torch.maximum(torch.maximum(mu_low_raw, mu_mid_raw), mu_high_raw)
+        mu_lower = torch.minimum(torch.minimum(mu_low_raw, mu_mid_raw), mu_high_raw)
+        mu_mid   = (mu_lower + mu_upper) / 2
 
         # Cache diagnostics (detached — no gradient)
-        _d2_d = d2.detach()
-        self._current_d2_mean = _d2_d.mean()
-        self._current_d2_std  = _d2_d.std()
-        self._current_proto_norm = self.prototype_center.norm(dim=-1).mean().detach()
+        _d2_avg = d2_mid.detach()  # use mid as representative
+        self._current_d2_mean = _d2_avg.mean()
+        self._current_d2_std  = _d2_avg.std()
+        # Proto norm: average across all three sets
+        _p_low  = self.prototype_center_low.norm(dim=-1).mean().detach()
+        _p_mid  = self.prototype_center_mid.norm(dim=-1).mean().detach()
+        _p_high = self.prototype_center_high.norm(dim=-1).mean().detach()
+        self._current_proto_norm = ((_p_low + _p_mid + _p_high) / 3)
         self._current_latent_norm = node_latent.detach().norm(dim=-1).mean()
         self._current_transform_weight = self.node_transform[-1].weight.norm().detach()
         self._node_latent_for_reg = node_latent  # keep grad: for latent norm regularization
-        # Per-step movement tracking (on raw vectors, pre-normalize)
-        _pc = self.prototype_center.detach()
+        # Per-step movement tracking (track mid prototype as representative)
+        _pc = self.prototype_center_mid.detach()
         _nl = node_latent.detach()
         if hasattr(self, '_prev_proto'):
             self._current_proto_update = (_pc - self._prev_proto).norm()
@@ -271,17 +298,18 @@ class FuzzyRelationalGraphLearner(nn.Module):
             self._current_latent_update = torch.tensor(0.0)
         self._prev_proto = _pc.clone()
         self._prev_latent_mean = _nl.mean(dim=0).clone()
-        _pc_mean = self.prototype_center.mean(dim=0)
+        _pc_mean = self.prototype_center_mid.mean(dim=0)
         _nl_mean = node_latent.detach().mean(dim=0)
         self._current_center_dist = (_nl_mean - _pc_mean).norm()
         _diff = (mu_upper - mu_lower).detach()
         self._current_mu_diff_mean = _diff.mean()
         self._current_mu_diff_max = _diff.max()
         self._current_mu_raw_low_mean  = mu_low_raw.detach().mean()
+        self._current_mu_raw_mid_mean  = mu_mid_raw.detach().mean()
         self._current_mu_raw_high_mean = mu_high_raw.detach().mean()
         self._current_sigma_delta_mean = sigma_delta.detach().mean()
 
-        return mu_lower, mu_upper, mu_mid
+        return mu_lower, mu_upper, mu_mid, mu_low_raw, mu_mid_raw, mu_high_raw
 
     # ═══════════════════════════════════════════════════════════════
     #  Relation Sparsification
@@ -344,15 +372,16 @@ class FuzzyRelationalGraphLearner(nn.Module):
             R_with_closure: [N, N] effective fuzzy relation
             fou_node:       [N]    per-node FOU scalar
         """
-        mu_lower, mu_upper, mu_mid = self._compute_memberships(node_features)
+        mu_lower, mu_upper, mu_mid, mu_low_raw, mu_mid_raw, mu_high_raw = \
+            self._compute_memberships(node_features)
 
         # Per-node FOU (for CellAttention, backward compat)
         fou_node = (mu_upper - mu_lower).clamp(min=0.0).mean(dim=-1)  # [N]
 
-        # ── Interval-valued relations ──
-        R_low = self._build_fuzzy_relation(mu_lower)  # pessimistic
-        R_mid = self._build_fuzzy_relation(mu_mid)  # midpoint
-        R_high = self._build_fuzzy_relation(mu_upper)  # optimistic
+        # ── Interval-valued relations — each from its OWN geometry ──
+        R_low  = self._build_fuzzy_relation(mu_low_raw)   # proto_low  + σ_high (pessimistic)
+        R_mid  = self._build_fuzzy_relation(mu_mid_raw)   # proto_mid  + σ_mid  (midpoint)
+        R_high = self._build_fuzzy_relation(mu_high_raw)  # proto_high + σ_low  (optimistic)
 
         # Per-relation top-K sparsification (independent per view)
         R_low  = self._sparsify_relation(R_low)

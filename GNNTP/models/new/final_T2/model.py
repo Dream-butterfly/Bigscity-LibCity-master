@@ -267,11 +267,15 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         # ── Prototype norm regularization: prevent |prototype_center| → 0 ──
         self._loss_proto_norm = torch.tensor(0.0)
         if self.proto_norm_reg_weight > 0 and self.fuzzy_graph is not None:
-            proto_norms = self.fuzzy_graph.prototype_center.norm(dim=-1)  # [K]
-            # Penalize if prototype norm deviates far from 1.0 (ideal for hypersphere)
-            proto_norm_hinge = F.relu(0.3 - proto_norms.mean())
-            self._loss_proto_norm = (self.proto_norm_reg_weight * proto_norm_hinge).detach()
-            total = total + self.proto_norm_reg_weight * proto_norm_hinge
+            # Three independent prototype sets → average norm across all
+            proto_norms = torch.stack([
+                self.fuzzy_graph.prototype_center_low.norm(dim=-1).mean(),
+                self.fuzzy_graph.prototype_center_mid.norm(dim=-1).mean(),
+                self.fuzzy_graph.prototype_center_high.norm(dim=-1).mean(),
+            ])
+            proto_norm_loss = (proto_norms.mean() - 1.0).pow(2)
+            self._loss_proto_norm = (self.proto_norm_reg_weight * proto_norm_loss).detach()
+            total = total + self.proto_norm_reg_weight * proto_norm_loss
 
         # ── Latent norm regularization: prevent node_transform weights → 0 ──
         # LayerNorm kills gradient on magnitude; this compensates.
@@ -292,6 +296,9 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 self.fuzzy_graph.log_sigma_low,
                 self.fuzzy_graph.log_sigma_delta,
                 self.fuzzy_graph.relation_mix_logits,
+                self.fuzzy_graph.prototype_center_low,
+                self.fuzzy_graph.prototype_center_mid,
+                self.fuzzy_graph.prototype_center_high,
             ]
             _boost = self.t2_lr_boost
             def _amp_grad(_grad):
@@ -341,6 +348,9 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 diag['sigma_high_std']  = round(sh.std().item(), 4)
                 diag['sigma_ratio']     = round(
                     (sl / (sh + 1e-8)).clamp(0, 1).mean().item(), 4)
+            if hasattr(self.fuzzy_graph, '_current_sigma_mid'):
+                diag['sigma_mid_mean'] = round(
+                    self.fuzzy_graph._current_sigma_mid.mean().item(), 4)
             # Anti-collapse loss values
             # Weighted contributions for L=[] display
             if hasattr(self, '_loss_mae'):
@@ -371,6 +381,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             if hasattr(self.fuzzy_graph, '_current_mu_raw_low_mean'):
                 diag['mu_raw_low']  = round(
                     self.fuzzy_graph._current_mu_raw_low_mean.item(), 4)
+                diag['mu_raw_mid']  = round(
+                    self.fuzzy_graph._current_mu_raw_mid_mean.item(), 4)
                 diag['mu_raw_high'] = round(
                     self.fuzzy_graph._current_mu_raw_high_mean.item(), 4)
             # Prototype drift diagnostics
@@ -401,7 +413,14 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 ('|∇proto|', 'prototype_center'),
             ]:
                 param = getattr(g, grad_key, None)
-                if param is not None and param.grad is not None:
+                # For prototype, max gradient across all three sets
+                if grad_key == 'prototype_center' and hasattr(g, 'prototype_center_low'):
+                    gn = max(
+                        g.prototype_center_low.grad.detach().abs().mean().item() if g.prototype_center_low.grad is not None else 0,
+                        g.prototype_center_mid.grad.detach().abs().mean().item() if g.prototype_center_mid.grad is not None else 0,
+                        g.prototype_center_high.grad.detach().abs().mean().item() if g.prototype_center_high.grad is not None else 0,
+                    )
+                elif param is not None and param.grad is not None:
                     gn = param.grad.detach().abs().mean().item()
                     diag[grad_key + '_grad'] = gn
             # Relation diffs (are the three graphs actually different?)

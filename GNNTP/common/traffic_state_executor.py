@@ -447,11 +447,11 @@ class TrafficStateExecutor(AbstractExecutor):
                                 parts2.append('FOU(μ={:.1e},σ={:.1e})'.format(
                                     diag['fou_mean'], diag['fou_std']))
                             if 'sigma_low_mean' in diag:
-                                parts2.append('σ_low={:.4f}±{:.4f} σ_high={:.4f}±{:.4f} σ_δ={:.4f}±{:.4f}'.format(
-                                    diag['sigma_low_mean'], diag['sigma_low_std'],
-                                    diag['sigma_high_mean'], diag['sigma_high_std'],
-                                    diag['sigma_high_mean'] - diag['sigma_low_mean'],
-                                    diag.get('sigma_high_std', 0)))
+                                parts2.append('σ_low={:.4f} σ_mid={:.4f} σ_high={:.4f} δ={:.4f}'.format(
+                                    diag['sigma_low_mean'],
+                                    diag.get('sigma_mid_mean', 0),
+                                    diag['sigma_high_mean'],
+                                    diag.get('sigma_delta_mean', 0)))
                                 if 'sigma_ratio' in diag:
                                     parts2[-1] += ' r={:.4f}'.format(diag['sigma_ratio'])
                             if 'loss_mae' in diag:
@@ -467,9 +467,9 @@ class TrafficStateExecutor(AbstractExecutor):
                                 parts2.append('raw=[ent={:.3f} gap={:.4f} fou={:.4f}]'.format(
                                     diag['raw_ent'], diag['raw_gap'], diag['raw_fou']))
                             if 'd2_mean' in diag:
-                                parts2.append('d²={:.1f}±{:.1f} μ_raw(L={:.3f},H={:.3f}) δ={:.2f} μΔ(m={:.4f},M={:.4f})'.format(
+                                parts2.append('d²={:.1f}±{:.1f} μ_raw(L={:.3f},M={:.3f},H={:.3f}) δ={:.2f} μΔ(m={:.4f},M={:.4f})'.format(
                                     diag['d2_mean'], diag['d2_std'],
-                                    diag.get('mu_raw_low', 0), diag.get('mu_raw_high', 0),
+                                    diag.get('mu_raw_low', 0), diag.get('mu_raw_mid', 0), diag.get('mu_raw_high', 0),
                                     diag.get('sigma_delta_mean', 0),
                                     diag.get('mu_diff_mean', 0), diag.get('mu_diff_max', 0)))
                             if 'proto_norm' in diag:
