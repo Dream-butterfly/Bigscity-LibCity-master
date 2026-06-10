@@ -53,6 +53,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.use_proto_adaptive_embed = config.get("use_proto_adaptive_embed", False)
         self.proto_norm_reg_weight = config.get("proto_norm_reg_weight", 0.01)
         self._latent_norm_reg_weight = config.get("latent_norm_reg_weight", 0.01)
+        self.decoder_node_mode = config.get("decoder_node_mode", "embed")
 
         self.use_cell_attention = config.get("use_cell_attention", True)
         self.num_cells = config.get("num_cells", 8)
@@ -142,6 +143,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             num_cells=self.num_cells,
             use_hollow_kernel=self.use_hollow_kernel,
             cell_blend_init=self.cell_blend_init,
+            node_mode=self.decoder_node_mode,
+            proto_embed=self.proto_embed if self.use_proto_adaptive_embed else None,
         )
 
         # ── torch.compile each block (standard Transformer kernels fuse well) ──
@@ -190,16 +193,20 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
     def predict(self, batch):
         history_sequence = batch["X"]
         condition_features, graph_matrix, fou, graph_powers = self.encode_condition(history_sequence)
+        mu_mid = getattr(self, '_current_mu_mid', None)
         return self.future_decoder(
-            condition_features, graph_matrix, graph_uncertainty=fou, powers=graph_powers)
+            condition_features, graph_matrix, graph_uncertainty=fou,
+            powers=graph_powers, mu_mid=mu_mid)
 
     def calculate_loss(self, batch):
         history_sequence = batch["X"]
         future_sequence = batch["y"][..., :self.output_dim]
 
         condition_features, graph_matrix, fou, graph_powers = self.encode_condition(history_sequence)
+        mu_mid = getattr(self, '_current_mu_mid', None)
         predicted_future = self.future_decoder(
-            condition_features, graph_matrix, graph_uncertainty=fou, powers=graph_powers)
+            condition_features, graph_matrix, graph_uncertainty=fou,
+            powers=graph_powers, mu_mid=mu_mid)
 
         # ── Regression loss ──
         if self.loss_mode == "mse":

@@ -113,20 +113,30 @@ class FutureDecoder(nn.Module):
         num_cells=8,
         use_hollow_kernel=True,
         cell_blend_init=0.3,
+        node_mode="embed",
+        proto_embed=None,
     ):
         super().__init__()
         self.use_gradient_checkpointing = use_gradient_checkpointing
         self.output_window = output_window
         self.num_nodes = num_nodes
+        self.node_mode = node_mode
 
         # Factorized future queries: horizon × node → T×N×D
-        #   saves ~91% params vs dense [1,T,N,D] (678k → 57k for PEMSD7)
         self.horizon_embed = nn.Parameter(
             torch.zeros(1, output_window, 1, hidden_dim))
-        self.node_embed = nn.Parameter(
-            torch.zeros(1, 1, num_nodes, hidden_dim))
         nn.init.trunc_normal_(self.horizon_embed, std=0.02)
-        nn.init.trunc_normal_(self.node_embed, std=0.02)
+
+        # Node identity component — routed through prototype membership
+        # when node_mode="proto" or "both", avoiding the per-node shortcut.
+        if node_mode in ("embed", "both"):
+            self.node_embed = nn.Parameter(
+                torch.zeros(1, 1, num_nodes, hidden_dim))
+            nn.init.trunc_normal_(self.node_embed, std=0.02)
+        else:
+            self.node_embed = None
+
+        self.proto_embed = proto_embed  # shared from model layer
 
         self.blocks = nn.ModuleList([
             DecoderBlock(
@@ -143,9 +153,29 @@ class FutureDecoder(nn.Module):
         self.final_norm = nn.LayerNorm(hidden_dim)
         self.output_projection = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, condition_features, graph_matrix, graph_uncertainty=None, powers=None):
+    def forward(self, condition_features, graph_matrix, graph_uncertainty=None,
+                powers=None, mu_mid=None):
         batch_size = condition_features.shape[0]
-        queries = (self.horizon_embed + self.node_embed).expand(
+
+        # ── Node identity component ──
+        if self.node_mode == "embed":
+            node_comp = self.node_embed  # (1, 1, N, D) — per-node shortcut
+        elif self.node_mode == "proto":
+            # Route through Type-2 membership: no per-node parameters
+            if mu_mid is None:
+                raise ValueError("mu_mid required for node_mode='proto'")
+            # mu_mid(N,K) @ proto_embed(K,D) → (N,D) → (1,1,N,D)
+            node_comp = torch.matmul(
+                mu_mid, self.proto_embed.squeeze(0)).unsqueeze(0).unsqueeze(0)
+        elif self.node_mode == "both":
+            node_comp = self.node_embed
+            if mu_mid is not None:
+                node_comp = node_comp + torch.matmul(
+                    mu_mid, self.proto_embed.squeeze(0)).unsqueeze(0).unsqueeze(0)
+        else:
+            node_comp = self.node_embed
+
+        queries = (self.horizon_embed + node_comp).expand(
             batch_size, -1, -1, -1)
 
         for block in self.blocks:

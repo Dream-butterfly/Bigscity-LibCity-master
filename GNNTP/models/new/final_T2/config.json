@@ -56,5 +56,7 @@
   "data_col": ["traffic_flow"],
   "output_dim": 1,
   "lr_T_max": 100,
-  "lr_eta_min": 1e-6
+  "lr_eta_min": 1e-6,
+  "decoder_node_mode": "both",
+  "use_static_blend": false
 }

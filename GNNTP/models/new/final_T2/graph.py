@@ -194,6 +194,8 @@ class FuzzyRelationalGraphLearner(nn.Module):
             self._has_static = False
 
         self.blend_logit = nn.Parameter(torch.tensor(0.5))
+        # Temperature for membership sharpness annealing
+        self.register_buffer('tau', torch.tensor(3.0))  # updated by model each step
 
         # Interval relation mixing: β = softmax(logits)
         self.relation_mix_logits = nn.Parameter(
