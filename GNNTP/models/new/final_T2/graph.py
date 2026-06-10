@@ -146,6 +146,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self.num_fuzzy_sets = num_fuzzy_sets
         self.closure_steps = int(max(0, closure_steps))
         self.topk = topk
+        self.graph_sparsify_topk = None  # set via model config if needed
 
         # ── Random init with time+pid seed (different per run) ─────
         _seed = int((time.time() * 1e6) % (2 ** 31)) ^ (os.getpid() % (2 ** 16))
@@ -280,6 +281,31 @@ class FuzzyRelationalGraphLearner(nn.Module):
         return mu_lower, mu_upper, mu_mid
 
     # ═══════════════════════════════════════════════════════════════
+    #  Relation Sparsification
+    # ═══════════════════════════════════════════════════════════════
+
+    def _sparsify_relation(self, R):
+        """Top-K sparsification per node: keep K strongest edges, zero rest.
+
+        Uses Straight-Through Estimator: forward = sparse, backward grad
+        flows through full dense R, allowing zeroed-out edges to recover.
+        """
+        if self.graph_sparsify_topk is None or self.graph_sparsify_topk <= 0:
+            return R
+        N = R.size(0)
+        K = min(self.graph_sparsify_topk, N)
+        # Keep self-loops + top-K (excluding diag)
+        R_nodiag = R.clone()
+        R_nodiag[range(N), range(N)] = 0
+        _, idx = R_nodiag.topk(K, dim=-1)
+        mask = torch.zeros_like(R)
+        mask.scatter_(-1, idx, 1.0)
+        mask[range(N), range(N)] = 1.0  # always keep self-loops
+        # STE: forward = R ⊙ mask, backward gradients pass through full R
+        sparse = R * mask
+        return (sparse - R).detach() + R
+
+    # ═══════════════════════════════════════════════════════════════
     #  Fuzzy Relation Construction
     # ═══════════════════════════════════════════════════════════════
 
@@ -324,6 +350,11 @@ class FuzzyRelationalGraphLearner(nn.Module):
         R_low = self._build_fuzzy_relation(mu_lower)  # pessimistic
         R_mid = self._build_fuzzy_relation(mu_mid)  # midpoint
         R_high = self._build_fuzzy_relation(mu_upper)  # optimistic
+
+        # Per-relation top-K sparsification (independent per view)
+        R_low  = self._sparsify_relation(R_low)
+        R_mid  = self._sparsify_relation(R_mid)
+        R_high = self._sparsify_relation(R_high)
 
         # Cache relation diffs for diagnostics
         self._current_R_diff_lm = (R_low - R_mid).abs().mean().detach()

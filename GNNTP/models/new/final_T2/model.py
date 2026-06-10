@@ -48,6 +48,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.use_fuzzy_graph = config.get("use_fuzzy_graph", True)
         self.fuzzy_num_sets = config.get("fuzzy_num_sets", 3)
         self.graph_topk = config.get("graph_topk", 32)
+        self.graph_sparsify_topk = config.get("graph_sparsify_topk", 0)  # 0=off
         self.beta_init_random = config.get("beta_init_random", False)
 
         self.use_cell_attention = config.get("use_cell_attention", True)
@@ -90,6 +91,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 topk=self.graph_topk,
                 beta_init_random=self.beta_init_random,
             )
+            self.fuzzy_graph.graph_sparsify_topk = (
+                self.graph_sparsify_topk if self.graph_sparsify_topk > 0 else None)
         else:
             self.fuzzy_graph = None
 

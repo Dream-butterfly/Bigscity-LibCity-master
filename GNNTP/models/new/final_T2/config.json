@@ -52,5 +52,6 @@
   "t2_entropy_weight": 0.002,
   "t2_interval_weight": 0.01,
   "t2_fou_floor_weight": 0.05,
-  "t2_interval_ratio_threshold": 0.9
+  "t2_interval_ratio_threshold": 0.9,
+  "graph_sparsify_topk": 0
 }
