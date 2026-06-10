@@ -53,6 +53,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.use_proto_adaptive_embed = config.get("use_proto_adaptive_embed", False)
         self.proto_norm_reg_weight = config.get("proto_norm_reg_weight", 0.01)
         self._latent_norm_reg_weight = config.get("latent_norm_reg_weight", 0.01)
+        self.use_static_blend = config.get("use_static_blend", True)
 
         self.use_cell_attention = config.get("use_cell_attention", True)
         self.num_cells = config.get("num_cells", 8)
@@ -88,7 +89,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 num_nodes=self.num_nodes,
                 hidden_dim=self.hidden_dim,
                 num_fuzzy_sets=self.fuzzy_num_sets,
-                static_adjacency=adjacency_matrix,
+                static_adjacency=adjacency_matrix if self.use_static_blend else None,
                 input_dim=self.feature_dim,
                 closure_steps=int(max(0, config.get("graph_closure_steps", 0))),
                 topk=self.graph_topk,
@@ -315,9 +316,10 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             # Interval mix weights
             beta = F.softmax(self.fuzzy_graph.relation_mix_logits, dim=0).detach()
             diag['beta'] = [round(b.item(), 3) for b in beta]
-            # Fuzzy-static blend
-            diag['blend'] = round(
-                torch.sigmoid(self.fuzzy_graph.blend_logit).item(), 3)
+            # Fuzzy-static blend (only when static adjacency is used)
+            if self.fuzzy_graph._has_static:
+                diag['blend'] = round(
+                    torch.sigmoid(self.fuzzy_graph.blend_logit).item(), 3)
             # FOU statistics (from last forward)
             if hasattr(self, '_current_fou') and self._current_fou is not None:
                 fou = self._current_fou.detach()

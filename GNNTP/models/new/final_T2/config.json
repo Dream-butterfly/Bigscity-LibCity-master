@@ -46,7 +46,7 @@
   "use_torch_compile": true,
   "t2_lr_boost": 1.0,
   "beta_init_random": false,
-  "t2_entropy_weight": 0.002,
+  "t2_entropy_weight": 0.0,
   "t2_interval_weight": 0.005,
   "t2_fou_floor_weight": 0.01,
   "t2_interval_ratio_threshold": 0.9,
@@ -56,5 +56,8 @@
   "data_col": ["traffic_flow"],
   "output_dim": 1,
   "lr_T_max": 100,
-  "lr_eta_min": 1e-6
+  "lr_eta_min": 1e-6,
+  "loss_mode": "huber",
+  "huber_delta": 1.0,
+  "use_static_blend": false
 }
