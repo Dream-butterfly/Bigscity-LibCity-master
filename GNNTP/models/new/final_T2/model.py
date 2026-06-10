@@ -50,6 +50,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.graph_topk = config.get("graph_topk", 32)
         self.graph_sparsify_topk = config.get("graph_sparsify_topk", 0)  # 0=off
         self.beta_init_random = config.get("beta_init_random", False)
+        self.use_proto_adaptive_embed = config.get("use_proto_adaptive_embed", False)
 
         self.use_cell_attention = config.get("use_cell_attention", True)
         self.num_cells = config.get("num_cells", 8)
@@ -95,6 +96,15 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 self.graph_sparsify_topk if self.graph_sparsify_topk > 0 else None)
         else:
             self.fuzzy_graph = None
+
+        # Prototype-aware adaptive embedding: E_node = μ_mid @ E_proto
+        # Each of K fuzzy prototypes learns a D-dim spatial signature.
+        # Node embedding = membership-weighted mixture (N×K @ K×D → N×D).
+        # 3×hidden_dim parameters total — cannot become a shortcut.
+        if self.use_proto_adaptive_embed:
+            self.proto_embed = nn.Parameter(
+                torch.zeros(1, self.fuzzy_num_sets, self.hidden_dim))
+            nn.init.trunc_normal_(self.proto_embed, std=0.02)
 
         self.condition_encoder = STEncoder(
             input_dim=self.feature_dim,
@@ -144,18 +154,29 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
 
     def encode_condition(self, history_sequence):
         if self.use_fuzzy_graph and self.fuzzy_graph is not None:
-            graph_matrix, fou = self.fuzzy_graph.get_type2_info(history_sequence)
+            graph_matrix, fou, mu_mid = self.fuzzy_graph.get_type2_info(history_sequence)
             graph_matrix = graph_matrix.to(history_sequence.device)
             fou = fou.to(history_sequence.device)
+            mu_mid = mu_mid.to(history_sequence.device)
             self._current_fou = fou  # cache for diagnostics
+            self._current_mu_mid = mu_mid  # cache for diagnostics
         else:
             graph_matrix = self.adjacency_matrix.to(history_sequence.device)
             fou = None
+            mu_mid = None
             self._current_fou = None
+            self._current_mu_mid = None
         graph_powers = FuzzyGraphConvolution.precompute_powers(
             graph_matrix, k_hop=self.graph_k_hop, topk=self.graph_topk)
         condition_features = self.condition_encoder(
             history_sequence, graph_matrix, graph_uncertainty=fou, powers=graph_powers)
+
+        # Prototype-aware spatial embedding: route through Type-2 membership
+        if self.use_proto_adaptive_embed and mu_mid is not None:
+            # E_node = μ_mid @ E_proto  (N,K) @ (K,D) → (N,D)
+            node_adaptive = mu_mid @ self.proto_embed  # (N, K) @ (1, K, D) → (N, D)
+            condition_features = condition_features + node_adaptive  # broadcast (B,T)
+
         return condition_features, graph_matrix, fou, graph_powers
 
     def forward(self, batch):
@@ -387,7 +408,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         metrics = []
         with torch.no_grad():
             if self.use_fuzzy_graph and self.fuzzy_graph is not None:
-                graph_matrix, fou = self.fuzzy_graph.get_type2_info(history_sequence)
+                graph_matrix, fou, _ = self.fuzzy_graph.get_type2_info(history_sequence)
                 graph_matrix = graph_matrix.to(history_sequence.device)
                 fou = fou.to(history_sequence.device)
             else:

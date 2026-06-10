@@ -382,12 +382,12 @@ class FuzzyRelationalGraphLearner(nn.Module):
         # Closure (if configured)
         R_with_closure = self._apply_mid_closure(R_final)
 
-        return R_with_closure, fou_node
+        return R_with_closure, fou_node, mu_mid
 
     # ── Backward-compatible interface ─────────────────────────────
 
     def forward(self, node_features):
-        R, _ = self.get_type2_info(node_features)
+        R, _, _ = self.get_type2_info(node_features)
         return R
 
     def get_memberships(self, node_features=None):
