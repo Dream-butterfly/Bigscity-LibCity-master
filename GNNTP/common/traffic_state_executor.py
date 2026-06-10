@@ -482,9 +482,9 @@ class TrafficStateExecutor(AbstractExecutor):
                             if 'log_sigma_low_grad' in diag:
                                 parts3.append('∇β={:.2e} σ_low={:.2e} δ={:.2e} proto={:.2e}'.format(
                                     diag.get('relation_mix_logits_grad', 0),
-                                    diag['log_sigma_low_grad'],
+                                    diag.get('log_sigma_low_grad', 0),
                                     diag.get('log_sigma_delta_grad', 0),
-                                    diag['prototype_center_grad']))
+                                    diag.get('prototype_center_grad', 0)))
                             if 'R_gap' in diag:
                                 parts3.append('R_gap={:.2f} w={:.1e}'.format(
                                     diag['R_gap'], diag.get('eff_width', 0)))

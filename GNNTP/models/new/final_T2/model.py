@@ -422,7 +422,9 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                     )
                 elif param is not None and param.grad is not None:
                     gn = param.grad.detach().abs().mean().item()
-                    diag[grad_key + '_grad'] = gn
+                else:
+                    gn = 0.0
+                diag[grad_key + '_grad'] = gn
             # Relation diffs (are the three graphs actually different?)
             if hasattr(g, '_current_R_diff_lm'):
                 diag['R_diff_lm'] = round(g._current_R_diff_lm.item(), 4)
