@@ -193,13 +193,23 @@ class FuzzyRelationalGraphLearner(nn.Module):
         else:
             self.raw_projection = None
 
-        # ── Feature transform (maps node repr to prototype space) ─
+        # ── Feature transform (shared geometry) ────────────────────
         self.node_transform = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.GELU(),
             nn.Linear(hidden_dim, hidden_dim),
         )
+
+        # ── View-specific residuals (Δ) — lightweight perturbations ──
+        #   Shared latent + view-specific Δ → different prototypes react
+        #   differently per view.  ~8K params/view, ~25K total.
+        self.delta_low  = nn.Sequential(
+            nn.Linear(hidden_dim, 32), nn.GELU(), nn.Linear(32, hidden_dim))
+        self.delta_mid  = nn.Sequential(
+            nn.Linear(hidden_dim, 32), nn.GELU(), nn.Linear(32, hidden_dim))
+        self.delta_high = nn.Sequential(
+            nn.Linear(hidden_dim, 32), nn.GELU(), nn.Linear(32, hidden_dim))
 
         # ── Static adjacency ──────────────────────────────────────
         if static_adjacency is not None:
@@ -251,13 +261,20 @@ class FuzzyRelationalGraphLearner(nn.Module):
             raise ValueError(
                 "node_features is required for prototype-based membership")
 
-        # 2. Project to hidden space + transform for prototype matching
+        # 2. Shared geometry + view-specific perturbations
         if self.raw_projection is not None:
             node_repr = self.raw_projection(node_repr)  # → [N, D]
-        node_latent = self.node_transform(node_repr)  # → [N, D]
+        shared_latent = self.node_transform(node_repr)  # → [N, D]
 
-        # ── Hyperspherical projection: normalize to unit sphere ──
-        node_latent_norm = F.normalize(node_latent, dim=-1)          # [N, D], ||·||=1
+        # View-specific residual: z_v = shared + Δ_v(shared)
+        z_low  = shared_latent + self.delta_low(shared_latent)   # [N, D]
+        z_mid  = shared_latent + self.delta_mid(shared_latent)
+        z_high = shared_latent + self.delta_high(shared_latent)
+
+        # ── Per-view hyperspherical projection ──
+        z_low_norm   = F.normalize(z_low, dim=-1)
+        z_mid_norm   = F.normalize(z_mid, dim=-1)
+        z_high_norm  = F.normalize(z_high, dim=-1)
         proto_low_norm  = F.normalize(self.prototype_center_low, dim=-1)   # [K, D]
         proto_mid_norm  = F.normalize(self.prototype_center_mid, dim=-1)   # [K, D]
         proto_high_norm = F.normalize(self.prototype_center_high, dim=-1)  # [K, D]
@@ -273,9 +290,9 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self._current_sigma_high = sigma_high.detach()
 
         # 4. Three independent distance fields → genuinely different geometries
-        d2_low  = torch.cdist(node_latent_norm, proto_low_norm).pow(2)   # [N, K]
-        d2_mid  = torch.cdist(node_latent_norm, proto_mid_norm).pow(2)   # [N, K]
-        d2_high = torch.cdist(node_latent_norm, proto_high_norm).pow(2)  # [N, K]
+        d2_low  = torch.cdist(z_low_norm,  proto_low_norm).pow(2)   # [N, K]
+        d2_mid  = torch.cdist(z_mid_norm,  proto_mid_norm).pow(2)   # [N, K]
+        d2_high = torch.cdist(z_high_norm, proto_high_norm).pow(2)  # [N, K]
 
         # Per-view temperature: τ ≠ 1 → different membership sharpness per view
         tau_low  = F.softplus(self.log_tau_low) + 0.1   # τ ∈ (0.1, ∞), init=1
@@ -301,12 +318,12 @@ class FuzzyRelationalGraphLearner(nn.Module):
         _p_mid  = self.prototype_center_mid.norm(dim=-1).mean().detach()
         _p_high = self.prototype_center_high.norm(dim=-1).mean().detach()
         self._current_proto_norm = ((_p_low + _p_mid + _p_high) / 3)
-        self._current_latent_norm = node_latent.detach().norm(dim=-1).mean()
+        self._current_latent_norm = shared_latent.detach().norm(dim=-1).mean()
         self._current_transform_weight = self.node_transform[-1].weight.norm().detach()
-        self._node_latent_for_reg = node_latent  # keep grad: for latent norm regularization
+        self._node_latent_for_reg = shared_latent  # keep grad: for latent norm regularization
         # Per-step movement tracking (track mid prototype as representative)
         _pc = self.prototype_center_mid.detach()
-        _nl = node_latent.detach()
+        _nl = shared_latent.detach()
         if hasattr(self, '_prev_proto'):
             self._current_proto_update = (_pc - self._prev_proto).norm()
             self._current_latent_update = (_nl.mean(dim=0) - self._prev_latent_mean).norm()
@@ -316,7 +333,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self._prev_proto = _pc.clone()
         self._prev_latent_mean = _nl.mean(dim=0).clone()
         _pc_mean = self.prototype_center_mid.mean(dim=0)
-        _nl_mean = node_latent.detach().mean(dim=0)
+        _nl_mean = shared_latent.detach().mean(dim=0)
         self._current_center_dist = (_nl_mean - _pc_mean).norm()
         _diff = (mu_upper - mu_lower).detach()
         self._current_mu_diff_mean = _diff.mean()
