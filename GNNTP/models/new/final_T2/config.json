@@ -55,6 +55,7 @@
   "t2_fou_floor_weight": 0.01,
   "t2_interval_ratio_threshold": 0.9,
   "proto_norm_reg_weight": 0.01,
+  "latent_norm_reg_weight": 0.01,
   "graph_sparsify_topk": 0,
   "data_col": ["traffic_flow"],
   "output_dim": 1,

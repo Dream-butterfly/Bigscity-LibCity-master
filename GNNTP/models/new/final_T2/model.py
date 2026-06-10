@@ -52,6 +52,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.beta_init_random = config.get("beta_init_random", False)
         self.use_proto_adaptive_embed = config.get("use_proto_adaptive_embed", False)
         self.proto_norm_reg_weight = config.get("proto_norm_reg_weight", 0.01)
+        self._latent_norm_reg_weight = config.get("latent_norm_reg_weight", 0.01)
 
         self.use_cell_attention = config.get("use_cell_attention", True)
         self.num_cells = config.get("num_cells", 8)
@@ -265,6 +266,18 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             self._loss_proto_norm = (self.proto_norm_reg_weight * proto_norm_hinge).detach()
             total = total + self.proto_norm_reg_weight * proto_norm_hinge
 
+        # ── Latent norm regularization: prevent node_transform weights → 0 ──
+        # LayerNorm kills gradient on magnitude; this compensates.
+        self._loss_latent_norm = torch.tensor(0.0)
+        if (hasattr(self, '_latent_norm_reg_weight')
+                and self._latent_norm_reg_weight > 0
+                and self.fuzzy_graph is not None
+                and hasattr(self.fuzzy_graph, '_node_latent_for_reg')):
+            latent_norms = self.fuzzy_graph._node_latent_for_reg.norm(dim=-1).mean()
+            latent_norm_hinge = F.relu(1.0 - latent_norms)
+            self._loss_latent_norm = (self._latent_norm_reg_weight * latent_norm_hinge).detach()
+            total = total + self._latent_norm_reg_weight * latent_norm_hinge
+
         # ── Type-2 gradient boost: amplify σ/r/β gradients post-backward ──
         if (self.t2_lr_boost != 1.0 and self.fuzzy_graph is not None
                 and total.requires_grad):
@@ -330,6 +343,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 diag['loss_gap']   = round(self._loss_gap.item(), 4)
                 diag['loss_fou']   = round(self._loss_fou.item(), 4)
                 diag['loss_proto_norm'] = round(self._loss_proto_norm.item(), 4)
+                diag['loss_latent_norm'] = round(self._loss_latent_norm.item(), 4)
             # Raw (unweighted) anti-collapse loss values
             if hasattr(self, '_raw_ent'):
                 diag['raw_ent'] = round(self._raw_ent.item(), 4)

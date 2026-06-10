@@ -455,13 +455,14 @@ class TrafficStateExecutor(AbstractExecutor):
                                 if 'sigma_ratio' in diag:
                                     parts2[-1] += ' r={:.4f}'.format(diag['sigma_ratio'])
                             if 'loss_mae' in diag:
-                                parts2.append('L=[mae={:.4f} ent={:.1e} gap={:.1e} fou={:.1e} consv={:.1e} pn={:.1e}]'.format(
+                                parts2.append('L=[mae={:.4f} ent={:.1e} gap={:.1e} fou={:.1e} consv={:.1e} pn={:.1e} ln={:.1e}]'.format(
                                     diag['loss_mae'],
                                     diag.get('loss_ent', 0),
                                     diag.get('loss_gap', 0),
                                     diag.get('loss_fou', 0),
                                     diag.get('loss_consv', 0),
-                                    diag.get('loss_proto_norm', 0)))
+                                    diag.get('loss_proto_norm', 0),
+                                    diag.get('loss_latent_norm', 0)))
                             if 'raw_ent' in diag:
                                 parts2.append('raw=[ent={:.3f} gap={:.4f} fou={:.4f}]'.format(
                                     diag['raw_ent'], diag['raw_gap'], diag['raw_fou']))
