@@ -310,7 +310,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             cross_sim = torch.max(torch.stack([
                 sim_lm_mat.max(), sim_mh_mat.max(), sim_lh_mat.max()
             ]))
-            cross_sim_clamped = F.relu(cross_sim - 0.3)  # allow up to 0.3, penalize above
+            cross_sim_clamped = F.relu(cross_sim - 0.0)  # penalize any positive max-cos
             self._loss_proto_div = (self._proto_diversity_weight * cross_sim_clamped).detach()
             total = total + self._proto_diversity_weight * cross_sim_clamped
 
