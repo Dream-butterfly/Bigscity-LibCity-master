@@ -35,7 +35,7 @@
   "learner": "adam",
   "learning_rate": 0.001,
   "lr_decay": true,
-  "lr_scheduler": "reducelronplateau",
+  "lr_scheduler": "cosineannealinglr",
   "lr_decay_ratio": 0.5,
   "lr_patience": 5,
   "lr_threshold": 0.001,
@@ -54,7 +54,10 @@
   "t2_interval_weight": 0.005,
   "t2_fou_floor_weight": 0.01,
   "t2_interval_ratio_threshold": 0.9,
+  "proto_norm_reg_weight": 0.01,
   "graph_sparsify_topk": 0,
+  "data_col": ["traffic_flow"],
+  "output_dim": 1,
   "lr_T_max": 100,
   "lr_eta_min": 1e-6
 }
