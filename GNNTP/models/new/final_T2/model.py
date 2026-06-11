@@ -629,6 +629,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         congestion = ((current_state - s_min) / (s_max - s_min)).clamp(0.0, 1.0)
 
         R = fuzzy_relation.to(device=congestion.device, dtype=congestion.dtype)
+        if R.dim() == 3:
+            R = R.mean(dim=0)  # (B,N,N) → (N,N) for conservation computation
         c = congestion.unsqueeze(-1)
         r = R.unsqueeze(0).unsqueeze(0)
         flow_pressure = (c + r - 1.0).clamp(min=0.0)

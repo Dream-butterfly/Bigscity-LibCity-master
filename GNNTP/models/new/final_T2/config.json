@@ -6,7 +6,7 @@
   "encoder_layers": 2,
   "decoder_layers": 2,
   "ffn_hidden_dim": 512,
-  "graph_k_hop": 2,
+  "graph_k_hop": 1,
   "use_fuzzy_graph": true,
   "fuzzy_num_sets": 16,
   "use_cell_attention": true,

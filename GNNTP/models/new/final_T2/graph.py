@@ -78,14 +78,19 @@ class FuzzyGraphConvolution(nn.Module):
     def precompute_powers(R_base, k_hop, topk=None, relation_mode="maxmin"):
         device = R_base.device
         dtype = R_base.dtype
-        N = R_base.size(0)
+        N = R_base.size(-1)  # works for both (N,N) and (B,N,N)
         I = torch.eye(N, device=device, dtype=dtype)
+        if R_base.dim() == 3:
+            I = I.unsqueeze(0).expand(R_base.size(0), -1, -1)  # (B,N,N)
         powers = [I]
         current = R_base
         for _ in range(k_hop):
             powers.append(current)
             if relation_mode == "inner":
-                current = torch.mm(current, R_base)             # R² = R @ R
+                if current.dim() == 3:
+                    current = torch.bmm(current, R_base)
+                else:
+                    current = torch.mm(current, R_base)
             else:
                 current = FuzzyGraphConvolution._max_min_compose_2d(R_base, current, topk=topk)
         return powers
@@ -98,13 +103,11 @@ class FuzzyGraphConvolution(nn.Module):
                         for p in powers]
         else:
             if fuzzy_relation.dim() == 3:
-                R_base = fuzzy_relation[0].to(
-                    device=node_features.device, dtype=node_features.dtype
-                )
+                R_base = fuzzy_relation.to(
+                    device=node_features.device, dtype=node_features.dtype)
             else:
                 R_base = fuzzy_relation.to(
-                    device=node_features.device, dtype=node_features.dtype
-                )
+                    device=node_features.device, dtype=node_features.dtype)
             R_powers = self.precompute_powers(R_base, self.k_hop,
                                                 topk=self.topk, relation_mode="inner")
 
@@ -112,14 +115,16 @@ class FuzzyGraphConvolution(nn.Module):
         graph_contrib = torch.zeros_like(output)
         for hop_index in range(1, self.k_hop + 1):
             R_k = R_powers[hop_index]
-            x_flat = node_features.permute(1, 0, 2).reshape(num_nodes, -1)
-            propagated_flat = torch.mm(R_k, x_flat)
-            propagated = propagated_flat.reshape(num_nodes, batch_size, -1).permute(1, 0, 2)
+            # Match batch dim: R may be (B,N,N), node_features may be (B*T,N,D)
+            if R_k.dim() == 3:
+                T = node_features.size(0) // R_k.size(0)
+                if T > 1:
+                    R_k = R_k.repeat_interleave(T, dim=0)
+            propagated = R_k @ node_features
             contrib = self.projections[hop_index](propagated)
             output = output + contrib
             graph_contrib = graph_contrib + contrib
 
-        # Cache graph energy: ||GCN_branch|| / ||input||
         self._current_graph_energy = (graph_contrib.detach().norm() /
                                       (node_features.detach().norm() + 1e-8))
         return output
@@ -425,8 +430,8 @@ class FuzzyRelationalGraphLearner(nn.Module):
         return R.clamp(0.0, 1.0)
 
     def _apply_mid_closure(self, R_mid):
-        if self.closure_steps <= 0:
-            return R_mid
+        if self.closure_steps <= 0 or R_mid.dim() == 3:
+            return R_mid  # closure only supports 2D; per-batch passes through
         R_current = R_mid
         R_list = [R_current]
         for _ in range(self.closure_steps):
@@ -465,27 +470,27 @@ class FuzzyRelationalGraphLearner(nn.Module):
         R_low  = self._sparsify_relation(R_low)
         R_mid  = self._sparsify_relation(R_mid)
         R_high = self._sparsify_relation(R_high)
-        # Per-sample → batch-mean after sparsify (preserves sample-specific edges)
+        # Diagnostics on batch-mean R (keep per-sample R for GCN)
         if R_low.dim() == 3:
-            R_low  = R_low.mean(dim=0)
-            R_mid  = R_mid.mean(dim=0)
-            R_high = R_high.mean(dim=0)
+            R_low_diag  = R_low.mean(dim=0)
+            R_mid_diag  = R_mid.mean(dim=0)
+            R_high_diag = R_high.mean(dim=0)
+        else:
+            R_low_diag, R_mid_diag, R_high_diag = R_low, R_mid, R_high
 
         # Cache relation diffs for diagnostics
-        self._current_R_diff_lm = (R_low - R_mid).abs().mean().detach()
-        self._current_R_diff_hm = (R_high - R_mid).abs().mean().detach()
-        # R_gap: relative interval size — directly measures Type-2 collapse
-        _R_mid_norm = R_mid.abs().mean().clamp_min(1e-8)
-        self._current_R_gap = (R_high - R_low).abs().mean().detach() / _R_mid_norm
+        self._current_R_diff_lm = (R_low_diag - R_mid_diag).abs().mean().detach()
+        self._current_R_diff_hm = (R_high_diag - R_mid_diag).abs().mean().detach()
+        _R_mid_norm = R_mid_diag.abs().mean().clamp_min(1e-8)
+        self._current_R_gap = (R_high_diag - R_low_diag).abs().mean().detach() / _R_mid_norm
 
-        # Cache relation correlations — are the three views structurally different?
+        # Cache relation correlations
         R_flat = lambda R: R.flatten().detach()
-        _rl, _rm, _rh = R_flat(R_low), R_flat(R_mid), R_flat(R_high)
+        _rl, _rm, _rh = R_flat(R_low_diag), R_flat(R_mid_diag), R_flat(R_high_diag)
         self._current_R_corr_lm = torch.corrcoef(torch.stack([_rl, _rm]))[0, 1]
         self._current_R_corr_lh = torch.corrcoef(torch.stack([_rl, _rh]))[0, 1]
         self._current_R_corr_mh = torch.corrcoef(torch.stack([_rm, _rh]))[0, 1]
 
-        # Cache effective Type-2 width (membership interval)
         self._current_eff_width = (mu_upper - mu_lower).abs().mean().detach()
 
         # Learnable interval mix
