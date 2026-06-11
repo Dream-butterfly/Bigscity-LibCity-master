@@ -158,7 +158,20 @@ class FutureDecoder(nn.Module):
             for _ in range(num_layers)
         ])
         self.final_norm = nn.LayerNorm(hidden_dim)
-        self.output_projection = nn.Linear(hidden_dim, output_dim)
+
+        # ── Temporal refinement: pure time attention after spatial ops ──
+        self.temporal_refine = MultiHeadAttention(hidden_dim, num_heads, dropout)
+        self.norm_temporal_refine = nn.LayerNorm(hidden_dim)
+
+        # Mixed projection (STAEformer-style): T×D → bottleneck → T×out
+        # Allows output timesteps to interact before final prediction.
+        T, D = output_window, hidden_dim
+        self.output_projection = nn.Sequential(
+            nn.Linear(T * D, T * 32),   # 1536→384: bottleneck
+            nn.GELU(),
+            nn.Linear(T * 32, T * output_dim),  # 384→T: per-timestep output
+        )
+        self.output_window = output_window  # needed in forward
 
     def forward(self, condition_features, graph_matrix, graph_uncertainty=None,
                 powers=None, mu_low=None, mu_mid=None, mu_high=None, beta=None):
@@ -204,6 +217,18 @@ class FutureDecoder(nn.Module):
             else:
                 queries = block(queries, condition_features, graph_matrix, graph_uncertainty, powers=powers)
 
-        queries = self.final_norm(queries)
-        return self.output_projection(queries)
+        # ── Temporal refinement: pure time attention across output steps ──
+        B, T, N, D = queries.shape
+        q_t = queries.permute(0, 2, 1, 3).reshape(B * N, T, D)  # merge batch & node
+        q_t_refined = self.temporal_refine(q_t, q_t)  # query, context (no mask)
+        q_t = q_t + q_t_refined  # residual
+        queries = self.norm_temporal_refine(q_t).reshape(B, N, T, D).permute(0, 2, 1, 3)
+
+        queries = self.final_norm(queries)  # (B, T, N, D)
+
+        # Mixed projection: flatten T×D, project to T×out per node
+        B, T, N, D = queries.shape
+        q_flat = queries.permute(0, 2, 1, 3).reshape(B * N, T * D)  # (B*N, T*D)
+        out_flat = self.output_projection(q_flat)                   # (B*N, T*out)
+        return out_flat.reshape(B, N, T, -1).permute(0, 2, 1, 3)   # (B, T, N, out)
 
