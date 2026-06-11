@@ -182,25 +182,34 @@ class FutureDecoder(nn.Module):
             node_comp = self.node_embed
         elif self.node_mode == "proto":
             # β-weighted per-view routing: each view's membership × its own proto embed
-            # node_comp = β₀·(μ_low @ E_low) + β₁·(μ_mid @ E_mid) + β₂·(μ_high @ E_high)
+            # Supports both global β[3] and per-node β (N,3)
             if mu_low is None or beta is None:
                 raise ValueError("mu_low/mu_mid/mu_high/beta required for node_mode='proto'")
             def _route(mu, pe):
                 return torch.matmul(mu, pe.squeeze(0))  # (N,K)@(K,D) → (N,D)
-            node_comp = (beta[0] * _route(mu_low,  self.proto_embed_low) +
-                         beta[1] * _route(mu_mid,  self.proto_embed_mid) +
-                         beta[2] * _route(mu_high, self.proto_embed_high))
+            if beta.dim() == 2:  # per-node: (N,3)
+                node_comp = (beta[:, 0:1] * _route(mu_low,  self.proto_embed_low) +
+                             beta[:, 1:2] * _route(mu_mid,  self.proto_embed_mid) +
+                             beta[:, 2:3] * _route(mu_high, self.proto_embed_high))
+            else:  # global: [3]
+                node_comp = (beta[0] * _route(mu_low,  self.proto_embed_low) +
+                             beta[1] * _route(mu_mid,  self.proto_embed_mid) +
+                             beta[2] * _route(mu_high, self.proto_embed_high))
             node_comp = node_comp.unsqueeze(0).unsqueeze(0)  # → (1,1,N,D)
         elif self.node_mode == "both":
             node_comp = self.node_embed
             if mu_low is not None and beta is not None:
                 def _route(mu, pe):
                     return torch.matmul(mu, pe.squeeze(0))
-                node_comp = node_comp + (
-                    beta[0] * _route(mu_low,  self.proto_embed_low) +
-                    beta[1] * _route(mu_mid,  self.proto_embed_mid) +
-                    beta[2] * _route(mu_high, self.proto_embed_high)
-                ).unsqueeze(0).unsqueeze(0)
+                if beta.dim() == 2:  # per-node: (N,3)
+                    routing = (beta[:, 0:1] * _route(mu_low,  self.proto_embed_low) +
+                               beta[:, 1:2] * _route(mu_mid,  self.proto_embed_mid) +
+                               beta[:, 2:3] * _route(mu_high, self.proto_embed_high))
+                else:
+                    routing = (beta[0] * _route(mu_low,  self.proto_embed_low) +
+                               beta[1] * _route(mu_mid,  self.proto_embed_mid) +
+                               beta[2] * _route(mu_high, self.proto_embed_high))
+                node_comp = node_comp + routing.unsqueeze(0).unsqueeze(0)
         else:
             node_comp = self.node_embed
 

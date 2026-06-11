@@ -57,6 +57,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.use_static_blend = config.get("use_static_blend", True)
         self.gcn_use_static = config.get("gcn_use_static", False)
         self._proto_diversity_weight = config.get("proto_diversity_weight", 0.0)
+        self._delta_diversity_weight = config.get("delta_diversity_weight", 0.001)
+        self.use_per_node_beta = config.get("use_per_node_beta", True)
 
         self.use_cell_attention = config.get("use_cell_attention", True)
         self.num_cells = config.get("num_cells", 8)
@@ -177,7 +179,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
     def encode_condition(self, history_sequence):
         if self.use_fuzzy_graph and self.fuzzy_graph is not None:
             (graph_matrix, fou, mu_mid,
-             mu_low_raw, mu_mid_raw, mu_high_raw, beta
+             mu_low_raw, mu_mid_raw, mu_high_raw, beta_global, beta_node
             ) = self.fuzzy_graph.get_type2_info(history_sequence)
             graph_matrix = graph_matrix.to(history_sequence.device)
             fou = fou.to(history_sequence.device)
@@ -197,7 +199,14 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 self._current_mu_low_raw = mu_low_raw
                 self._current_mu_mid_raw = mu_mid_raw
                 self._current_mu_high_raw = mu_high_raw
-            self._current_beta = beta  # keep grad — decoder routing needs it
+            # β: per-node (N,3) if enabled, else global [3]
+            if self.use_per_node_beta:
+                if beta_node.dim() == 3:
+                    self._current_beta = beta_node.mean(dim=0)  # (N,3)
+                else:
+                    self._current_beta = beta_node
+            else:
+                self._current_beta = beta_global  # [3]
         else:
             graph_matrix = self.adjacency_matrix.to(history_sequence.device)
             fou = None
@@ -205,16 +214,20 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             self._current_fou = None
             self._current_mu_mid = None
         rm = getattr(self.fuzzy_graph, 'relation_mode', 'maxmin') if self.fuzzy_graph else 'maxmin'
-        # GCN graph: static adjacency for stable message passing,
-        #            fuzzy graph for adaptive routing (configurable).
-        if self.use_fuzzy_graph and not getattr(self, 'gcn_use_static', False):
-            gcn_graph = graph_matrix
-        else:
-            gcn_graph = self.adjacency_matrix.to(history_sequence.device)
-        gcn_powers = FuzzyGraphConvolution.precompute_powers(
-            gcn_graph, k_hop=self.graph_k_hop, topk=self.graph_topk, relation_mode=rm)
+        # ── Encoder GCN: static adjacency (stable message passing) ──
+        encoder_gcn_graph = self.adjacency_matrix.to(history_sequence.device)
+        encoder_powers = FuzzyGraphConvolution.precompute_powers(
+            encoder_gcn_graph, k_hop=self.graph_k_hop, topk=self.graph_topk, relation_mode=rm)
         condition_features = self.condition_encoder(
-            history_sequence, gcn_graph, graph_uncertainty=fou, powers=gcn_powers)
+            history_sequence, encoder_gcn_graph, graph_uncertainty=fou, powers=encoder_powers)
+
+        # ── Decoder GCN: fuzzy graph (Type-2 adaptive routing) ──
+        if self.use_fuzzy_graph and self.fuzzy_graph is not None:
+            decoder_graph = graph_matrix  # fuzzy
+        else:
+            decoder_graph = encoder_gcn_graph  # fallback to static
+        decoder_powers = FuzzyGraphConvolution.precompute_powers(
+            decoder_graph, k_hop=self.graph_k_hop, topk=self.graph_topk, relation_mode=rm)
 
         # Prototype-aware spatial embedding: route through Type-2 membership
         if self.use_proto_adaptive_embed and mu_mid is not None:
@@ -222,7 +235,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             node_adaptive = mu_mid @ self.proto_embed  # (N, K) @ (1, K, D) → (N, D)
             condition_features = condition_features + node_adaptive  # broadcast (B,T)
 
-        return condition_features, gcn_graph, fou, gcn_powers
+        return condition_features, decoder_graph, fou, decoder_powers
 
     def forward(self, batch):
         if self.training:
@@ -367,6 +380,20 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             self._loss_proto_div = (self._proto_diversity_weight * cross_sim_clamped).detach()
             total = total + self._proto_diversity_weight * cross_sim_clamped
 
+        # ── Δ diversity: push normalized z vectors apart on hypersphere ──
+        self._loss_delta_div = torch.tensor(0.0)
+        if (self._delta_diversity_weight > 0 and self.fuzzy_graph is not None
+                and hasattr(self.fuzzy_graph, '_z_low_norm')):
+            zl = self.fuzzy_graph._z_low_norm   # [B, N, D] or [N, D]
+            zm = self.fuzzy_graph._z_mid_norm
+            zh = self.fuzzy_graph._z_high_norm
+            cos_lm = (zl * zm).sum(dim=-1).mean()  # mean cosine over nodes & batch
+            cos_mh = (zm * zh).sum(dim=-1).mean()
+            cos_lh = (zl * zh).sum(dim=-1).mean()
+            loss_delta_div = (cos_lm.pow(2) + cos_mh.pow(2) + cos_lh.pow(2)) / 3
+            self._loss_delta_div = (self._delta_diversity_weight * loss_delta_div).detach()
+            total = total + self._delta_diversity_weight * loss_delta_div
+
         # ── Type-2 gradient boost: amplify σ/r/β gradients post-backward ──
         if (self.t2_lr_boost != 1.0 and self.fuzzy_graph is not None
                 and total.requires_grad):
@@ -448,6 +475,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 diag['loss_proto_norm'] = round(self._loss_proto_norm.item(), 4)
                 diag['loss_latent_norm'] = round(self._loss_latent_norm.item(), 4)
                 diag['loss_proto_div'] = round(self._loss_proto_div.item(), 4)
+                diag['loss_delta_div'] = round(self._loss_delta_div.item(), 4)
             # Raw (unweighted) anti-collapse loss values
             if hasattr(self, '_raw_ent'):
                 diag['raw_ent'] = round(self._raw_ent.item(), 4)
@@ -570,6 +598,13 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             # Raw logits std — tracks if router is converging
             diag['logits_std'] = round(
                 self.fuzzy_graph.relation_mix_logits.detach().std().item(), 4)
+            # Per-node β stats (if enabled)
+            if hasattr(self, '_current_beta') and self._current_beta is not None:
+                bn = self._current_beta.detach()  # (N,3) or [3]
+                if bn.dim() == 2 and bn.size(1) == 3:
+                    bn_range = (bn.max(dim=0).values - bn.min(dim=0).values)
+                    diag['beta_n_mean'] = [round(b.item(), 3) for b in bn.mean(dim=0)]
+                    diag['beta_n_range'] = [round(b.item(), 3) for b in bn_range]
         if self.use_cell_attention and hasattr(self, 'condition_encoder'):
             # Cell blend from first encoder block
             first_block = self.condition_encoder.blocks[0]

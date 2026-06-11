@@ -63,5 +63,7 @@
   "lr_eta_min": 1e-6,
   "decoder_node_mode": "proto",
   "use_static_blend": false,
-  "gcn_use_static": true
+  "gcn_use_static": true,
+  "use_per_node_beta": true,
+  "delta_diversity_weight": 0.001
 }

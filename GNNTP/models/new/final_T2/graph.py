@@ -217,15 +217,15 @@ class FuzzyRelationalGraphLearner(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
         )
 
-        # ── View-specific residuals (Δ) — lightweight perturbations ──
+        # ── View-specific residuals (Δ) — no bottleneck ──
         #   Shared latent + view-specific Δ → different prototypes react
-        #   differently per view.  ~8K params/view, ~25K total.
+        #   differently per view.  ~33K params/view (128→128→128).
         self.delta_low  = nn.Sequential(
-            nn.Linear(hidden_dim, 32), nn.GELU(), nn.Linear(32, hidden_dim))
+            nn.Linear(hidden_dim, hidden_dim), nn.GELU(), nn.Linear(hidden_dim, hidden_dim))
         self.delta_mid  = nn.Sequential(
-            nn.Linear(hidden_dim, 32), nn.GELU(), nn.Linear(32, hidden_dim))
+            nn.Linear(hidden_dim, hidden_dim), nn.GELU(), nn.Linear(hidden_dim, hidden_dim))
         self.delta_high = nn.Sequential(
-            nn.Linear(hidden_dim, 32), nn.GELU(), nn.Linear(32, hidden_dim))
+            nn.Linear(hidden_dim, hidden_dim), nn.GELU(), nn.Linear(hidden_dim, hidden_dim))
 
         # ── Static adjacency ──────────────────────────────────────
         if static_adjacency is not None:
@@ -246,6 +246,10 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self.relation_mix_logits = nn.Parameter(
             torch.randn(3, generator=_g) * 1.0 if beta_init_random
             else torch.zeros(3))
+        # Per-node β projection: node-specific uncertainty preference
+        self.node_beta_proj = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim // 4), nn.GELU(),
+            nn.Linear(hidden_dim // 4, 3))
 
     # ═══════════════════════════════════════════════════════════════
     #  Interval Type-2 Membership Computation
@@ -283,6 +287,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         if self.raw_projection is not None:
             node_repr = self.raw_projection(node_repr)  # → [B, N, D]
         shared_latent = self.node_transform(node_repr)  # → [B, N, D]
+        self._shared_latent = shared_latent  # cache for per-node β
 
         # View-specific residual: z_v = shared + Δ_v(shared)
         z_low  = shared_latent + self.delta_low(shared_latent)   # [N, D]
@@ -293,6 +298,10 @@ class FuzzyRelationalGraphLearner(nn.Module):
         z_low_norm   = F.normalize(z_low, dim=-1)
         z_mid_norm   = F.normalize(z_mid, dim=-1)
         z_high_norm  = F.normalize(z_high, dim=-1)
+        # Cache for z-diversity loss (keep grad)
+        self._z_low_norm  = z_low_norm
+        self._z_mid_norm  = z_mid_norm
+        self._z_high_norm = z_high_norm
         proto_low_norm  = F.normalize(self.prototype_center_low, dim=-1)   # [K, D]
         proto_mid_norm  = F.normalize(self.prototype_center_mid, dim=-1)   # [K, D]
         proto_high_norm = F.normalize(self.prototype_center_high, dim=-1)  # [K, D]
@@ -495,8 +504,10 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
         self._current_eff_width = (mu_upper - mu_lower).abs().mean().detach()
 
-        # Learnable interval mix
+        # Learnable interval mix — global β for R_mixed
         beta = F.softmax(self.relation_mix_logits, dim=0)  # [3]
+        # Per-node β for decoder routing: each node learns its own view preference
+        beta_node = F.softmax(self.node_beta_proj(self._shared_latent), dim=-1)  # (B,N,3)
         R_mixed = (beta[0] * R_low + beta[1] * R_mid + beta[2] * R_high)
 
         # Static adjacency blend
@@ -506,12 +517,16 @@ class FuzzyRelationalGraphLearner(nn.Module):
             R_static = self.static_adjacency.to(device=R_final.device, dtype=R_final.dtype)
             R_final = torch.max(R_final * blend, R_static * (1.0 - blend))
             diag = torch.eye(self.num_nodes, device=R_final.device, dtype=R_final.dtype)
-            R_final = R_final + diag * (1.0 - R_final.diag().unsqueeze(-1))
+            if R_final.dim() == 3:
+                diag = diag.unsqueeze(0)
+                R_final = R_final + diag * (1.0 - R_final.diagonal(dim1=-2, dim2=-1).unsqueeze(-1))
+            else:
+                R_final = R_final + diag * (1.0 - R_final.diag().unsqueeze(-1))
 
         # Closure (if configured)
         R_with_closure = self._apply_mid_closure(R_final)
 
-        return R_with_closure, fou_node, mu_mid, mu_low_raw, mu_mid_raw, mu_high_raw, beta
+        return R_with_closure, fou_node, mu_mid, mu_low_raw, mu_mid_raw, mu_high_raw, beta, beta_node
 
     # ── Backward-compatible interface ─────────────────────────────
 
