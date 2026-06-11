@@ -62,5 +62,6 @@
   "lr_T_max": 100,
   "lr_eta_min": 1e-6,
   "decoder_node_mode": "proto",
-  "use_static_blend": false
+  "use_static_blend": false,
+  "gcn_use_static": true
 }

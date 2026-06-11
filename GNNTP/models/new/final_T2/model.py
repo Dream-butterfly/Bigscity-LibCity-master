@@ -55,6 +55,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self._latent_norm_reg_weight = config.get("latent_norm_reg_weight", 0.01)
         self.decoder_node_mode = config.get("decoder_node_mode", "embed")
         self.use_static_blend = config.get("use_static_blend", True)
+        self.gcn_use_static = config.get("gcn_use_static", False)
         self._proto_diversity_weight = config.get("proto_diversity_weight", 0.0)
 
         self.use_cell_attention = config.get("use_cell_attention", True)
@@ -204,10 +205,16 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             self._current_fou = None
             self._current_mu_mid = None
         rm = getattr(self.fuzzy_graph, 'relation_mode', 'maxmin') if self.fuzzy_graph else 'maxmin'
-        graph_powers = FuzzyGraphConvolution.precompute_powers(
-            graph_matrix, k_hop=self.graph_k_hop, topk=self.graph_topk, relation_mode=rm)
+        # GCN graph: static adjacency for stable message passing,
+        #            fuzzy graph for adaptive routing (configurable).
+        if self.use_fuzzy_graph and not getattr(self, 'gcn_use_static', False):
+            gcn_graph = graph_matrix
+        else:
+            gcn_graph = self.adjacency_matrix.to(history_sequence.device)
+        gcn_powers = FuzzyGraphConvolution.precompute_powers(
+            gcn_graph, k_hop=self.graph_k_hop, topk=self.graph_topk, relation_mode=rm)
         condition_features = self.condition_encoder(
-            history_sequence, graph_matrix, graph_uncertainty=fou, powers=graph_powers)
+            history_sequence, gcn_graph, graph_uncertainty=fou, powers=gcn_powers)
 
         # Prototype-aware spatial embedding: route through Type-2 membership
         if self.use_proto_adaptive_embed and mu_mid is not None:
@@ -215,7 +222,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             node_adaptive = mu_mid @ self.proto_embed  # (N, K) @ (1, K, D) → (N, D)
             condition_features = condition_features + node_adaptive  # broadcast (B,T)
 
-        return condition_features, graph_matrix, fou, graph_powers
+        return condition_features, gcn_graph, fou, gcn_powers
 
     def forward(self, batch):
         if self.training:
@@ -225,10 +232,10 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
 
     def predict(self, batch):
         history_sequence = batch["X"]
-        condition_features, graph_matrix, fou, graph_powers = self.encode_condition(history_sequence)
+        condition_features, gcn_graph, fou, gcn_powers = self.encode_condition(history_sequence)
         return self.future_decoder(
-            condition_features, graph_matrix, graph_uncertainty=fou,
-            powers=graph_powers,
+            condition_features, gcn_graph, graph_uncertainty=fou,
+            powers=gcn_powers,
             mu_low=getattr(self, '_current_mu_low_raw', None),
             mu_mid=getattr(self, '_current_mu_mid_raw', None),
             mu_high=getattr(self, '_current_mu_high_raw', None),
@@ -238,10 +245,10 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         history_sequence = batch["X"]
         future_sequence = batch["y"][..., :self.output_dim]
 
-        condition_features, graph_matrix, fou, graph_powers = self.encode_condition(history_sequence)
+        condition_features, gcn_graph, fou, gcn_powers = self.encode_condition(history_sequence)
         predicted_future = self.future_decoder(
-            condition_features, graph_matrix, graph_uncertainty=fou,
-            powers=graph_powers,
+            condition_features, gcn_graph, graph_uncertainty=fou,
+            powers=gcn_powers,
             mu_low=getattr(self, '_current_mu_low_raw', None),
             mu_mid=getattr(self, '_current_mu_mid_raw', None),
             mu_high=getattr(self, '_current_mu_high_raw', None),
@@ -261,7 +268,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         # ── Conservation (if enabled) ──
         effective_weight = self._get_effective_conservation_weight()
         if effective_weight > 0:
-            conservation_loss = self._fuzzy_conservation_loss(predicted_future, graph_matrix)
+            fuzzy_R = self.fuzzy_graph.get_type2_info(history_sequence)[0] if self.fuzzy_graph else graph_matrix
+            conservation_loss = self._fuzzy_conservation_loss(predicted_future, fuzzy_R)
             contrib = effective_weight * conservation_loss
             self._loss_consv = contrib.detach()
             total = total + contrib
