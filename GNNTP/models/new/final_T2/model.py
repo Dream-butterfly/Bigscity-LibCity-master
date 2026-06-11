@@ -49,6 +49,10 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.fuzzy_num_sets = config.get("fuzzy_num_sets", 3)
         self.graph_topk = config.get("graph_topk", 32)
         self.graph_sparsify_topk = config.get("graph_sparsify_topk", 0)  # 0=off
+        # Per-view sparsification: different topk → structurally different R
+        self.t2_topk_low  = config.get("t2_topk_low", 0)
+        self.t2_topk_mid  = config.get("t2_topk_mid", 0)
+        self.t2_topk_high = config.get("t2_topk_high", 0)
         self.beta_init_random = config.get("beta_init_random", False)
         self.use_proto_adaptive_embed = config.get("use_proto_adaptive_embed", False)
         self.proto_norm_reg_weight = config.get("proto_norm_reg_weight", 0.01)
@@ -104,6 +108,10 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             )
             self.fuzzy_graph.graph_sparsify_topk = (
                 self.graph_sparsify_topk if self.graph_sparsify_topk > 0 else None)
+            # Per-view sparsification: different topk → structurally different R
+            self.fuzzy_graph.t2_topk_low  = self.t2_topk_low if self.t2_topk_low > 0 else None
+            self.fuzzy_graph.t2_topk_mid  = self.t2_topk_mid if self.t2_topk_mid > 0 else None
+            self.fuzzy_graph.t2_topk_high = self.t2_topk_high if self.t2_topk_high > 0 else None
         else:
             self.fuzzy_graph = None
 

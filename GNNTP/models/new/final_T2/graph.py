@@ -392,24 +392,26 @@ class FuzzyRelationalGraphLearner(nn.Module):
     #  Relation Sparsification
     # ═══════════════════════════════════════════════════════════════
 
-    def _sparsify_relation(self, R):
+    def _sparsify_relation(self, R, topk=None):
         """Top-K sparsification per node: keep K strongest edges, zero rest.
 
         Uses Straight-Through Estimator: forward = sparse, backward grad
         flows through full dense R, allowing zeroed-out edges to recover.
         """
-        if self.graph_sparsify_topk is None or self.graph_sparsify_topk <= 0:
+        k = topk if topk is not None else self.graph_sparsify_topk
+        if k is None or k <= 0:
             return R
+        # Handle 3D (B,N,N): iterate batch
+        if R.dim() == 3:
+            return torch.stack([self._sparsify_relation(r, topk=k) for r in R])
         N = R.size(0)
-        K = min(self.graph_sparsify_topk, N)
-        # Keep self-loops + top-K (excluding diag)
+        K = min(k, N)
         R_nodiag = R.clone()
         R_nodiag[range(N), range(N)] = 0
         _, idx = R_nodiag.topk(K, dim=-1)
         mask = torch.zeros_like(R)
         mask.scatter_(-1, idx, 1.0)
         mask[range(N), range(N)] = 1.0  # always keep self-loops
-        # STE: forward = R ⊙ mask, backward gradients pass through full R
         sparse = R * mask
         return (sparse - R).detach() + R
 
@@ -473,14 +475,14 @@ class FuzzyRelationalGraphLearner(nn.Module):
         else:
             fou_node = (mu_upper - mu_lower).clamp(min=0.0).mean(dim=-1)  # [N]
 
-        # ── Per-sample relations → sparsify per-sample → batch-mean → (N,N) ──
+        # ── Per-sample relations → per-view sparsification → batch-mean → (N,N) ──
         R_low  = self._build_fuzzy_relation(mu_low_raw)
         R_mid  = self._build_fuzzy_relation(mu_mid_raw)
         R_high = self._build_fuzzy_relation(mu_high_raw)
-        # Per-relation top-K sparsification (handles batch dim natively)
-        R_low  = self._sparsify_relation(R_low)
-        R_mid  = self._sparsify_relation(R_mid)
-        R_high = self._sparsify_relation(R_high)
+        # Per-view top-K: different sparsity → structurally different graphs
+        R_low  = self._sparsify_relation(R_low,  topk=getattr(self, 't2_topk_low', None))
+        R_mid  = self._sparsify_relation(R_mid,  topk=getattr(self, 't2_topk_mid', None))
+        R_high = self._sparsify_relation(R_high, topk=getattr(self, 't2_topk_high', None))
         # Diagnostics on batch-mean R (keep per-sample R for GCN)
         if R_low.dim() == 3:
             R_low_diag  = R_low.mean(dim=0)
