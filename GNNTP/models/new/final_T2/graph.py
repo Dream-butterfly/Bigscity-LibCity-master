@@ -105,13 +105,19 @@ class FuzzyGraphConvolution(nn.Module):
             R_powers = self.precompute_powers(R_base, self.k_hop, topk=self.topk)
 
         output = self.projections[0](node_features)
+        graph_contrib = torch.zeros_like(output)
         for hop_index in range(1, self.k_hop + 1):
             R_k = R_powers[hop_index]
             x_flat = node_features.permute(1, 0, 2).reshape(num_nodes, -1)
             propagated_flat = torch.mm(R_k, x_flat)
             propagated = propagated_flat.reshape(num_nodes, batch_size, -1).permute(1, 0, 2)
-            output = output + self.projections[hop_index](propagated)
+            contrib = self.projections[hop_index](propagated)
+            output = output + contrib
+            graph_contrib = graph_contrib + contrib
 
+        # Cache graph energy: ||GCN_branch|| / ||input||
+        self._current_graph_energy = (graph_contrib.detach().norm() /
+                                      (node_features.detach().norm() + 1e-8))
         return output
 
 
@@ -346,6 +352,18 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self._current_tau_low  = tau_low.detach().mean()
         self._current_tau_mid  = tau_mid.detach().mean()
         self._current_tau_high = tau_high.detach().mean()
+
+        # ── Adapter ratio: Δ contribution vs shared latent ──
+        _s_norm = shared_latent.detach().norm(dim=-1).mean()
+        _d_low  = (z_low.detach() - shared_latent.detach()).norm(dim=-1).mean()
+        _d_mid  = (z_mid.detach() - shared_latent.detach()).norm(dim=-1).mean()
+        _d_high = (z_high.detach() - shared_latent.detach()).norm(dim=-1).mean()
+        self._current_adapter_ratio = ((_d_low + _d_mid + _d_high) / 3) / (_s_norm + 1e-8)
+
+        # ── View distance: pairwise ||z_v - z_w|| ──
+        self._current_view_dist_lm = (z_low.detach() - z_mid.detach()).norm(dim=-1).mean()
+        self._current_view_dist_lh = (z_low.detach() - z_high.detach()).norm(dim=-1).mean()
+        self._current_view_dist_mh = (z_mid.detach() - z_high.detach()).norm(dim=-1).mean()
 
         return mu_lower, mu_upper, mu_mid, mu_low_raw, mu_mid_raw, mu_high_raw
 

@@ -476,6 +476,32 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 diag['tau_low']  = round(self.fuzzy_graph._current_tau_low.item(), 2)
                 diag['tau_mid']  = round(self.fuzzy_graph._current_tau_mid.item(), 2)
                 diag['tau_high'] = round(self.fuzzy_graph._current_tau_high.item(), 2)
+            # Adapter ratio: Δ contribution vs shared latent
+            if hasattr(self.fuzzy_graph, '_current_adapter_ratio'):
+                diag['adapter_ratio'] = round(
+                    self.fuzzy_graph._current_adapter_ratio.item(), 3)
+            # View distances
+            if hasattr(self.fuzzy_graph, '_current_view_dist_lm'):
+                diag['view_dist_lm'] = round(
+                    self.fuzzy_graph._current_view_dist_lm.item(), 2)
+                diag['view_dist_lh'] = round(
+                    self.fuzzy_graph._current_view_dist_lh.item(), 2)
+                diag['view_dist_mh'] = round(
+                    self.fuzzy_graph._current_view_dist_mh.item(), 2)
+            # Graph energy: max ||GCN_contrib|| / ||input|| across all GCN layers
+            ge_vals = []
+            for block in self.condition_encoder.blocks:
+                if hasattr(block, 'graph_convolution'):
+                    ge = getattr(block.graph_convolution, '_current_graph_energy', None)
+                    if ge is not None:
+                        ge_vals.append(ge.item())
+            for block in self.future_decoder.blocks:
+                if hasattr(block, 'graph_convolution'):
+                    ge = getattr(block.graph_convolution, '_current_graph_energy', None)
+                    if ge is not None:
+                        ge_vals.append(ge.item())
+            if ge_vals:
+                diag['graph_energy'] = round(max(ge_vals), 3)
             # Gradient norms for key Type-2 parameters
             g = self.fuzzy_graph
             for pname, grad_key in [

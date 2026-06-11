@@ -503,6 +503,14 @@ class TrafficStateExecutor(AbstractExecutor):
                             if 'R_corr_lm' in diag:
                                 self._logger.info('  [R_corr] ρ(L,M)={:.4f} ρ(L,H)={:.4f} ρ(M,H)={:.4f}'.format(
                                     diag['R_corr_lm'], diag['R_corr_lh'], diag['R_corr_mh']))
+                            if 'adapter_ratio' in diag:
+                                parts4 = ['Δ/sh={:.3f}'.format(diag['adapter_ratio'])]
+                                if 'graph_energy' in diag:
+                                    parts4.append('GCN={:.3f}'.format(diag['graph_energy']))
+                                if 'view_dist_lm' in diag:
+                                    parts4.append('∇z(LM={:.1f},LH={:.1f},MH={:.1f})'.format(
+                                        diag['view_dist_lm'], diag['view_dist_lh'], diag['view_dist_mh']))
+                                self._logger.info('  [GCN] ' + ' | '.join(parts4))
                 except Exception as e:
                     self._logger.warning(f'T2 diagnostics failed: {e}', exc_info=True)
 
