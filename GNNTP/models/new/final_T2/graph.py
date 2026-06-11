@@ -265,10 +265,12 @@ class FuzzyRelationalGraphLearner(nn.Module):
             mu_lower:      [N, K]  min over three raw
             mu_mid:        [N, K]  (upper+lower)/2
         """
-        # 1. Node representation extraction — per-sample (time-pooled, batch kept)
+        # 1. Node representation from latest traffic state + short-term trend
         if node_features is not None:
             if node_features.dim() == 4:  # [B, T, N, D]
-                node_repr = node_features.mean(dim=1)  # [B, N, D] — time avg, per-sample!
+                latest = node_features[:, -1, :, :]         # [B, N, D] — latest traffic
+                trend = latest - node_features[:, 0, :, :]  # [B, N, D] — T-step change
+                node_repr = latest + trend                   # [B, N, D]
             elif node_features.dim() == 3:  # [B, N, D]
                 node_repr = node_features  # keep batch
             else:
