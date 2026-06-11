@@ -76,6 +76,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.t2_interval_weight          = config.get("t2_interval_weight", 0.0)
         self.t2_interval_ratio_threshold  = config.get("t2_interval_ratio_threshold", 0.90)
         self.t2_fou_floor_weight = config.get("t2_fou_floor_weight", 0.0)  # FOU floor (keep μ interval)
+        self._t2_fou_ceiling_weight = config.get("t2_fou_ceiling_weight", 0.0)  # FOU ceiling (prevent inflation)
         # Type-2 gradient boost (default 1=off)
         self.t2_lr_boost = float(config.get("t2_lr_boost", 1.0))
         self._train_step_count = 0
@@ -301,6 +302,14 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 self._loss_fou = (self.t2_fou_floor_weight * fou_gap).detach()
                 total = total + self.t2_fou_floor_weight * fou_gap
 
+            # ④ FOU ceiling: prevent uncertainty inflation (Type-2 runaway)
+            if hasattr(self, '_t2_fou_ceiling_weight') and self._t2_fou_ceiling_weight > 0 and self._current_fou is not None:
+                fou_ceiling_gap = F.relu(self._current_fou.mean() - 0.25)
+                self._loss_fou_ceiling = (self._t2_fou_ceiling_weight * fou_ceiling_gap).detach()
+                total = total + self._t2_fou_ceiling_weight * fou_ceiling_gap
+            else:
+                self._loss_fou_ceiling = torch.tensor(0.0)
+
         # ── Prototype norm regularization: prevent |prototype_center| → 0 ──
         self._loss_proto_norm = torch.tensor(0.0)
         if self.proto_norm_reg_weight > 0 and self.fuzzy_graph is not None:
@@ -426,6 +435,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 diag['loss_ent']   = round(self._loss_ent.item(), 4)
                 diag['loss_gap']   = round(self._loss_gap.item(), 4)
                 diag['loss_fou']   = round(self._loss_fou.item(), 4)
+                diag['loss_fou_ceil'] = round(self._loss_fou_ceiling.item(), 4)
                 diag['loss_proto_norm'] = round(self._loss_proto_norm.item(), 4)
                 diag['loss_latent_norm'] = round(self._loss_latent_norm.item(), 4)
                 diag['loss_proto_div'] = round(self._loss_proto_div.item(), 4)
