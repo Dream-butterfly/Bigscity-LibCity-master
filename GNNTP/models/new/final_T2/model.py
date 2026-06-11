@@ -197,7 +197,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 self._current_mu_low_raw = mu_low_raw
                 self._current_mu_mid_raw = mu_mid_raw
                 self._current_mu_high_raw = mu_high_raw
-            self._current_beta = beta.detach()
+            self._current_beta = beta  # keep grad — decoder routing needs it
         else:
             graph_matrix = self.adjacency_matrix.to(history_sequence.device)
             fou = None
