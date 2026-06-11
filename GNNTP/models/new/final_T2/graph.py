@@ -205,12 +205,10 @@ class FuzzyRelationalGraphLearner(nn.Module):
             self.raw_projection = None
 
         # ── Feature transform (shared geometry) ────────────────────
-        # LN after GELU: preserves W₁ gradient on magnitude (no normalization
-        # mask). Previous LN-before-GELU allowed W₁ to shrink undetected.
         self.node_transform = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
-            nn.GELU(),
             nn.LayerNorm(hidden_dim),
+            nn.GELU(),
             nn.Linear(hidden_dim, hidden_dim),
         )
 
