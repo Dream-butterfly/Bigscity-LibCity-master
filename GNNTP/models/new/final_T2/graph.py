@@ -75,7 +75,7 @@ class FuzzyGraphConvolution(nn.Module):
         ).values  # [N, N]
 
     @staticmethod
-    def precompute_powers(R_base, k_hop, topk=None):
+    def precompute_powers(R_base, k_hop, topk=None, relation_mode="maxmin"):
         device = R_base.device
         dtype = R_base.dtype
         N = R_base.size(0)
@@ -84,7 +84,10 @@ class FuzzyGraphConvolution(nn.Module):
         current = R_base
         for _ in range(k_hop):
             powers.append(current)
-            current = FuzzyGraphConvolution._max_min_compose_2d(R_base, current, topk=topk)
+            if relation_mode == "inner":
+                current = torch.mm(current, R_base)             # R² = R @ R
+            else:
+                current = FuzzyGraphConvolution._max_min_compose_2d(R_base, current, topk=topk)
         return powers
 
     def forward(self, node_features, fuzzy_relation, powers=None):
@@ -102,7 +105,8 @@ class FuzzyGraphConvolution(nn.Module):
                 R_base = fuzzy_relation.to(
                     device=node_features.device, dtype=node_features.dtype
                 )
-            R_powers = self.precompute_powers(R_base, self.k_hop, topk=self.topk)
+            R_powers = self.precompute_powers(R_base, self.k_hop,
+                                                topk=self.topk, relation_mode="inner")
 
         output = self.projections[0](node_features)
         graph_contrib = torch.zeros_like(output)
@@ -163,12 +167,13 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
         # ── Independent prototype centers per view ─────────────────
         #   Three views → three geometry templates → genuinely different relations
+        #   Init directly on unit hypersphere (not randn*0.1 → normalize).
         self.prototype_center_low  = nn.Parameter(
-            torch.randn(num_fuzzy_sets, hidden_dim, generator=_g) * 0.1)
+            F.normalize(torch.randn(num_fuzzy_sets, hidden_dim, generator=_g), dim=-1))
         self.prototype_center_mid  = nn.Parameter(
-            torch.randn(num_fuzzy_sets, hidden_dim, generator=_g) * 0.1)
+            F.normalize(torch.randn(num_fuzzy_sets, hidden_dim, generator=_g), dim=-1))
         self.prototype_center_high = nn.Parameter(
-            torch.randn(num_fuzzy_sets, hidden_dim, generator=_g) * 0.1)
+            F.normalize(torch.randn(num_fuzzy_sets, hidden_dim, generator=_g), dim=-1))
         # Backward-compat alias
         self.prototype_center = self.prototype_center_mid
 
@@ -200,10 +205,12 @@ class FuzzyRelationalGraphLearner(nn.Module):
             self.raw_projection = None
 
         # ── Feature transform (shared geometry) ────────────────────
+        # LN after GELU: preserves W₁ gradient on magnitude (no normalization
+        # mask). Previous LN-before-GELU allowed W₁ to shrink undetected.
         self.node_transform = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
-            nn.LayerNorm(hidden_dim),
             nn.GELU(),
+            nn.LayerNorm(hidden_dim),
             nn.Linear(hidden_dim, hidden_dim),
         )
 

@@ -203,8 +203,9 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             mu_mid = None
             self._current_fou = None
             self._current_mu_mid = None
+        rm = getattr(self.fuzzy_graph, 'relation_mode', 'maxmin') if self.fuzzy_graph else 'maxmin'
         graph_powers = FuzzyGraphConvolution.precompute_powers(
-            graph_matrix, k_hop=self.graph_k_hop, topk=self.graph_topk)
+            graph_matrix, k_hop=self.graph_k_hop, topk=self.graph_topk, relation_mode=rm)
         condition_features = self.condition_encoder(
             history_sequence, graph_matrix, graph_uncertainty=fou, powers=graph_powers)
 
