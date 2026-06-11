@@ -459,19 +459,19 @@ class FuzzyRelationalGraphLearner(nn.Module):
         else:
             fou_node = (mu_upper - mu_lower).clamp(min=0.0).mean(dim=-1)  # [N]
 
-        # ── Per-sample relations → batch-mean → (N, N) ──
+        # ── Per-sample relations → sparsify per-sample → batch-mean → (N,N) ──
         R_low  = self._build_fuzzy_relation(mu_low_raw)
         R_mid  = self._build_fuzzy_relation(mu_mid_raw)
         R_high = self._build_fuzzy_relation(mu_high_raw)
+        # Per-relation top-K sparsification (handles batch dim natively)
+        R_low  = self._sparsify_relation(R_low)
+        R_mid  = self._sparsify_relation(R_mid)
+        R_high = self._sparsify_relation(R_high)
+        # Per-sample → batch-mean after sparsify (preserves sample-specific edges)
         if R_low.dim() == 3:
             R_low  = R_low.mean(dim=0)
             R_mid  = R_mid.mean(dim=0)
             R_high = R_high.mean(dim=0)
-
-        # Per-relation top-K sparsification (independent per view)
-        R_low  = self._sparsify_relation(R_low)
-        R_mid  = self._sparsify_relation(R_mid)
-        R_high = self._sparsify_relation(R_high)
 
         # Cache relation diffs for diagnostics
         self._current_R_diff_lm = (R_low - R_mid).abs().mean().detach()
