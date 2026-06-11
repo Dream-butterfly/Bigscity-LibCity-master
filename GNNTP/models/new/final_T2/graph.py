@@ -249,12 +249,12 @@ class FuzzyRelationalGraphLearner(nn.Module):
             mu_lower:      [N, K]  min over three raw
             mu_mid:        [N, K]  (upper+lower)/2
         """
-        # 1. Node representation extraction
+        # 1. Node representation extraction — per-sample (time-pooled, batch kept)
         if node_features is not None:
             if node_features.dim() == 4:  # [B, T, N, D]
-                node_repr = node_features.mean(dim=(0, 1))
+                node_repr = node_features.mean(dim=1)  # [B, N, D] — time avg, per-sample!
             elif node_features.dim() == 3:  # [B, N, D]
-                node_repr = node_features.mean(dim=0)
+                node_repr = node_features  # keep batch
             else:
                 node_repr = node_features
         else:
@@ -263,8 +263,8 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
         # 2. Shared geometry + view-specific perturbations
         if self.raw_projection is not None:
-            node_repr = self.raw_projection(node_repr)  # → [N, D]
-        shared_latent = self.node_transform(node_repr)  # → [N, D]
+            node_repr = self.raw_projection(node_repr)  # → [B, N, D]
+        shared_latent = self.node_transform(node_repr)  # → [B, N, D]
 
         # View-specific residual: z_v = shared + Δ_v(shared)
         z_low  = shared_latent + self.delta_low(shared_latent)   # [N, D]
@@ -320,10 +320,11 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self._current_proto_norm = ((_p_low + _p_mid + _p_high) / 3)
         self._current_latent_norm = shared_latent.detach().norm(dim=-1).mean()
         self._current_transform_weight = self.node_transform[-1].weight.norm().detach()
-        self._node_latent_for_reg = shared_latent  # keep grad: for latent norm regularization
+        # Latent norm reg uses batch-mean for stable gradient
+        self._node_latent_for_reg = shared_latent.mean(dim=0) if shared_latent.dim() == 3 else shared_latent
         # Per-step movement tracking (track mid prototype as representative)
         _pc = self.prototype_center_mid.detach()
-        _nl = shared_latent.detach()
+        _nl = shared_latent.detach().mean(dim=0) if shared_latent.dim() == 3 else shared_latent.detach()
         if hasattr(self, '_prev_proto'):
             self._current_proto_update = (_pc - self._prev_proto).norm()
             self._current_latent_update = (_nl.mean(dim=0) - self._prev_latent_mean).norm()
@@ -378,16 +379,26 @@ class FuzzyRelationalGraphLearner(nn.Module):
     # ═══════════════════════════════════════════════════════════════
 
     def _build_fuzzy_relation(self, memberships):
+        # memberships: [N, K] or [B, N, K]
         if self.relation_mode == "inner":
-            # Inner product ÷ K: all K prototypes contribute, values in [0,1].
             K = memberships.size(-1)
-            R = (memberships @ memberships.T) / K              # [N, N]
-        else:  # "maxmin" (default)
-            mu_i = memberships.unsqueeze(1)  # [N, 1, K]
-            mu_j = memberships.unsqueeze(0)  # [1, N, K]
-            R = torch.max(torch.min(mu_i, mu_j), dim=-1).values  # [N, N]
-        diag = torch.eye(self.num_nodes, device=R.device, dtype=R.dtype)
-        R = R + diag * (1.0 - R.diag().unsqueeze(-1))
+            R = (memberships @ memberships.transpose(-2, -1)) / K  # [*B, N, N]
+        else:  # "maxmin"
+            if memberships.dim() == 3:
+                mu_i = memberships.unsqueeze(2)  # [B, N, 1, K]
+                mu_j = memberships.unsqueeze(1)  # [B, 1, N, K]
+            else:
+                mu_i = memberships.unsqueeze(1)  # [N, 1, K]
+                mu_j = memberships.unsqueeze(0)  # [1, N, K]
+            R = torch.max(torch.min(mu_i, mu_j), dim=-1).values
+        N = memberships.size(-2)
+        I = torch.eye(N, device=R.device, dtype=R.dtype)
+        # Broadcast self-loop across batch if needed
+        if R.dim() == 3:
+            I = I.unsqueeze(0)
+            R = R + I * (1.0 - R.diagonal(dim1=-2, dim2=-1).unsqueeze(-1))
+        else:
+            R = R + I * (1.0 - R.diag().unsqueeze(-1))
         return R.clamp(0.0, 1.0)
 
     def _apply_mid_closure(self, R_mid):
@@ -417,13 +428,20 @@ class FuzzyRelationalGraphLearner(nn.Module):
         mu_lower, mu_upper, mu_mid, mu_low_raw, mu_mid_raw, mu_high_raw = \
             self._compute_memberships(node_features)
 
-        # Per-node FOU (for CellAttention, backward compat)
-        fou_node = (mu_upper - mu_lower).clamp(min=0.0).mean(dim=-1)  # [N]
+        # Per-node FOU (mean over batch if per-sample)
+        if mu_upper.dim() == 3:
+            fou_node = (mu_upper - mu_lower).clamp(min=0.0).mean(dim=-1).mean(dim=0)  # [N]
+        else:
+            fou_node = (mu_upper - mu_lower).clamp(min=0.0).mean(dim=-1)  # [N]
 
-        # ── Interval-valued relations — each from its OWN geometry ──
-        R_low  = self._build_fuzzy_relation(mu_low_raw)   # proto_low  + σ_high (pessimistic)
-        R_mid  = self._build_fuzzy_relation(mu_mid_raw)   # proto_mid  + σ_mid  (midpoint)
-        R_high = self._build_fuzzy_relation(mu_high_raw)  # proto_high + σ_low  (optimistic)
+        # ── Per-sample relations → batch-mean → (N, N) ──
+        R_low  = self._build_fuzzy_relation(mu_low_raw)
+        R_mid  = self._build_fuzzy_relation(mu_mid_raw)
+        R_high = self._build_fuzzy_relation(mu_high_raw)
+        if R_low.dim() == 3:
+            R_low  = R_low.mean(dim=0)
+            R_mid  = R_mid.mean(dim=0)
+            R_high = R_high.mean(dim=0)
 
         # Per-relation top-K sparsification (independent per view)
         R_low  = self._sparsify_relation(R_low)
