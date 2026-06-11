@@ -409,6 +409,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 self.fuzzy_graph.log_sigma_low,
                 self.fuzzy_graph.log_sigma_delta,
                 self.fuzzy_graph.relation_mix_logits,
+                self.fuzzy_graph.node_beta_logits,
                 self.fuzzy_graph.prototype_center_low,
                 self.fuzzy_graph.prototype_center_mid,
                 self.fuzzy_graph.prototype_center_high,

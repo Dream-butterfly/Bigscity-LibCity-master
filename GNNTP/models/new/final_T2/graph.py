@@ -246,10 +246,8 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self.relation_mix_logits = nn.Parameter(
             torch.randn(3, generator=_g) * 1.0 if beta_init_random
             else torch.zeros(3))
-        # Per-node β projection: node-specific uncertainty preference
-        self.node_beta_proj = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim // 4), nn.GELU(),
-            nn.Linear(hidden_dim // 4, 3))
+        # Per-node β parameters: each node learns its own view preference
+        self.node_beta_logits = nn.Parameter(torch.zeros(num_nodes, 3))
 
     # ═══════════════════════════════════════════════════════════════
     #  Interval Type-2 Membership Computation
@@ -509,7 +507,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         # Learnable interval mix — global β for R_mixed
         beta = F.softmax(self.relation_mix_logits, dim=0)  # [3]
         # Per-node β for decoder routing: each node learns its own view preference
-        beta_node = F.softmax(self.node_beta_proj(self._shared_latent), dim=-1)  # (B,N,3)
+        beta_node = F.softmax(self.node_beta_logits, dim=-1)  # (N,3) per-node
         R_mixed = (beta[0] * R_low + beta[1] * R_mid + beta[2] * R_high)
 
         # Static adjacency blend
