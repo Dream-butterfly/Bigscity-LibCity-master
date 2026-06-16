@@ -203,8 +203,9 @@ def collect_diagnostics(model, test_loader) -> dict:
                           "high": getattr(g, 't2_topk_high', None)}
                 for vn, vm in [("low", mlr), ("mid", mmr), ("high", mhr)]:
                     Rv = g._build_fuzzy_relation(vm)
+                    first[f"R_{vn}_dense"]  = _safe_cpu(_bm(Rv))
                     Rv_sp = g._sparsify_relation(Rv, topk=topks[vn])
-                    first[f"R_{vn}"] = _safe_cpu(_bm(Rv_sp))
+                    first[f"R_{vn}_sparse"] = _safe_cpu(_bm(Rv_sp))
                 first["R_final"] = _safe_cpu(
                     R_final[0] if R_final.dim() == 3 else R_final)
                 got_first = True
