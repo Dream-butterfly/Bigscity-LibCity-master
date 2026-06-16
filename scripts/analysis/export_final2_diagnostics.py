@@ -198,14 +198,17 @@ def collect_diagnostics(model, test_loader) -> dict:
                 first["mu_low_raw"]  = _safe_cpu(_bm(mlr))
                 first["mu_mid_raw"]  = _safe_cpu(_bm(mmr))
                 first["mu_high_raw"] = _safe_cpu(_bm(mhr))
-                topks = {"low": getattr(g, 't2_topk_low', None),
-                          "mid": getattr(g, 't2_topk_mid', None),
-                          "high": getattr(g, 't2_topk_high', None)}
+                topks = {
+                    "low":  getattr(g, 't2_topk_low', None) or 16,
+                    "mid":  getattr(g, 't2_topk_mid', None) or 32,
+                    "high": getattr(g, 't2_topk_high', None) or 64,
+                }
                 for vn, vm in [("low", mlr), ("mid", mmr), ("high", mhr)]:
                     Rv = g._build_fuzzy_relation(vm)
                     first[f"R_{vn}_dense"]  = _safe_cpu(_bm(Rv))
-                    Rv_sp = g._sparsify_relation(Rv, topk=topks[vn])
-                    first[f"R_{vn}_sparse"] = _safe_cpu(_bm(Rv_sp))
+                    Rv_bm = _bm(Rv)  # batch-mean first → [N,N]
+                    Rv_sp = g._sparsify_relation(Rv_bm, topk=topks[vn])
+                    first[f"R_{vn}_sparse"] = _safe_cpu(Rv_sp)
                 first["R_final"] = _safe_cpu(
                     R_final[0] if R_final.dim() == 3 else R_final)
                 got_first = True
