@@ -233,7 +233,12 @@ def collect_diagnostics(model, test_loader) -> dict:
     ]:
         val = getattr(g, f"_current_{attr}", None)
         if val is not None:
-            diag[attr] = val.cpu().item() if isinstance(val, torch.Tensor) else float(val)
+            if isinstance(val, torch.Tensor):
+                diag[attr] = val.cpu().numpy() if val.numel() > 1 else val.cpu().item()
+            elif isinstance(val, np.ndarray):
+                diag[attr] = val
+            else:
+                diag[attr] = float(val)
 
     return diag
 
