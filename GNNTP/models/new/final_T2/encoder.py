@@ -1,4 +1,4 @@
-"""Spatio-temporal encoder (final_T2) — accepts optional graph uncertainty.
+"""Spatio-temporal encoder (final_T2) — accepts optional per-node MDI uncertainty.
 """
 
 import torch

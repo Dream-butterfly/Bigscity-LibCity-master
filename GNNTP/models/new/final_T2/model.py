@@ -1,8 +1,16 @@
-"""final_T2 model: integrates Type-2 FOU as a local uncertainty modulator.
+"""final_T2 model: multi-view fuzzy graph transformer (MVF-STGFormer).
 
-Key engineering choices implemented here follow your specification:
-- Type-2 models membership uncertainty but only gates attention.
-- Closure (if enabled) is applied only on the mid/expected fuzzy graph.
+Integrates three structurally independent fuzzy perspectives (Low/Mid/High)
+on the traffic sensor graph. The Membership Disagreement Interval (MDI) —
+computed as the width of the cross-view membership envelope — serves as a
+learned per-node uncertainty signal that gates CellAttention without altering
+graph propagation.
+
+Design principles:
+- Three independent fuzzy perspectives → complementary relation graphs.
+- MDI gates attention only; graph propagation uses expected membership μ̄.
+- Encoder GCN uses static adjacency (stable); decoder GCN uses fuzzy graph.
+- Łukasiewicz T-norm enforces flow conservation through the learned fuzzy relation.
 """
 
 from logging import getLogger
@@ -78,7 +86,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.use_fuzzy_conservation = config.get("use_fuzzy_conservation", True)
         self.loss_mode = config.get("loss_mode", "mae")  # mae | mse | huber
         self.huber_delta = config.get("huber_delta", 1.0)
-        # Type-2 anti-collapse losses (all default 0 → backward compatible)
+        # Structural anti-collapse losses (all default 0 → backward compatible)
         self.t2_entropy_weight   = config.get("t2_entropy_weight", 0.0)    # β entropy (keep β diverse)
         self.t2_interval_weight          = config.get("t2_interval_weight", 0.0)
         self.t2_interval_ratio_threshold  = config.get("t2_interval_ratio_threshold", 0.90)
@@ -229,7 +237,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         condition_features = self.condition_encoder(
             history_sequence, encoder_gcn_graph, graph_uncertainty=fou, powers=encoder_powers)
 
-        # ── Decoder GCN: fuzzy graph (Type-2 adaptive routing) ──
+        # ── Decoder GCN: fuzzy graph (multi-view adaptive routing) ──
         if self.use_fuzzy_graph and self.fuzzy_graph is not None:
             decoder_graph = graph_matrix  # fuzzy
         else:
@@ -237,7 +245,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         decoder_powers = FuzzyGraphConvolution.precompute_powers(
             decoder_graph, k_hop=self.graph_k_hop, topk=self.graph_topk, relation_mode=rm)
 
-        # Prototype-aware spatial embedding: route through Type-2 membership
+        # Prototype-aware spatial embedding: route through multi-view membership
         if self.use_proto_adaptive_embed and mu_mid is not None:
             # E_node = μ_mid @ E_proto  (N,K) @ (K,D) → (N,D)
             node_adaptive = mu_mid @ self.proto_embed  # (N, K) @ (1, K, D) → (N, D)
@@ -297,7 +305,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         else:
             self._loss_consv = torch.tensor(0.0)
 
-        # ── Type-2 anti-collapse losses ──
+        # ── Structural anti-collapse losses ──
         self._loss_ent = torch.tensor(0.0)
         self._loss_gap = torch.tensor(0.0)
         self._loss_fou = torch.tensor(0.0)
@@ -325,14 +333,14 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 self._loss_gap = (self.t2_interval_weight * s_gap.mean()).detach()
                 total = total + self.t2_interval_weight * s_gap.mean()
 
-            # ③ FOU floor: keep membership interval from collapsing to 0
+            # ③ MDI floor: keep membership interval from collapsing to 0
             if self.t2_fou_floor_weight > 0 and self._current_fou is not None:
                 fou_gap = F.relu(0.01 - self._current_fou.mean())
                 self._raw_fou = fou_gap.detach()
                 self._loss_fou = (self.t2_fou_floor_weight * fou_gap).detach()
                 total = total + self.t2_fou_floor_weight * fou_gap
 
-            # ④ FOU ceiling: prevent uncertainty inflation (Type-2 runaway)
+            # ④ MDI ceiling: prevent uncertainty inflation
             if hasattr(self, '_t2_fou_ceiling_weight') and self._t2_fou_ceiling_weight > 0 and self._current_fou is not None:
                 fou_ceiling_gap = F.relu(self._current_fou.mean() - 0.25)
                 self._loss_fou_ceiling = (self._t2_fou_ceiling_weight * fou_ceiling_gap).detach()
@@ -402,7 +410,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             self._loss_delta_div = (self._delta_diversity_weight * loss_delta_div).detach()
             total = total + self._delta_diversity_weight * loss_delta_div
 
-        # ── Type-2 gradient boost: amplify σ/r/β gradients post-backward ──
+        # ── View parameter gradient boost: amplify σ/τ/β gradients post-backward ──
         if (self.t2_lr_boost != 1.0 and self.fuzzy_graph is not None
                 and total.requires_grad):
             _params = [

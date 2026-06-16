@@ -1,11 +1,14 @@
-"""Graph components for final_T2 with a light-weight Type-2 interface.
+"""Graph components for final_T2 — multi-view fuzzy relational graph learner.
 
 Design notes:
-- We compute membership logits (theta) and expose a Type-2 FOU per node
-  (mean over fuzzy sets). The mid (expectation) graph is built from
-  mu = sigmoid(theta) and any closure is applied only on this mid graph.
-- FOU is intended solely for gating/attention; it is NOT used in
-  relation propagation (avoids structure collapse).
+- Three structurally independent fuzzy perspectives (Low/Mid/High), each with its own
+  prototype geometry, node representation, Gaussian width, and temperature.
+- The upper/lower envelope (max/min over three views) quantifies cross-view disagreement
+  rather than classical IT2 parametric uncertainty.
+- The mid (expected) graph is built from mu_mid = (upper+lower)/2 and any closure
+  is applied only on this mid graph.
+- The Membership Disagreement Interval (MDI, code variable 'fou') is intended solely
+  for gating/attention; it is NOT used in relation propagation (avoids structure collapse).
 """
 
 import math
@@ -131,16 +134,29 @@ class FuzzyGraphConvolution(nn.Module):
 
 
 class FuzzyRelationalGraphLearner(nn.Module):
-    """Interval Type-2 Fuzzy Relational Graph Learner.
+    """Multi-View Fuzzy Relational Graph Learner (MV-FRGL).
 
-    Uses Gaussian IT2 membership functions with uncertain standard deviation:
-        μ̃_k(x) = exp(−||x−c_k||² / 2σ̃_k²),   σ̃_k ∈ [σ_k·(1−r_k), σ_k·(1+r_k)]
+    Constructs three structurally independent fuzzy perspectives (Low / Mid / High)
+    on the sensor network, each with:
+      - independent prototype centers C_v
+      - independent node representations z_v via view-specific Δ-networks
+      - independent Gaussian widths (ordered: σ_L ≤ σ_M ≤ σ_H)
+      - independent temperature τ_v
 
-    Upper membership (narrower, optimistic): σ_low  = σ·(1−r)
-    Lower membership (wider,   pessimistic): σ_high = σ·(1+r)
+    The three views produce three T1 membership matrices μ_L, μ_M, μ_H.
+    The upper envelope μ⁺ = max(μ_L,μ_M,μ_H) and lower envelope μ⁻ = min(·)
+    form a membership interval. The midpoint μ̄ = (μ⁺+μ⁻)/2 is used for
+    relation construction; the width δ = mean(μ⁺−μ⁻) is the Membership
+    Disagreement Interval (MDI) — a learned spatial uncertainty signal.
 
-    Degeneration theorem:
-        r_k → 0  ⇒  μ_lower → μ_upper  ⇒  Type-2 collapses to Type-1
+    Inspired by Interval Type-2 Fuzzy Sets (Mendel 2007), but this is a
+    multi-view fuzzy system where uncertainty emerges from cross-view
+    structural disagreement rather than from parametric uncertainty within
+    a single MF.
+
+    Degeneration:
+        Δ_v→0, C_v→C, σ_L→σ_H, τ_v→τ  ⇒  three views identical
+        ⇒  μ⁺=μ⁻  ⇒  δ(n)=0  ⇒  envelope collapses to single-view T1
     """
 
     def __init__(
@@ -182,10 +198,10 @@ class FuzzyRelationalGraphLearner(nn.Module):
         # Backward-compat alias
         self.prototype_center = self.prototype_center_mid
 
-        # ── Independent dual widths: σ_low, σ_high (genuine Type-2) ─
-        #   Each fuzzy set k has its own lower and upper Gaussian width,
-        #   independently learned from data (not a symmetric perturbation).
-        #   Ordering enforced: σ_low ≤ σ_high at compute time.
+        # ── Independent dual widths (view granularity control) ─
+        #   Each fuzzy set k has its own base width and width delta,
+        #   producing three ordered widths σ_L ≤ σ_M ≤ σ_H.
+        #   Cross-assigned to views: Low→σ_H (coarse), High→σ_L (fine).
         _sigma_low_init   = torch.rand(num_fuzzy_sets, generator=_g) * 1.0 + 0.5   # U(0.5,1.5)
         _sigma_delta_init = torch.rand(num_fuzzy_sets, generator=_g) * 0.3 + 0.2   # U(0.2,0.5)
         self.log_sigma_low = nn.Parameter(
@@ -250,22 +266,25 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self.node_beta_logits = nn.Parameter(torch.zeros(num_nodes, 3))
 
     # ═══════════════════════════════════════════════════════════════
-    #  Interval Type-2 Membership Computation
+    #  Multi-View Membership Computation
     # ═══════════════════════════════════════════════════════════════
 
     def _compute_memberships(self, node_features):
-        """Compute IT2 Gaussian memberships with independent prototype geometry per view.
+        """Compute multi-view Gaussian T1 memberships with independent geometry per view.
 
         Three views → three prototype sets → three distance fields → three
-        structurally different relation matrices (not just scaled copies).
+        structurally different membership matrices (not just scaled copies).
+
+        Cross-assigned widths: Low view uses σ_H (coarse), High view uses σ_L (fine),
+        maximizing structural differentiation.
 
         Returns:
-            mu_lower_raw:  [N, K]  pessimistic (wider Gaussian, proto_low)
-            mu_mid_raw:    [N, K]  midpoint     (mid Gaussian,  proto_mid)
-            mu_high_raw:   [N, K]  optimistic   (narrow Gaussian, proto_high)
-            mu_upper:      [N, K]  max over three raw
-            mu_lower:      [N, K]  min over three raw
-            mu_mid:        [N, K]  (upper+lower)/2
+            mu_lower_raw:  [N, K]  Low-view  T1 membership (coarse, wide Gaussian)
+            mu_mid_raw:    [N, K]  Mid-view  T1 membership (reference)
+            mu_high_raw:   [N, K]  High-view T1 membership (fine, narrow Gaussian)
+            mu_upper:      [N, K]  upper envelope  μ⁺ = max over three views
+            mu_lower:      [N, K]  lower envelope  μ⁻ = min over three views
+            mu_mid:        [N, K]  expected μ̄ = (μ⁺+μ⁻)/2
         """
         # 1. Node representation from latest traffic state + short-term trend
         if node_features is not None:
@@ -329,7 +348,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         mu_mid_raw  = torch.exp(-d2_mid  / (2 * sigma_mid.pow(2)  * tau_mid))
         mu_high_raw = torch.exp(-d2_high / (2 * sigma_low.pow(2)  * tau_high))
 
-        # Type-2 envelope: upper/lower across three independent views
+        # Multi-view envelope: upper/lower across three independent views
         mu_upper = torch.maximum(torch.maximum(mu_low_raw, mu_mid_raw), mu_high_raw)
         mu_lower = torch.minimum(torch.minimum(mu_low_raw, mu_mid_raw), mu_high_raw)
         mu_mid   = (mu_lower + mu_upper) / 2
@@ -458,16 +477,22 @@ class FuzzyRelationalGraphLearner(nn.Module):
     # ═══════════════════════════════════════════════════════════════
 
     def get_type2_info(self, node_features):
-        """Build interval-valued fuzzy graph with per-node FOU.
+        """Build multi-view fuzzy graph with per-node disagreement interval.
 
         Returns:
             R_with_closure: [N, N] effective fuzzy relation
-            fou_node:       [N]    per-node FOU scalar
+            fou_node:       [N]    per-node MDI scalar δ(n)
+            mu_mid:         [B,N,K] expected memberships μ̄
+            mu_low_raw:     [B,N,K] Low-view T1 memberships
+            mu_mid_raw:     [B,N,K] Mid-view T1 memberships
+            mu_high_raw:    [B,N,K] High-view T1 memberships
+            beta:           [3]     global view mixing coefficients
+            beta_node:      [N,3]   per-node view preferences
         """
         mu_lower, mu_upper, mu_mid, mu_low_raw, mu_mid_raw, mu_high_raw = \
             self._compute_memberships(node_features)
 
-        # Per-node FOU (mean over batch if per-sample)
+        # Per-node MDI δ(n) (mean over batch if per-sample)
         if mu_upper.dim() == 3:
             fou_node = (mu_upper - mu_lower).clamp(min=0.0).mean(dim=-1).mean(dim=0)  # [N]
         else:

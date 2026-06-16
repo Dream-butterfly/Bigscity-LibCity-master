@@ -1,9 +1,14 @@
-"""Fuzzy Cell Attention with uncertainty gating (final_T2).
+"""Fuzzy Cell Attention with MDI uncertainty gating (final_T2).
 
-This variant accepts an optional per-node uncertainty (FOU) vector and
-modulates region affinity by (1 - alpha * U_ij) where
-U_ij = (FOU_i + FOU_j) / 2. The uncertainty only gates attention — it
+This variant accepts an optional per-node Membership Disagreement Interval
+(MDI) vector δ and modulates region affinity by (1 - α·U_ij) where
+U_ij = (δ_i + δ_j) / 2. The uncertainty only gates attention — it
 never alters graph propagation.
+
+The MDI signal δ comes from the multi-view fuzzy graph learner and
+quantifies cross-view membership disagreement. High δ → the node's
+fuzzy identity is disputed across views → attenuate its CellAttention
+affinity to prevent unreliable structural information from dominating.
 """
 
 import torch
@@ -91,7 +96,7 @@ class FuzzyCellAttention(nn.Module):
             hollow = self._hollow_kernel(dist)
             region_affinity = region_affinity * hollow
 
-        # If provided, modulate by uncertainty mask U_ij = (fou_i + fou_j) / 2
+        # If provided, modulate by MDI mask U_ij = (δ_i + δ_j) / 2
         if node_uncertainty is not None:
             fou = node_uncertainty.view(-1).to(device=region_affinity.device, dtype=region_affinity.dtype)
             U_ij = (fou.unsqueeze(0) + fou.unsqueeze(1)) / 2.0
