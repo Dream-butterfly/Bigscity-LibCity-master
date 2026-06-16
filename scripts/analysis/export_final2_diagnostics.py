@@ -27,7 +27,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from GNNTP.common import ConfigParser
-from GNNTP.data import build_artifact_runtime
+from GNNTP.data import build_artifact_runtime, build_dataset_runtime
 from GNNTP.data.artifact_io import load_run_meta
 from GNNTP.utils import (
     add_general_args,
@@ -268,8 +268,6 @@ def export_diagnostics(
 
     bound_aid = str(run_meta.get("artifact_id", "")).strip()
     effective_aid = str(artifact_id or "").strip() or bound_aid
-    if not effective_aid:
-        raise ValueError("No artifact_id. Provide --artifact_id or ensure run_meta.json exists.")
 
     saved_cfg = PROJECT_ROOT / "outputs" / run_id / "effective_config.json"
     base = {}
@@ -293,12 +291,16 @@ def export_diagnostics(
                 run_id, epoch, resolved_model, resolved_dataset)
     set_random_seed(config.get("seed", 0))
 
-    runtime = build_artifact_runtime(
-        config, task=resolved_task, model_name=resolved_model,
-        artifact_id=effective_aid, force_reuse=True,
-    )
-    for msg in runtime.warnings:
-        logger.warning("[FORCE_REUSE] %s", msg)
+    if effective_aid:
+        runtime = build_artifact_runtime(
+            config, task=resolved_task, model_name=resolved_model,
+            artifact_id=effective_aid, force_reuse=True,
+        )
+        for msg in runtime.warnings:
+            logger.warning("[FORCE_REUSE] %s", msg)
+    else:
+        logger.info("No artifact_id found, using old dataset pipeline")
+        runtime = build_dataset_runtime(config)
 
     ckpt_path = os.path.join(
         get_output_root(), run_id, "model_cache",
