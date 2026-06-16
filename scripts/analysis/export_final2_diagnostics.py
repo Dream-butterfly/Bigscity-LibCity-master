@@ -163,8 +163,9 @@ def collect_diagnostics(model, test_loader) -> dict:
 
     with torch.no_grad():
         for batch in test_loader:
-            history = batch["X"].to(model.device)
-            future = batch["y"][..., :model.output_dim].to(model.device)
+            batch.to_tensor(model.device)
+            history = batch["X"]
+            future = batch["y"][..., :model.output_dim]
 
             condition, R_final, fou, _ = model.encode_condition(history)
             pred = model.future_decoder(
