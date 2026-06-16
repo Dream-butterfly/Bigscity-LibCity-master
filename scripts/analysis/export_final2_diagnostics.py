@@ -84,7 +84,7 @@ _PER_EPOCH_PATTERNS = {
 
 
 def parse_run_log(run_id: str) -> dict[str, list]:
-    log_path = get_run_dir(run_id) / "logs" / "run.log"
+    log_path = Path(get_run_dir(run_id)) / "logs" / "run.log"
     if not log_path.exists():
         print(f"[WARN] run.log not found: {log_path}")
         return {}
@@ -320,7 +320,7 @@ def export_diagnostics(
     logger.info("Collecting spatial diagnostics...")
     diag = collect_diagnostics(model, runtime.test_loader)
 
-    out_dir = get_run_dir(run_id) / "evaluate_cache"
+    out_dir = Path(get_run_dir(run_id)) / "evaluate_cache"
     out_dir.mkdir(parents=True, exist_ok=True)
     npz_path = out_dir / "diagnostics.npz"
     np.savez_compressed(npz_path, **diag)
