@@ -520,19 +520,18 @@ class FuzzyRelationalGraphLearner(nn.Module):
         _R_mid_norm = R_mid_diag.abs().mean().clamp_min(1e-8)
         self._current_R_gap = (R_high_diag - R_low_diag).abs().mean().detach() / _R_mid_norm
 
-        # Cache relation correlations (numerically stable: fallback to 0 if NaN)
-        def _safe_corr(x, y):
-            sx, sy = x.std(), y.std()
-            if sx < 1e-8 or sy < 1e-8:
-                return torch.tensor(0.0, device=x.device, dtype=x.dtype)
-            c = torch.corrcoef(torch.stack([x, y]))[0, 1]
-            return torch.nan_to_num(c, nan=0.0)
+        # Cache relation correlations (manual Pearson for numerical stability)
+        def _pearson(x, y):
+            xc = x - x.mean()
+            yc = y - y.mean()
+            denom = (xc.norm() * yc.norm()).clamp_min(1e-12)
+            return (xc @ yc) / denom
         _rl = R_low_diag.flatten().detach()
         _rm = R_mid_diag.flatten().detach()
         _rh = R_high_diag.flatten().detach()
-        self._current_R_corr_lm = _safe_corr(_rl, _rm)
-        self._current_R_corr_lh = _safe_corr(_rl, _rh)
-        self._current_R_corr_mh = _safe_corr(_rm, _rh)
+        self._current_R_corr_lm = _pearson(_rl, _rm)
+        self._current_R_corr_lh = _pearson(_rl, _rh)
+        self._current_R_corr_mh = _pearson(_rm, _rh)
 
         self._current_eff_width = (mu_upper - mu_lower).abs().mean().detach()
 
