@@ -520,12 +520,19 @@ class FuzzyRelationalGraphLearner(nn.Module):
         _R_mid_norm = R_mid_diag.abs().mean().clamp_min(1e-8)
         self._current_R_gap = (R_high_diag - R_low_diag).abs().mean().detach() / _R_mid_norm
 
-        # Cache relation correlations
-        R_flat = lambda R: R.flatten().detach()
-        _rl, _rm, _rh = R_flat(R_low_diag), R_flat(R_mid_diag), R_flat(R_high_diag)
-        self._current_R_corr_lm = torch.corrcoef(torch.stack([_rl, _rm]))[0, 1]
-        self._current_R_corr_lh = torch.corrcoef(torch.stack([_rl, _rh]))[0, 1]
-        self._current_R_corr_mh = torch.corrcoef(torch.stack([_rm, _rh]))[0, 1]
+        # Cache relation correlations (numerically stable: fallback to 0 if NaN)
+        def _safe_corr(x, y):
+            sx, sy = x.std(), y.std()
+            if sx < 1e-8 or sy < 1e-8:
+                return torch.tensor(0.0, device=x.device, dtype=x.dtype)
+            c = torch.corrcoef(torch.stack([x, y]))[0, 1]
+            return torch.nan_to_num(c, nan=0.0)
+        _rl = R_low_diag.flatten().detach()
+        _rm = R_mid_diag.flatten().detach()
+        _rh = R_high_diag.flatten().detach()
+        self._current_R_corr_lm = _safe_corr(_rl, _rm)
+        self._current_R_corr_lh = _safe_corr(_rl, _rh)
+        self._current_R_corr_mh = _safe_corr(_rm, _rh)
 
         self._current_eff_width = (mu_upper - mu_lower).abs().mean().detach()
 
