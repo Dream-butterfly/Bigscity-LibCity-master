@@ -322,20 +322,42 @@ def export_diagnostics(
     )
     align_checkpoint_config(config.config, ckpt_path, logger)
 
-    # ── 从 checkpoint 对齐 feature_dim / hidden_dim 到 data_feature ──
+    # ── 检查 checkpoint 的 feature_dim / hidden_dim 与当前数据是否一致 ──
+    #    feature_dim 由数据管线派生（add_time_in_day + add_day_in_week + load_external），
+    #    无法通过直接修改 config 来改变。若 mismatch 则报清晰错误。
     from GNNTP.utils.utils import detect_checkpoint_model_params
     ckpt_params = detect_checkpoint_model_params(ckpt_path)
     for param_name in ("feature_dim", "hidden_dim"):
         if param_name in ckpt_params:
-            df_val = runtime.data_feature.get(param_name)
             ckpt_val = ckpt_params[param_name]
-            if df_val != ckpt_val:
+            df_val = runtime.data_feature.get(param_name)
+            if df_val is not None and df_val != ckpt_val:
                 logger.warning(
-                    "data_feature.%s=%s ≠ checkpoint %s=%d, overriding data_feature.",
+                    "data_feature.%s=%d ≠ checkpoint %s=%d, overriding data_feature from checkpoint.",
                     param_name, df_val, param_name, ckpt_val,
                 )
                 runtime.data_feature[param_name] = ckpt_val
                 config.config[param_name] = ckpt_val
+
+    # 验证实际数据的特征维度是否与 checkpoint 一致
+    if "feature_dim" in ckpt_params:
+        ckpt_fd = ckpt_params["feature_dim"]
+        sample_batch = next(iter(runtime.test_loader))
+        actual_fd = sample_batch['X'].shape[-1]
+        if actual_fd != ckpt_fd:
+            logger.error(
+                "Actual data feature_dim=%d ≠ checkpoint feature_dim=%d.\n"
+                "This means the data was built with different add_time_in_day / "
+                "add_day_in_week / load_external flags than training.\n"
+                "Solution: pass --artifact_id <TRAINING_ARTIFACT_ID> to use the "
+                "exact data artifact from training. You can find the artifact_id in "
+                "outputs/%s/run_meta.json.",
+                actual_fd, ckpt_fd, run_id,
+            )
+            raise RuntimeError(
+                f"Data/checkpoint feature_dim mismatch: data={actual_fd}, ckpt={ckpt_fd}. "
+                f"Pass --artifact_id to use the training artifact."
+            )
 
     model = get_model(config, runtime.data_feature)
     executor = get_executor(config, model, runtime.data_feature)
