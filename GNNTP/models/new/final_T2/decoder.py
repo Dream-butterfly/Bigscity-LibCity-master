@@ -163,13 +163,13 @@ class FutureDecoder(nn.Module):
         self.temporal_refine = MultiHeadAttention(hidden_dim, num_heads, dropout)
         self.norm_temporal_refine = nn.LayerNorm(hidden_dim)
 
-        # Mixed projection (STAEformer-style): T×D → bottleneck → T×out
-        # Allows output timesteps to interact before final prediction.
-        T, D = output_window, hidden_dim
+        # Per-step projection: D → bottleneck → output_dim
+        # Cross-timestep interaction is handled by temporal_refine attention,
+        # so a simple per-step linear projection suffices.
         self.output_projection = nn.Sequential(
-            nn.Linear(T * D, T * 32),   # 1536→384: bottleneck
+            nn.Linear(hidden_dim, 32),
             nn.GELU(),
-            nn.Linear(T * 32, T * output_dim),  # 384→T: per-timestep output
+            nn.Linear(32, output_dim),
         )
         self.output_window = output_window  # needed in forward
 
@@ -233,9 +233,9 @@ class FutureDecoder(nn.Module):
 
         queries = self.final_norm(queries)  # (B, T, N, D)
 
-        # Mixed projection: flatten T×D, project to T×out per node
+        # Per-step projection: (B*N*T, D) → (B*N*T, output_dim)
         B, T, N, D = queries.shape
-        q_flat = queries.permute(0, 2, 1, 3).reshape(B * N, T * D)  # (B*N, T*D)
-        out_flat = self.output_projection(q_flat)                   # (B*N, T*out)
+        q_flat = queries.reshape(B * N * T, D)
+        out_flat = self.output_projection(q_flat)
         return out_flat.reshape(B, N, T, -1).permute(0, 2, 1, 3)   # (B, T, N, out)
 
