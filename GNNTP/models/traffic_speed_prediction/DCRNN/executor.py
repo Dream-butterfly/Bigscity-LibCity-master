@@ -1,31 +1,38 @@
+"""DCRNN 专属 Executor — 继承 TrafficStateExecutor，增加 curriculum learning 的 batches_seen 追踪。"""
 import time
 import numpy as np
-import torch
-import os
-from GNNTP.models import loss
 from functools import partial
+from logging import getLogger
+
 from GNNTP.common.traffic_state_executor import TrafficStateExecutor
-from GNNTP.utils import tune
+from GNNTP.models import loss
 
 
 class DCRNNExecutor(TrafficStateExecutor):
+    """DCRNN Executor — 在标准 TrafficStateExecutor 基础上增加:
+    - batches_seen 全局步数追踪（curriculum learning 需要）
+    - 定制的 _build_train_loss 传递 batches_seen 给模型
+    - 定制的 train/_train_epoch/_valid_epoch 维护 batches_seen
+    """
+
     def __init__(self, config, model, data_feature):
-        TrafficStateExecutor.__init__(self, config, model, data_feature)
+        super().__init__(config, model, data_feature)
 
     def _build_train_loss(self):
-        """
-        根据全局参数`train_loss`选择训练过程的loss函数
-        如果该参数为none，则需要使用模型自定义的loss函数
-        注意，loss函数应该接收`Batch`对象作为输入，返回对应的loss(torch.tensor)
-        """
+        """构建传递 batches_seen 的 loss 函数。"""
         if self.train_loss.lower() == 'none':
-            self._logger.warning('Received none train loss func and will use the loss func defined in the model.')
+            self._logger.warning(
+                'Received none train loss func and will use the loss func defined in the model.')
             return None
-        if self.train_loss.lower() not in ['mae', 'mse', 'rmse', 'mape', 'logcosh', 'huber', 'quantile', 'masked_mae',
-                                           'masked_mse', 'masked_rmse', 'masked_mape', 'r2', 'evar']:
-            self._logger.warning('Received unrecognized train loss function, set default mae loss func.')
+        if self.train_loss.lower() not in [
+            'mae', 'mse', 'rmse', 'mape', 'logcosh', 'huber', 'quantile',
+            'masked_mae', 'masked_mse', 'masked_rmse', 'masked_mape', 'r2', 'evar',
+        ]:
+            self._logger.warning(
+                'Received unrecognized train loss function, set default mae loss func.')
         else:
-            self._logger.info('You select `{}` as train loss function.'.format(self.train_loss.lower()))
+            self._logger.info(
+                'You select `{}` as train loss function.'.format(self.train_loss.lower()))
 
         def func(batch, batches_seen=None):
             y_true = batch['y']
@@ -54,6 +61,10 @@ class DCRNNExecutor(TrafficStateExecutor):
                 lf = partial(loss.masked_rmse_torch, null_val=0)
             elif self.train_loss.lower() == 'masked_mape':
                 lf = partial(loss.masked_mape_torch, null_val=0)
+            elif self.train_loss.lower() == 'smape':
+                lf = loss.masked_smape_torch
+            elif self.train_loss.lower() == 'masked_smape':
+                lf = partial(loss.masked_smape_torch, null_val=0)
             elif self.train_loss.lower() == 'r2':
                 lf = loss.r2_score_torch
             elif self.train_loss.lower() == 'evar':
@@ -61,45 +72,36 @@ class DCRNNExecutor(TrafficStateExecutor):
             else:
                 lf = loss.masked_mae_torch
             return lf(y_predicted, y_true)
+
         return func
 
     def train(self, train_dataloader, eval_dataloader):
-        """
-        use data to train model with config
-
-        Args:
-            train_dataloader(torch.Dataloader): Dataloader
-            eval_dataloader(torch.Dataloader): Dataloader
-        """
-        if self._is_rank0():
-            self._logger.info('Start training ...')
+        """训练流程 — DCRNN 版本（含 batches_seen 追踪 + AMP + DDP）。"""
+        self._logger.info('Start training ...')
         min_val_loss = float('inf')
         wait = 0
         best_epoch = 0
         train_time = []
         eval_time = []
         num_batches = len(train_dataloader)
-        if self._is_rank0():
-            self._logger.info("num_batches:{}".format(num_batches))
+        self._logger.info("num_batches:{}".format(num_batches))
 
         batches_seen = num_batches * self._epoch_num
         for epoch_idx in range(self._epoch_num, self.epochs):
-            # DDP: 设置 epoch 以保证每轮 shuffle 不同
-            if self.is_distributed and hasattr(train_dataloader, 'sampler') and hasattr(train_dataloader.sampler, 'set_epoch'):
+            if hasattr(train_dataloader, 'sampler') and hasattr(train_dataloader.sampler, 'set_epoch'):
                 train_dataloader.sampler.set_epoch(epoch_idx)
-
             start_time = time.time()
-            losses, batches_seen = self._train_epoch(train_dataloader, epoch_idx, batches_seen, self.loss_func)
+            losses, batches_seen = self._train_epoch(
+                train_dataloader, epoch_idx, batches_seen, self.loss_func)
             t1 = time.time()
             train_time.append(t1 - start_time)
             self._writer.add_scalar('training loss', np.mean(losses), batches_seen)
-            if self._is_rank0():
-                self._logger.info("epoch complete!")
+            self._logger.info("epoch complete!")
 
-            if self._is_rank0():
-                self._logger.info("evaluating now!")
+            self._logger.info("evaluating now!")
             t2 = time.time()
-            val_loss = self._valid_epoch(eval_dataloader, epoch_idx, batches_seen, self.loss_func)
+            val_loss = self._valid_epoch(
+                eval_dataloader, epoch_idx, batches_seen, self.loss_func)
             end_time = time.time()
             eval_time.append(end_time - t2)
 
@@ -109,24 +111,16 @@ class DCRNNExecutor(TrafficStateExecutor):
                 else:
                     self.lr_scheduler.step()
 
-            if self._is_rank0() and (epoch_idx % self.log_every) == 0:
+            if (epoch_idx % self.log_every) == 0:
                 log_lr = self.optimizer.param_groups[0]['lr']
-                message = 'Epoch [{}/{}] train_loss: {:.4f}, val_loss: {:.4f}, lr: {:.6f}, {:.2f}s'. \
-                    format(epoch_idx, self.epochs, np.mean(losses), val_loss,
+                message = 'Epoch [{}/{}] ({}) train_loss: {:.4f}, val_loss: {:.4f}, lr: {:.6f}, {:.2f}s'. \
+                    format(epoch_idx, self.epochs, batches_seen, np.mean(losses), val_loss,
                            log_lr, (end_time - start_time))
                 self._logger.info(message)
 
-            if self.hyper_tune and self._is_rank0():
-                # use ray tune to checkpoint
-                with tune.checkpoint_dir(step=epoch_idx) as checkpoint_dir:
-                    path = os.path.join(checkpoint_dir, "checkpoint")
-                    self.save_model(path)
-                # ray tune use loss to determine which params are best
-                tune.report(loss=val_loss)
-
             if val_loss < min_val_loss:
                 wait = 0
-                if self.saved and self._is_rank0():
+                if self.saved:
                     model_file_name = self.save_model_with_epoch(epoch_idx)
                     self._logger.info('Val loss decrease from {:.4f} to {:.4f}, '
                                       'saving to {}'.format(min_val_loss, val_loss, model_file_name))
@@ -135,10 +129,9 @@ class DCRNNExecutor(TrafficStateExecutor):
             else:
                 wait += 1
                 if wait == self.patience and self.use_early_stop:
-                    if self._is_rank0():
-                        self._logger.warning('Early stopping at epoch: %d' % epoch_idx)
+                    self._logger.warning('Early stopping at epoch: %d' % epoch_idx)
                     break
-        if self._is_rank0() and len(train_time) > 0:
+        if len(train_time) > 0:
             self._logger.info('Trained totally {} epochs, average train time is {:.3f}s, '
                               'average eval time is {:.3f}s'.
                               format(len(train_time), sum(train_time) / len(train_time),
@@ -148,70 +141,45 @@ class DCRNNExecutor(TrafficStateExecutor):
         return min_val_loss
 
     def _train_epoch(self, train_dataloader, epoch_idx, batches_seen=None, loss_func=None):
-        """
-        完成模型一个轮次的训练
-
-        Args:
-            train_dataloader: 训练数据
-            epoch_idx: 轮次数
-            batches_seen: 全局batch数
-            loss_func: 损失函数
-
-        Returns:
-            tuple: tuple contains
-                losses(list): 每个batch的损失的数组 \n
-                batches_seen(int): 全局batch数
-        """
+        """单轮训练 — 含 AMP + batches_seen 追踪。"""
         self.model.train()
         loss_func = loss_func if loss_func is not None else self._unwrap_model().calculate_loss
         losses = []
         for batch in train_dataloader:
             self.optimizer.zero_grad()
             batch.to_tensor(self.device)
-            loss = loss_func(batch, batches_seen)
+            with self._autocast_context():
+                loss = loss_func(batch, batches_seen)
             self._logger.debug(loss.item())
             losses.append(loss.item())
             batches_seen += 1
-            loss.backward()
-            if self.clip_grad_norm:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
-            self.optimizer.step()
-        # DDP: all_reduce 求全局平均 loss
-        if self.is_distributed:
-            import torch.distributed as dist
-            loss_tensor = torch.tensor([np.mean(losses)], device=self.device)
-            dist.all_reduce(loss_tensor, op=dist.ReduceOp.AVG)
-            losses = [loss_tensor.item()] * len(losses)
+            if self.grad_scaler.is_enabled():
+                self.grad_scaler.scale(loss).backward()
+                if self.clip_grad_norm:
+                    self.grad_scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+                self.grad_scaler.step(self.optimizer)
+                self.grad_scaler.update()
+            else:
+                loss.backward()
+                if self.clip_grad_norm:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+                self.optimizer.step()
         return losses, batches_seen
 
     def _valid_epoch(self, eval_dataloader, epoch_idx, batches_seen=None, loss_func=None):
-        """
-        完成模型一个轮次的评估
-
-        Args:
-            eval_dataloader: 评估数据
-            epoch_idx: 轮次数
-            batches_seen: 全局batch数
-            loss_func: 损失函数
-
-        Returns:
-            float: 评估数据的平均损失值
-        """
+        """单轮验证 — 含 AMP + batches_seen 传递。"""
+        import torch
         with torch.no_grad():
             self.model.eval()
             loss_func = loss_func if loss_func is not None else self._unwrap_model().calculate_loss
             losses = []
             for batch in eval_dataloader:
                 batch.to_tensor(self.device)
-                loss = loss_func(batch, batches_seen)
+                with self._autocast_context():
+                    loss = loss_func(batch, batches_seen)
                 self._logger.debug(loss.item())
                 losses.append(loss.item())
             mean_loss = np.mean(losses)
-            # DDP: all_reduce 求全局平均 loss
-            if self.is_distributed:
-                import torch.distributed as dist
-                loss_tensor = torch.tensor([mean_loss], device=self.device)
-                dist.all_reduce(loss_tensor, op=dist.ReduceOp.AVG)
-                mean_loss = loss_tensor.item()
             self._writer.add_scalar('eval loss', mean_loss, batches_seen)
             return mean_loss

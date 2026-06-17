@@ -1,5 +1,3 @@
-from GNNTP.models.traffic_speed_prediction.DCRNN.model import DCRNN
+from .model import DCRNN
 
-__all__ = [
-    "DCRNN",
-]
+__all__ = ["DCRNN"]

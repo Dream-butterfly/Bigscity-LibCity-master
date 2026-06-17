@@ -1,5 +1,3 @@
-from GNNTP.models.traffic_speed_prediction.STGCN.model import STGCN
+from .model import STGCN
 
-__all__ = [
-    "STGCN",
-]
+__all__ = ["STGCN"]

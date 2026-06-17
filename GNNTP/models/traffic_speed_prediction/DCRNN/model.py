@@ -60,13 +60,13 @@ def count_parameters(model):
 
 
 class GCONV(nn.Module):
-    def __init__(self, num_nodes, max_diffusion_step, num_supports, device, input_dim, hid_dim, output_dim, bias_start=0.0):
+    def __init__(self, num_nodes, max_diffusion_step, supports, device, input_dim, hid_dim, output_dim, bias_start=0.0):
         super().__init__()
         self._num_nodes = num_nodes
         self._max_diffusion_step = max_diffusion_step
+        self._supports = supports
         self._device = device
-        self._num_supports = num_supports
-        self._num_matrices = self._num_supports * self._max_diffusion_step + 1  # Ks
+        self._num_matrices = len(self._supports) * self._max_diffusion_step + 1  # Ks
         self._output_dim = output_dim
         input_size = input_dim + hid_dim
         shape = (input_size * self._num_matrices, self._output_dim)
@@ -80,7 +80,7 @@ class GCONV(nn.Module):
         x_ = x_.unsqueeze(0)
         return torch.cat([x, x_], dim=0)
 
-    def forward(self, inputs, state, supports):
+    def forward(self, inputs, state):
         # 对X(t)和H(t-1)做图卷积，并加偏置bias
         # Reshape input and state to (batch_size, num_nodes, input_dim/state_dim)
         batch_size = inputs.shape[0]
@@ -96,44 +96,27 @@ class GCONV(nn.Module):
         x0 = torch.reshape(x0, shape=[self._num_nodes, input_size * batch_size])
         x = torch.unsqueeze(x0, 0)  # (1, num_nodes, total_arg_size * batch_size)
 
-        # CUDA sparse.mm doesn't support FP16 (Half), cast to FP32 temporarily
-        original_dtype = x0.dtype
-        if original_dtype != torch.float32:
-            x0 = x0.float()
-            x = x.float()
-
         # 3阶[T0,T1,T2]Chebyshev多项式近似g(theta)
         # 把图卷积公式中的~L替换成了随机游走拉普拉斯D^(-1)*W
         if self._max_diffusion_step == 0:
             pass
         else:
-            # torch.sparse.mm does NOT support FP16 on CUDA.
-            # Disable autocast here to prevent it from casting sparse operands to Half,
-            # and explicitly cast operands to FP32 (handles model.half() case).
-            with torch.autocast(device_type=self._device.type, enabled=False):
-                x0_fp32 = x0.float()
-                for support in supports:
-                    support_fp32 = support.float()
-                    # T1=L x1=T1*x=L*x
-                    x1 = torch.sparse.mm(support_fp32, x0_fp32)  # supports: n*n; x0: n*(total_arg_size * batch_size)
-                    x = self._concat(x, x1)  # (2, num_nodes, total_arg_size * batch_size)
-                    x_prev, x_curr = x0_fp32, x1
-                    for k in range(2, self._max_diffusion_step + 1):
-                        # T2=2LT1-T0=2L^2-1 x2=T2*x=2L^2x-x=2L*x1-x0...
-                        # T3=2LT2-T1=2L(2L^2-1)-L x3=2L*x2-x1...
-                        x2 = 2 * torch.sparse.mm(support_fp32, x_curr) - x_prev
-                        x = self._concat(x, x2)  # (3, num_nodes, total_arg_size * batch_size)
-                        x_prev, x_curr = x_curr, x2
+            for support in self._supports:
+                # T1=L x1=T1*x=L*x
+                x1 = torch.sparse.mm(support, x0)  # supports: n*n; x0: n*(total_arg_size * batch_size)
+                x = self._concat(x, x1)  # (2, num_nodes, total_arg_size * batch_size)
+                for k in range(2, self._max_diffusion_step + 1):
+                    # T2=2LT1-T0=2L^2-1 x2=T2*x=2L^2x-x=2L*x1-x0...
+                    # T3=2LT2-T1=2L(2L^2-1)-L x3=2L*x2-x1...
+                    x2 = 2 * torch.sparse.mm(support, x1) - x0
+                    x = self._concat(x, x2)  # (3, num_nodes, total_arg_size * batch_size)
+                    x1, x0 = x2, x1  # 循环
         # x.shape (Ks, num_nodes, total_arg_size * batch_size)
         # Ks = len(supports) * self._max_diffusion_step + 1
 
         x = torch.reshape(x, shape=[self._num_matrices, self._num_nodes, input_size, batch_size])
         x = x.permute(3, 1, 2, 0)  # (batch_size, num_nodes, input_size, num_matrices)
         x = torch.reshape(x, shape=[batch_size * self._num_nodes, input_size * self._num_matrices])
-
-        # Cast back to original dtype before matmul with weight (for AMP compatibility)
-        if original_dtype != torch.float32:
-            x = x.to(original_dtype)
 
         x = torch.matmul(x, self.weight)  # (batch_size * self._num_nodes, self._output_dim)
         x += self.biases
@@ -161,7 +144,8 @@ class FC(nn.Module):
         state = torch.reshape(state, (batch_size * self._num_nodes, -1))
         inputs_and_state = torch.cat([inputs, state], dim=-1)
         # (batch_size * self._num_nodes, input_size(input_dim+state_dim))
-        value = torch.matmul(inputs_and_state, self.weight)
+        value = torch.sigmoid(torch.matmul(inputs_and_state, self.weight))
+        # (batch_size * self._num_nodes, self._output_dim)
         value += self.biases
         # Reshape res back to 2D: (batch_size * num_node, state_dim) -> (batch_size, num_node * state_dim)
         return torch.reshape(value, [batch_size, self._num_nodes * self._output_dim])
@@ -190,6 +174,7 @@ class DCGRUCell(nn.Module):
         self._num_units = num_units
         self._device = device
         self._max_diffusion_step = max_diffusion_step
+        self._supports = []
         self._use_gc_for_ru = use_gc_for_ru
 
         supports = []
@@ -202,20 +187,16 @@ class DCGRUCell(nn.Module):
             supports.append(calculate_random_walk_matrix(adj_mx.T).T)
         else:
             supports.append(calculate_scaled_laplacian(adj_mx))
-        self._support_names = []
-        for i, support in enumerate(supports):
-            name = f"support_{i}"
-            self.register_buffer(name, self._build_sparse_matrix(support, self._device))
-            self._support_names.append(name)
-        self._num_supports = len(self._support_names)
+        for support in supports:
+            self._supports.append(self._build_sparse_matrix(support, self._device))
 
         if self._use_gc_for_ru:
-            self._fn = GCONV(self._num_nodes, self._max_diffusion_step, self._num_supports, self._device,
+            self._fn = GCONV(self._num_nodes, self._max_diffusion_step, self._supports, self._device,
                              input_dim=input_dim, hid_dim=self._num_units, output_dim=2*self._num_units, bias_start=1.0)
         else:
             self._fn = FC(self._num_nodes, self._device, input_dim=input_dim,
                           hid_dim=self._num_units, output_dim=2*self._num_units, bias_start=1.0)
-        self._gconv = GCONV(self._num_nodes, self._max_diffusion_step, self._num_supports, self._device,
+        self._gconv = GCONV(self._num_nodes, self._max_diffusion_step, self._supports, self._device,
                             input_dim=input_dim, hid_dim=self._num_units, output_dim=self._num_units, bias_start=0.0)
 
     @staticmethod
@@ -224,11 +205,8 @@ class DCGRUCell(nn.Module):
         indices = np.column_stack((lap.row, lap.col))
         # this is to ensure row-major ordering to equal torch.sparse.sparse_reorder(L)
         indices = indices[np.lexsort((indices[:, 0], indices[:, 1]))]
-        lap = torch.sparse_coo_tensor(indices.T, lap.data, lap.shape, device=device).coalesce()
+        lap = torch.sparse_coo_tensor(indices.T, lap.data, lap.shape, device=device)
         return lap
-
-    def _get_supports(self):
-        return [getattr(self, name) for name in self._support_names]
 
     def forward(self, inputs, hx):
         """
@@ -242,18 +220,14 @@ class DCGRUCell(nn.Module):
             torch.tensor: shape (B, num_nodes * rnn_units)
         """
         output_size = 2 * self._num_units
-        supports = self._get_supports()
-        if self._use_gc_for_ru:
-            value = torch.sigmoid(self._fn(inputs, hx, supports))  # (batch_size, num_nodes * output_size)
-        else:
-            value = torch.sigmoid(self._fn(inputs, hx))  # (batch_size, num_nodes * output_size)
+        value = torch.sigmoid(self._fn(inputs, hx))  # (batch_size, num_nodes * output_size)
         value = torch.reshape(value, (-1, self._num_nodes, output_size))    # (batch_size, num_nodes, output_size)
 
         r, u = torch.split(tensor=value, split_size_or_sections=self._num_units, dim=-1)
         r = torch.reshape(r, (-1, self._num_nodes * self._num_units))  # (batch_size, num_nodes * _num_units)
         u = torch.reshape(u, (-1, self._num_nodes * self._num_units))  # (batch_size, num_nodes * _num_units)
 
-        c = self._gconv(inputs, r * hx, supports)  # (batch_size, num_nodes * _num_units)
+        c = self._gconv(inputs, r * hx)  # (batch_size, num_nodes * _num_units)
         if self._activation is not None:
             c = self._activation(c)
 
@@ -363,7 +337,6 @@ class DCRNN(AbstractTrafficStateModel, Seq2SeqAttrs):
         config['num_nodes'] = self.num_nodes
         config['feature_dim'] = self.feature_dim
         self.output_dim = data_feature.get('output_dim', 1)
-        config['output_dim'] = self.output_dim
 
         super().__init__(config, data_feature)
         Seq2SeqAttrs.__init__(self, config, self.adj_mx)
