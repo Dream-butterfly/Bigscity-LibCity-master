@@ -171,6 +171,13 @@ class FutureDecoder(nn.Module):
             nn.GELU(),
             nn.Linear(32, output_dim),
         )
+        # Lightweight temporal mixing before per-step projection (Conv1D, ~7K params)
+        # Provides local cross-step interaction without O(T²D²) cost of full mixed projection
+        self.temp_mix = nn.Sequential(
+            nn.Conv1d(hidden_dim, hidden_dim // 2, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.Conv1d(hidden_dim // 2, hidden_dim, kernel_size=3, padding=1),
+        )
         self.output_window = output_window  # needed in forward
 
     def forward(self, condition_features, graph_matrix, graph_uncertainty=None,
@@ -233,9 +240,11 @@ class FutureDecoder(nn.Module):
 
         queries = self.final_norm(queries)  # (B, T, N, D)
 
-        # Per-step projection: (B*N*T, D) → (B*N*T, output_dim)
+        # Temporal mixing → per-step projection
         B, T, N, D = queries.shape
-        q_flat = queries.reshape(B * N * T, D)
+        q_t = queries.permute(0, 2, 1, 3).reshape(B * N, T, D).transpose(1, 2)  # (BN, D, T)
+        q_t = self.temp_mix(q_t).transpose(1, 2)                                  # Conv1d over time
+        q_flat = q_t.reshape(B * N * T, D)                                        # (BNT, D)
         out_flat = self.output_projection(q_flat)
         return out_flat.reshape(B, N, T, -1).permute(0, 2, 1, 3)   # (B, T, N, out)
 
