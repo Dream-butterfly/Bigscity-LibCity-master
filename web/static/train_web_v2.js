@@ -881,6 +881,16 @@ function applyTrainDataVersionSelection() {
     const el = document.getElementById(id);
     if (el) el.disabled = !!v;
   });
+  // 选了数据版本时，从版本中回填锁定字段的值（覆盖模型默认值）
+  if (v && v.cli_options) {
+    lockIds.forEach(id => {
+      const el = document.getElementById(id);
+      const val = v.cli_options[id];
+      if (el && val !== undefined && val !== null && val !== '') {
+        el.value = String(val);
+      }
+    });
+  }
 }
 
 async function loadDefaults() {
