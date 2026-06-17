@@ -343,7 +343,25 @@ def export_diagnostics(
     if "feature_dim" in ckpt_params:
         ckpt_fd = ckpt_params["feature_dim"]
         sample_batch = next(iter(runtime.test_loader))
-        actual_fd = sample_batch['X'].shape[-1]
+        # Batch 对象: data 存储在 .data dict 中，to_tensor 之前是 list of ndarray
+        if hasattr(sample_batch, 'data') and isinstance(sample_batch.data, dict):
+            x_val = sample_batch.data.get('X', sample_batch.data.get('x', None))
+            if x_val is None:
+                x_val = next(iter(sample_batch.data.values()))
+            if isinstance(x_val, list) and len(x_val) > 0:
+                actual_fd = x_val[0].shape[-1] if hasattr(x_val[0], 'shape') else len(x_val[0])
+            elif hasattr(x_val, 'shape'):
+                actual_fd = x_val.shape[-1]
+            else:
+                actual_fd = None
+        elif isinstance(sample_batch, dict):
+            actual_fd = sample_batch.get('X', sample_batch.get('x', None))
+            if actual_fd is not None:
+                actual_fd = actual_fd.shape[-1] if hasattr(actual_fd, 'shape') else actual_fd
+        elif isinstance(sample_batch, (list, tuple)):
+            actual_fd = sample_batch[0].shape[-1] if hasattr(sample_batch[0], 'shape') else None
+        else:
+            actual_fd = None
         if actual_fd != ckpt_fd:
             logger.error(
                 "Actual data feature_dim=%d ≠ checkpoint feature_dim=%d.\n"
