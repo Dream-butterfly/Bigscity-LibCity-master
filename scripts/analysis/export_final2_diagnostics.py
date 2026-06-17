@@ -322,6 +322,21 @@ def export_diagnostics(
     )
     align_checkpoint_config(config.config, ckpt_path, logger)
 
+    # ── 从 checkpoint 对齐 feature_dim / hidden_dim 到 data_feature ──
+    from GNNTP.utils.utils import detect_checkpoint_model_params
+    ckpt_params = detect_checkpoint_model_params(ckpt_path)
+    for param_name in ("feature_dim", "hidden_dim"):
+        if param_name in ckpt_params:
+            df_val = runtime.data_feature.get(param_name)
+            ckpt_val = ckpt_params[param_name]
+            if df_val != ckpt_val:
+                logger.warning(
+                    "data_feature.%s=%s ≠ checkpoint %s=%d, overriding data_feature.",
+                    param_name, df_val, param_name, ckpt_val,
+                )
+                runtime.data_feature[param_name] = ckpt_val
+                config.config[param_name] = ckpt_val
+
     model = get_model(config, runtime.data_feature)
     executor = get_executor(config, model, runtime.data_feature)
 

@@ -310,6 +310,16 @@ def detect_checkpoint_model_params(checkpoint_path: str) -> dict[str, int]:
                 detected["fuzzy_num_sets"] = int(tensor.shape[1])
                 break
 
+    # feature_dim / hidden_dim: 从 raw_projection.weight 形状检测
+    #   shape = [hidden_dim, feature_dim]
+    for key in state_dict:
+        if key.endswith("raw_projection.weight") or key.endswith("input_projection.weight"):
+            tensor = state_dict[key]
+            if hasattr(tensor, "ndim") and tensor.ndim >= 2:
+                detected["hidden_dim"] = int(tensor.shape[0])
+                detected["feature_dim"] = int(tensor.shape[1])
+                break
+
     return detected
 
 
