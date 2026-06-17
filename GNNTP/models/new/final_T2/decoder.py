@@ -117,6 +117,7 @@ class FutureDecoder(nn.Module):
         proto_embed_low=None,
         proto_embed_mid=None,
         proto_embed_high=None,
+        temp_dilation=1,
     ):
         super().__init__()
         self.use_gradient_checkpointing = use_gradient_checkpointing
@@ -173,10 +174,14 @@ class FutureDecoder(nn.Module):
         )
         # Lightweight temporal mixing before per-step projection (Conv1D, ~7K params)
         # Provides local cross-step interaction without O(T²D²) cost of full mixed projection
+        # temp_dilation: 1=RF5, 2=RF7, 4=RF11  (RF ≈ 1 + 2*kernel*dilation per layer)
+        padding = (3 // 2) * temp_dilation
         self.temp_mix = nn.Sequential(
-            nn.Conv1d(hidden_dim, hidden_dim // 2, kernel_size=3, padding=1),
+            nn.Conv1d(hidden_dim, hidden_dim // 2, kernel_size=3,
+                      padding=padding, dilation=temp_dilation),
             nn.GELU(),
-            nn.Conv1d(hidden_dim // 2, hidden_dim, kernel_size=3, padding=1),
+            nn.Conv1d(hidden_dim // 2, hidden_dim, kernel_size=3,
+                      padding=padding, dilation=temp_dilation),
         )
         self.output_window = output_window  # needed in forward
 

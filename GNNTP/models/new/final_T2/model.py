@@ -76,6 +76,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.num_cells = config.get("num_cells", 8)
         self.use_hollow_kernel = config.get("use_hollow_kernel", True)
         self.cell_blend_init = config.get("cell_blend_init", 0.3)
+        self.temp_mix_dilation = config.get("temp_mix_dilation", 1)
 
         self.conservation_loss_weight = config.get("conservation_loss_weight", 0.1)
         self.conservation_warmup_epochs = int(max(0, config.get("conservation_warmup_epochs", 5)))
@@ -180,6 +181,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             proto_embed_low=self.proto_embed_low if hasattr(self, 'proto_embed_low') else None,
             proto_embed_mid=self.proto_embed_mid if hasattr(self, 'proto_embed_mid') else None,
             proto_embed_high=self.proto_embed_high if hasattr(self, 'proto_embed_high') else None,
+            temp_dilation=self.temp_mix_dilation,
         )
 
         # ── torch.compile each block (standard Transformer kernels fuse well) ──

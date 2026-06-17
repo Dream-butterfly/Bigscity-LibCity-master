@@ -67,5 +67,6 @@
   "use_static_blend": false,
   "gcn_use_static": true,
   "use_per_node_beta": true,
+  "temp_mix_dilation": 1,
   "delta_diversity_weight": 0.001
 }
