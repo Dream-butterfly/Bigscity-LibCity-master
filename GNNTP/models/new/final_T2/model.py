@@ -66,6 +66,12 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.proto_norm_reg_weight = config.get("proto_norm_reg_weight", 0.01)
         self._latent_norm_reg_weight = config.get("latent_norm_reg_weight", 0.01)
         self.decoder_node_mode = config.get("decoder_node_mode", "embed")
+        if not self.use_fuzzy_graph and self.decoder_node_mode in ("proto", "both"):
+            self._logger.warning(
+                f"decoder_node_mode='{self.decoder_node_mode}' requires fuzzy_graph; "
+                f"forcing to 'embed' because use_fuzzy_graph=False"
+            )
+            self.decoder_node_mode = "embed"
         self.use_static_blend = config.get("use_static_blend", True)
         self.gcn_use_static = config.get("gcn_use_static", False)
         self._proto_diversity_weight = config.get("proto_diversity_weight", 0.0)
