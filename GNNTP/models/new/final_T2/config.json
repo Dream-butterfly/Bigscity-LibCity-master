@@ -1,11 +1,11 @@
 {
   "input_window": 12,
   "output_window": 12,
-  "hidden_dim": 48,
+  "hidden_dim": 96,
   "num_heads": 4,
   "encoder_layers": 2,
   "decoder_layers": 1,
-  "ffn_hidden_dim": 128,
+  "ffn_hidden_dim": 256,
   "graph_k_hop": 1,
   "use_fuzzy_graph": true,
   "fuzzy_num_sets": 8,
@@ -41,7 +41,7 @@
   "max_grad_norm": 3,
   "use_early_stop": true,
   "patience": 30,
-  "batch_size": 64,
+  "batch_size": 32,
   "eval_batch_size": 64,
   "graph_topk": 32,
   "use_torch_compile": true,
@@ -67,6 +67,7 @@
   "use_static_blend": false,
   "gcn_use_static": true,
   "use_per_node_beta": true,
-  "temp_mix_dilation": 1,
-  "delta_diversity_weight": 0.001
+  "temp_mix_dilation": 2,
+  "delta_diversity_weight": 0.001,
+  "mask_val": 1
 }

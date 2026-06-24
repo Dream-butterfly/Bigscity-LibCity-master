@@ -1,6 +1,38 @@
 [
   {
     "task": "traffic_state_pred",
+    "model": "final_T2",
+    "dataset": "METR_LA_INTERPOLATION",
+    "status": "stopped",
+    "run_id": "20260617_205121__traffic_state_pred__final_T2__METR_LA_INTERPOLATION",
+    "started_at": 1781700679.9871526,
+    "ended_at": 1781700963.8345132,
+    "duration_sec": 283.8473606109619,
+    "major_metrics": {},
+    "output_dir": "",
+    "error": "Training stopped by user.",
+    "record_id": "tr_1781700679_df6115c6f1",
+    "created_at": 1781700679.9797854,
+    "updated_at": 1781700963.836467
+  },
+  {
+    "task": "traffic_state_pred",
+    "model": "final_T2",
+    "dataset": "METR_LA_INTERPOLATION",
+    "status": "failed",
+    "run_id": "20260617_204916__traffic_state_pred__final_T2__METR_LA_INTERPOLATION",
+    "started_at": 1781700555.2419155,
+    "ended_at": 1781700583.2119348,
+    "duration_sec": 27.970019340515137,
+    "major_metrics": {},
+    "output_dir": "",
+    "error": "Training failed with return code 1.",
+    "record_id": "tr_1781700555_e73ef36b8c",
+    "created_at": 1781700555.2375622,
+    "updated_at": 1781700583.2129154
+  },
+  {
+    "task": "traffic_state_pred",
     "model": "final_3_type2",
     "dataset": "PEMSD7",
     "status": "stopped",
