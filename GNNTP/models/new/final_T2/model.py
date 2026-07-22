@@ -74,6 +74,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             self.decoder_node_mode = "embed"
         self.use_static_blend = config.get("use_static_blend", True)
         self.gcn_use_static = config.get("gcn_use_static", False)
+        self.encoder_use_fuzzy_graph = config.get("encoder_use_fuzzy_graph", False)
         self._proto_diversity_weight = config.get("proto_diversity_weight", 0.0)
         self._delta_diversity_weight = config.get("delta_diversity_weight", 0.001)
         self.use_per_node_beta = config.get("use_per_node_beta", True)
@@ -238,8 +239,11 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             self._current_fou = None
             self._current_mu_mid = None
         rm = getattr(self.fuzzy_graph, 'relation_mode', 'maxmin') if self.fuzzy_graph else 'maxmin'
-        # ── Encoder GCN: static adjacency (stable message passing) ──
-        encoder_gcn_graph = self.adjacency_matrix.to(history_sequence.device)
+        # ── Encoder GCN: static adjacency by default; fuzzy graph if enabled ──
+        if self.encoder_use_fuzzy_graph and self.use_fuzzy_graph and self.fuzzy_graph is not None:
+            encoder_gcn_graph = graph_matrix.to(history_sequence.device)
+        else:
+            encoder_gcn_graph = self.adjacency_matrix.to(history_sequence.device)
         encoder_powers = FuzzyGraphConvolution.precompute_powers(
             encoder_gcn_graph, k_hop=self.graph_k_hop, topk=self.graph_topk, relation_mode=rm)
         condition_features = self.condition_encoder(
