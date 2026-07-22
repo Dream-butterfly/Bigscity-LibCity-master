@@ -227,23 +227,29 @@ class FuzzyRelationalGraphLearner(nn.Module):
         else:
             self.raw_projection = None
 
-        # ── Feature transform (shared geometry) ────────────────────
-        self.node_transform = nn.Sequential(
+        # ── Feature transforms (independent per view) ──────────────
+        #   Each view has its own 2-layer MLP + LayerNorm. Independent
+        #   gradients prevent view collapse observed with shared backbone.
+        self.transform_low = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.GELU(),
             nn.Linear(hidden_dim, hidden_dim),
         )
-
-        # ── View-specific residuals (Δ) — no bottleneck ──
-        #   Shared latent + view-specific Δ → different prototypes react
-        #   differently per view.  ~33K params/view (128→128→128).
-        self.delta_low  = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim), nn.GELU(), nn.Linear(hidden_dim, hidden_dim))
-        self.delta_mid  = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim), nn.GELU(), nn.Linear(hidden_dim, hidden_dim))
-        self.delta_high = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim), nn.GELU(), nn.Linear(hidden_dim, hidden_dim))
+        self.transform_mid = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, hidden_dim),
+        )
+        self.transform_high = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, hidden_dim),
+        )
+        # Backward-compat alias
+        self.node_transform = self.transform_mid
 
         # ── Static adjacency ──────────────────────────────────────
         if static_adjacency is not None:
@@ -302,16 +308,13 @@ class FuzzyRelationalGraphLearner(nn.Module):
             raise ValueError(
                 "node_features is required for prototype-based membership")
 
-        # 2. Shared geometry + view-specific perturbations
+        # 2. Independent transforms per view (no shared bottleneck)
         if self.raw_projection is not None:
             node_repr = self.raw_projection(node_repr)  # → [B, N, D]
-        shared_latent = self.node_transform(node_repr)  # → [B, N, D]
-        self._shared_latent = shared_latent  # cache for per-node β
-
-        # View-specific residual: z_v = shared + Δ_v(shared)
-        z_low  = shared_latent + self.delta_low(shared_latent)   # [N, D]
-        z_mid  = shared_latent + self.delta_mid(shared_latent)
-        z_high = shared_latent + self.delta_high(shared_latent)
+        z_low  = self.transform_low(node_repr)   # [B, N, D]
+        z_mid  = self.transform_mid(node_repr)
+        z_high = self.transform_high(node_repr)
+        self._shared_latent = z_mid  # backward-compat alias
 
         # ── Per-view hyperspherical projection ──
         z_low_norm   = F.normalize(z_low, dim=-1)

@@ -436,10 +436,10 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                 self.fuzzy_graph.log_tau_low,
                 self.fuzzy_graph.log_tau_mid,
                 self.fuzzy_graph.log_tau_high,
-                # View-specific residual networks
-                *self.fuzzy_graph.delta_low.parameters(),
-                *self.fuzzy_graph.delta_mid.parameters(),
-                *self.fuzzy_graph.delta_high.parameters(),
+                # View-specific transform networks
+                *self.fuzzy_graph.transform_low.parameters(),
+                *self.fuzzy_graph.transform_mid.parameters(),
+                *self.fuzzy_graph.transform_high.parameters(),
             ]
             _boost = self.t2_lr_boost
             def _amp_grad(_grad):
