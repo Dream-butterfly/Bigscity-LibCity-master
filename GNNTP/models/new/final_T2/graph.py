@@ -14,6 +14,7 @@ Design notes:
 import math
 import os
 import time
+import warnings
 
 import torch
 import torch.nn as nn
@@ -50,10 +51,11 @@ class GraphConvolution(nn.Module):
 
 
 class FuzzyGraphConvolution(nn.Module):
-    def __init__(self, hidden_dim, k_hop=2, topk=None):
+    def __init__(self, hidden_dim, k_hop=2, topk=None, relation_mode="inner"):
         super().__init__()
         self.k_hop = k_hop
         self.topk = topk
+        self.relation_mode = relation_mode
         self.projections = nn.ModuleList(
             [nn.Linear(hidden_dim, hidden_dim) for _ in range(k_hop + 1)]
         )
@@ -112,7 +114,7 @@ class FuzzyGraphConvolution(nn.Module):
                 R_base = fuzzy_relation.to(
                     device=node_features.device, dtype=node_features.dtype)
             R_powers = self.precompute_powers(R_base, self.k_hop,
-                                                topk=self.topk, relation_mode="inner")
+                                                topk=self.topk, relation_mode=self.relation_mode)
 
         output = self.projections[0](node_features)
         graph_contrib = torch.zeros_like(output)
@@ -292,7 +294,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
             mu_high_raw:   [N, K]  High-view T1 membership (fine, narrow Gaussian)
             mu_upper:      [N, K]  upper envelope  μ⁺ = max over three views
             mu_lower:      [N, K]  lower envelope  μ⁻ = min over three views
-            mu_mid:        [N, K]  expected μ̄ = (μ⁺+μ⁻)/2
+            mu_expected:   [N, K]  expected μ̄ = (μ⁺+μ⁻)/2  (NOT mid-view!)
         """
         # 1. Node representation from latest traffic state + short-term trend
         if node_features is not None:
@@ -356,7 +358,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         # Multi-view envelope: upper/lower across three independent views
         mu_upper = torch.maximum(torch.maximum(mu_low_raw, mu_mid_raw), mu_high_raw)
         mu_lower = torch.minimum(torch.minimum(mu_low_raw, mu_mid_raw), mu_high_raw)
-        mu_mid   = (mu_lower + mu_upper) / 2
+        mu_expected = (mu_lower + mu_upper) / 2  # expected membership μ̄ (not mid-view)
 
         # Cache diagnostics (detached — no gradient)
         _d2_avg = d2_mid.detach()  # use mid as representative
@@ -399,7 +401,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         # ── Adapter ratio: Δ contribution vs shared latent ──
         _s_norm = z_mid.detach().norm(dim=-1).mean()
         _d_low  = (z_low.detach() - z_mid.detach()).norm(dim=-1).mean()
-        _d_mid  = (z_mid.detach() - z_mid.detach()).norm(dim=-1).mean()
+        _d_mid  = (z_mid.detach() - z_low.detach()).norm(dim=-1).mean()   # z_mid vs z_low divergence
         _d_high = (z_high.detach() - z_mid.detach()).norm(dim=-1).mean()
         self._current_adapter_ratio = ((_d_low + _d_mid + _d_high) / 3) / (_s_norm + 1e-8)
 
@@ -408,7 +410,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self._current_view_dist_lh = (z_low.detach() - z_high.detach()).norm(dim=-1).mean()
         self._current_view_dist_mh = (z_mid.detach() - z_high.detach()).norm(dim=-1).mean()
 
-        return mu_lower, mu_upper, mu_mid, mu_low_raw, mu_mid_raw, mu_high_raw
+        return mu_lower, mu_upper, mu_expected, mu_low_raw, mu_mid_raw, mu_high_raw
 
     # ═══════════════════════════════════════════════════════════════
     #  Relation Sparsification
@@ -465,8 +467,14 @@ class FuzzyRelationalGraphLearner(nn.Module):
         return R.clamp(0.0, 1.0)
 
     def _apply_mid_closure(self, R_mid):
-        if self.closure_steps <= 0 or R_mid.dim() == 3:
-            return R_mid  # closure only supports 2D; per-batch passes through
+        if self.closure_steps <= 0:
+            return R_mid
+        if R_mid.dim() == 3:
+            warnings.warn(
+                f"closure_steps={self.closure_steps} > 0 but R is batched (dim=3); "
+                f"closure is only supported for 2D (single sample). Skipping."
+            )
+            return R_mid
         R_current = R_mid
         R_list = [R_current]
         for _ in range(self.closure_steps):
@@ -487,14 +495,14 @@ class FuzzyRelationalGraphLearner(nn.Module):
         Returns:
             R_with_closure: [N, N] effective fuzzy relation
             fou_node:       [N]    per-node MDI scalar δ(n)
-            mu_mid:         [B,N,K] expected memberships μ̄
+            mu_expected:    [B,N,K] expected memberships μ̄ (envelope midpoint)
             mu_low_raw:     [B,N,K] Low-view T1 memberships
             mu_mid_raw:     [B,N,K] Mid-view T1 memberships
             mu_high_raw:    [B,N,K] High-view T1 memberships
             beta:           [3]     global view mixing coefficients
             beta_node:      [N,3]   per-node view preferences
         """
-        mu_lower, mu_upper, mu_mid, mu_low_raw, mu_mid_raw, mu_high_raw = \
+        mu_lower, mu_upper, mu_expected, mu_low_raw, mu_mid_raw, mu_high_raw = \
             self._compute_memberships(node_features)
 
         # Per-node MDI δ(n) (mean over batch if per-sample)
@@ -562,7 +570,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         # Closure (if configured)
         R_with_closure = self._apply_mid_closure(R_final)
 
-        return R_with_closure, fou_node, mu_mid, mu_low_raw, mu_mid_raw, mu_high_raw, beta, beta_node
+        return R_with_closure, fou_node, mu_expected, mu_low_raw, mu_mid_raw, mu_high_raw, beta, beta_node
 
     # ── Backward-compatible interface ─────────────────────────────
 
