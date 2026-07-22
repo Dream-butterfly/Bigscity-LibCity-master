@@ -263,29 +263,6 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             node_adaptive = mu_mid @ self.proto_embed  # (N, K) @ (1, K, D) → (N, D)
             condition_features = condition_features + node_adaptive  # broadcast (B,T)
 
-        # ── 诊断：FuzzyGraph 数值统计 ──
-        if self.use_fuzzy_graph and self.fuzzy_graph is not None:
-            with torch.no_grad():
-                R = decoder_graph
-                row_sum = R.sum(dim=-1)
-                if R.dim() == 3:
-                    diag = R.diagonal(dim1=-2, dim2=-1)
-                else:
-                    diag = R.diag()
-                diag_ratio = (diag.abs().mean() / row_sum.abs().mean().clamp_min(1e-8)).item()
-                msg = (
-                    f"[R stats]  row_mean={row_sum.mean().item():.3f}  "
-                    f"row_std={row_sum.std().item():.3f}  "
-                    f"min={R.min().item():.4f}  max={R.max().item():.4f}  "
-                    f"diag_ratio={diag_ratio:.3f}"
-                )
-                self._logger.info(msg)
-                # GCN hop norms from encoder
-                enc_conv = self.condition_encoder.blocks[-1].graph_convolution
-                if hasattr(enc_conv, '_hop_norms'):
-                    hop_str = "  ".join([f"hop{i}={v:.2f}" for i, v in enumerate(enc_conv._hop_norms)])
-                    self._logger.info(f"[GCN norms enc]  {hop_str}")
-
         return condition_features, decoder_graph, fou, decoder_powers
 
     def forward(self, batch):

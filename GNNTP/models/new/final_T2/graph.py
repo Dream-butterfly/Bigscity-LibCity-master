@@ -116,7 +116,6 @@ class FuzzyGraphConvolution(nn.Module):
 
         output = self.projections[0](node_features)
         graph_contrib = torch.zeros_like(output)
-        self._hop_norms = [output.detach().norm().item()]
         for hop_index in range(1, self.k_hop + 1):
             R_k = R_powers[hop_index]
             # Match batch dim: R may be (B,N,N), node_features may be (B*T,N,D)
@@ -130,7 +129,6 @@ class FuzzyGraphConvolution(nn.Module):
             contrib = self.projections[hop_index](propagated)
             output = output + contrib
             graph_contrib = graph_contrib + contrib
-            self._hop_norms.append(contrib.detach().norm().item())
 
         self._current_graph_energy = (graph_contrib.detach().norm() /
                                       (node_features.detach().norm() + 1e-8))
