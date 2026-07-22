@@ -124,6 +124,8 @@ class FuzzyGraphConvolution(nn.Module):
                 T = node_features.size(0) // R_k.size(0)
                 if T > 1:
                     R_k = R_k.repeat_interleave(T, dim=0)
+            # Row normalization: each row sums to 1 for stable message passing
+            R_k = R_k / (R_k.sum(dim=-1, keepdim=True).clamp_min(1e-8))
             propagated = R_k @ node_features
             contrib = self.projections[hop_index](propagated)
             output = output + contrib
