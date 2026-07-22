@@ -314,7 +314,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         z_low  = self.transform_low(node_repr)   # [B, N, D]
         z_mid  = self.transform_mid(node_repr)
         z_high = self.transform_high(node_repr)
-        self._shared_latent = z_mid  # backward-compat alias
+        self._z_mid = z_mid  # backward-compat alias
 
         # ── Per-view hyperspherical projection ──
         z_low_norm   = F.normalize(z_low, dim=-1)
@@ -367,13 +367,13 @@ class FuzzyRelationalGraphLearner(nn.Module):
         _p_mid  = self.prototype_center_mid.norm(dim=-1).mean().detach()
         _p_high = self.prototype_center_high.norm(dim=-1).mean().detach()
         self._current_proto_norm = ((_p_low + _p_mid + _p_high) / 3)
-        self._current_latent_norm = shared_latent.detach().norm(dim=-1).mean()
+        self._current_latent_norm = z_mid.detach().norm(dim=-1).mean()
         self._current_transform_weight = self.node_transform[-1].weight.norm().detach()
         # Latent norm reg uses batch-mean for stable gradient
-        self._node_latent_for_reg = shared_latent.mean(dim=0) if shared_latent.dim() == 3 else shared_latent
+        self._node_latent_for_reg = z_mid.mean(dim=0) if z_mid.dim() == 3 else z_mid
         # Per-step movement tracking (track mid prototype as representative)
         _pc = self.prototype_center_mid.detach()
-        _nl = shared_latent.detach().mean(dim=0) if shared_latent.dim() == 3 else shared_latent.detach()
+        _nl = z_mid.detach().mean(dim=0) if z_mid.dim() == 3 else z_mid.detach()
         if hasattr(self, '_prev_proto'):
             self._current_proto_update = (_pc - self._prev_proto).norm()
             self._current_latent_update = (_nl.mean(dim=0) - self._prev_latent_mean).norm()
@@ -383,7 +383,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self._prev_proto = _pc.clone()
         self._prev_latent_mean = _nl.mean(dim=0).clone()
         _pc_mean = self.prototype_center_mid.mean(dim=0)
-        _nl_mean = shared_latent.detach().mean(dim=0)
+        _nl_mean = z_mid.detach().mean(dim=0)
         self._current_center_dist = (_nl_mean - _pc_mean).norm()
         _diff = (mu_upper - mu_lower).detach()
         self._current_mu_diff_mean = _diff.mean()
@@ -397,10 +397,10 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self._current_tau_high = tau_high.detach().mean()
 
         # ── Adapter ratio: Δ contribution vs shared latent ──
-        _s_norm = shared_latent.detach().norm(dim=-1).mean()
-        _d_low  = (z_low.detach() - shared_latent.detach()).norm(dim=-1).mean()
-        _d_mid  = (z_mid.detach() - shared_latent.detach()).norm(dim=-1).mean()
-        _d_high = (z_high.detach() - shared_latent.detach()).norm(dim=-1).mean()
+        _s_norm = z_mid.detach().norm(dim=-1).mean()
+        _d_low  = (z_low.detach() - z_mid.detach()).norm(dim=-1).mean()
+        _d_mid  = (z_mid.detach() - z_mid.detach()).norm(dim=-1).mean()
+        _d_high = (z_high.detach() - z_mid.detach()).norm(dim=-1).mean()
         self._current_adapter_ratio = ((_d_low + _d_mid + _d_high) / 3) / (_s_norm + 1e-8)
 
         # ── View distance: pairwise ||z_v - z_w|| ──
