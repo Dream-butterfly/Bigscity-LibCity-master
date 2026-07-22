@@ -68,6 +68,6 @@
   "gcn_use_static": true,
   "use_per_node_beta": true,
   "temp_mix_dilation": 2,
-  "delta_diversity_weight": 0.001,
+  "delta_diversity_weight": 0.01,
   "mask_val": 1
 }
