@@ -8,6 +8,7 @@
   "ffn_hidden_dim": 256,
   "graph_k_hop": 1,
   "use_fuzzy_graph": true,
+  "use_fuzzy_spatial_attn": true,
   "fuzzy_num_sets": 8,
   "use_cell_attention": true,
   "num_cells": 16,

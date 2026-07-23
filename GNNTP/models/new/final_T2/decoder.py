@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
 from .attention import MultiHeadAttention, FeedForwardNetwork
-from .graph import GraphConvolution, FuzzyGraphConvolution
+from .graph import GraphConvolution, FuzzyGraphConvolution, FuzzySpatialAttention
 from .cell_attention import FuzzyCellAttention, CellAttentionPool
 from .utils import (
     apply_temporal_attention,
@@ -25,6 +25,7 @@ class DecoderBlock(nn.Module):
         dropout=0.1,
         use_spatiotemporal_attention=False,
         use_fuzzy_graph=False,
+        use_fuzzy_spatial_attn=False,
         use_cell_attention=False,
         num_cells=8,
         use_hollow_kernel=True,
@@ -32,9 +33,13 @@ class DecoderBlock(nn.Module):
     ):
         super().__init__()
         self.use_cell_attention = use_cell_attention
+        self.use_fuzzy_spatial_attn = use_fuzzy_spatial_attn
 
         self.temporal_attention = MultiHeadAttention(hidden_dim, num_heads, dropout)
-        if use_fuzzy_graph:
+        if use_fuzzy_spatial_attn:
+            self.spatial_mixer = FuzzySpatialAttention(hidden_dim, num_heads, dropout)
+            self.norm_spatial = nn.LayerNorm(hidden_dim)
+        elif use_fuzzy_graph:
             self.graph_convolution = FuzzyGraphConvolution(hidden_dim, graph_k_hop)
         else:
             self.graph_convolution = GraphConvolution(hidden_dim, graph_k_hop)
@@ -45,7 +50,8 @@ class DecoderBlock(nn.Module):
         self.feed_forward = FeedForwardNetwork(hidden_dim, ffn_hidden_dim, dropout)
 
         self.norm_temporal = nn.LayerNorm(hidden_dim)
-        self.norm_graph = nn.LayerNorm(hidden_dim)
+        if not use_fuzzy_spatial_attn:
+            self.norm_graph = nn.LayerNorm(hidden_dim)
         self.norm_cross = nn.LayerNorm(hidden_dim)
         if use_spatiotemporal_attention:
             self.norm_spatiotemporal = nn.LayerNorm(hidden_dim)
@@ -67,9 +73,15 @@ class DecoderBlock(nn.Module):
 
         batch_size, time_steps, num_nodes, hidden_dim = queries.shape
         graph_input = queries.reshape(batch_size * time_steps, num_nodes, hidden_dim)
-        graph_output = self.graph_convolution(graph_input, graph_matrix, powers=powers)
+        if self.use_fuzzy_spatial_attn:
+            graph_output = self.spatial_mixer(graph_input, R=graph_matrix)
+        else:
+            graph_output = self.graph_convolution(graph_input, graph_matrix, powers=powers)
         graph_output = graph_output.reshape(batch_size, time_steps, num_nodes, hidden_dim)
-        queries = self.norm_graph(queries + self.dropout(graph_output))
+        if self.use_fuzzy_spatial_attn:
+            queries = self.norm_spatial(queries + self.dropout(graph_output))
+        else:
+            queries = self.norm_graph(queries + self.dropout(graph_output))
 
         if self.use_cell_attention:
             node_repr = CellAttentionPool.mean_pool(queries)  # [N, D]
@@ -109,6 +121,7 @@ class FutureDecoder(nn.Module):
         num_nodes=1,
         use_gradient_checkpointing=False,
         use_fuzzy_graph=False,
+        use_fuzzy_spatial_attn=False,
         use_cell_attention=False,
         num_cells=8,
         use_hollow_kernel=True,
@@ -151,6 +164,7 @@ class FutureDecoder(nn.Module):
                 hidden_dim, num_heads, ffn_hidden_dim, graph_k_hop, dropout,
                 use_spatiotemporal_attention=use_spatiotemporal_attention,
                 use_fuzzy_graph=use_fuzzy_graph,
+                use_fuzzy_spatial_attn=use_fuzzy_spatial_attn,
                 use_cell_attention=use_cell_attention,
                 num_cells=num_cells,
                 use_hollow_kernel=use_hollow_kernel,

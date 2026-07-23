@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
 from .attention import MultiHeadAttention, FeedForwardNetwork
-from .graph import GraphConvolution, FuzzyGraphConvolution
+from .graph import GraphConvolution, FuzzyGraphConvolution, FuzzySpatialAttention
 from .cell_attention import FuzzyCellAttention, CellAttentionPool
 from .utils import apply_temporal_attention
 
@@ -20,6 +20,7 @@ class STEncoderBlock(nn.Module):
         graph_k_hop,
         dropout=0.1,
         use_fuzzy_graph=False,
+        use_fuzzy_spatial_attn=False,
         use_cell_attention=False,
         num_cells=8,
         use_hollow_kernel=True,
@@ -27,16 +28,21 @@ class STEncoderBlock(nn.Module):
     ):
         super().__init__()
         self.use_cell_attention = use_cell_attention
+        self.use_fuzzy_spatial_attn = use_fuzzy_spatial_attn
 
         self.temporal_attention = MultiHeadAttention(hidden_dim, num_heads, dropout)
-        if use_fuzzy_graph:
+        if use_fuzzy_spatial_attn:
+            self.spatial_mixer = FuzzySpatialAttention(hidden_dim, num_heads, dropout)
+            self.norm_spatial = nn.LayerNorm(hidden_dim)
+        elif use_fuzzy_graph:
             self.graph_convolution = FuzzyGraphConvolution(hidden_dim, graph_k_hop)
         else:
             self.graph_convolution = GraphConvolution(hidden_dim, graph_k_hop)
         self.feed_forward = FeedForwardNetwork(hidden_dim, ffn_hidden_dim, dropout)
 
         self.norm_temporal = nn.LayerNorm(hidden_dim)
-        self.norm_graph = nn.LayerNorm(hidden_dim)
+        if not use_fuzzy_spatial_attn:
+            self.norm_graph = nn.LayerNorm(hidden_dim)
         self.norm_ffn = nn.LayerNorm(hidden_dim)
         self.dropout = nn.Dropout(dropout)
 
@@ -55,9 +61,15 @@ class STEncoderBlock(nn.Module):
 
         batch_size, time_steps, num_nodes, hidden_dim = sequence_features.shape
         graph_input = sequence_features.reshape(batch_size * time_steps, num_nodes, hidden_dim)
-        graph_output = self.graph_convolution(graph_input, graph_matrix, powers=powers)
+        if self.use_fuzzy_spatial_attn:
+            graph_output = self.spatial_mixer(graph_input, R=graph_matrix)
+        else:
+            graph_output = self.graph_convolution(graph_input, graph_matrix, powers=powers)
         graph_output = graph_output.reshape(batch_size, time_steps, num_nodes, hidden_dim)
-        sequence_features = self.norm_graph(sequence_features + self.dropout(graph_output))
+        if self.use_fuzzy_spatial_attn:
+            sequence_features = self.norm_spatial(sequence_features + self.dropout(graph_output))
+        else:
+            sequence_features = self.norm_graph(sequence_features + self.dropout(graph_output))
 
         if self.use_cell_attention:
             node_repr = CellAttentionPool.mean_pool(sequence_features)
@@ -87,6 +99,7 @@ class STEncoder(nn.Module):
         max_time_steps=None,
         use_gradient_checkpointing=True,
         use_fuzzy_graph=False,
+        use_fuzzy_spatial_attn=False,
         use_cell_attention=False,
         num_cells=8,
         use_hollow_kernel=True,
@@ -101,6 +114,7 @@ class STEncoder(nn.Module):
                 hidden_dim, num_heads, ffn_hidden_dim, graph_k_hop,
                 dropout,
                 use_fuzzy_graph=use_fuzzy_graph,
+                use_fuzzy_spatial_attn=use_fuzzy_spatial_attn,
                 use_cell_attention=use_cell_attention,
                 num_cells=num_cells,
                 use_hollow_kernel=use_hollow_kernel,

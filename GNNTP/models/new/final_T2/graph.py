@@ -137,6 +137,65 @@ class FuzzyGraphConvolution(nn.Module):
         return output
 
 
+class FuzzySpatialAttention(nn.Module):
+    """Spatial self-attention with Type-2 fuzzy relation as learnable bias.
+
+    Core formula (per head):
+        score = (Q @ Kᵀ) / √d_k + w · R
+        attn  = softmax(score)
+        out   = attn @ V
+
+    w is a per-layer learnable scalar that quantifies how much the
+    Type-2 fuzzy relational prior contributes to spatial attention.
+    """
+
+    def __init__(self, hidden_dim, num_heads, dropout=0.1):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.num_heads = num_heads
+        self.head_dim = hidden_dim // num_heads
+        self.scale = self.head_dim ** -0.5
+
+        self.q_proj = nn.Linear(hidden_dim, hidden_dim)
+        self.k_proj = nn.Linear(hidden_dim, hidden_dim)
+        self.v_proj = nn.Linear(hidden_dim, hidden_dim)
+        self.out_proj = nn.Linear(hidden_dim, hidden_dim)
+        self.dropout = nn.Dropout(dropout)
+
+        # Layer-specific fuzzy bias (w in paper notation)
+        self.fuzzy_bias = nn.Parameter(torch.tensor(0.0))
+
+    def forward(self, x, R=None):
+        # x: (Bx, N, D) where Bx may include merged time steps (B*T)
+        Bx, N, D = x.shape
+
+        q = (self.q_proj(x).view(Bx, N, self.num_heads, self.head_dim)
+             .transpose(1, 2))  # (Bx, H, N, D/H)
+        k = (self.k_proj(x).view(Bx, N, self.num_heads, self.head_dim)
+             .transpose(1, 2))
+        v = (self.v_proj(x).view(Bx, N, self.num_heads, self.head_dim)
+             .transpose(1, 2))
+
+        score = (q @ k.transpose(-2, -1)) * self.scale  # (Bx, H, N, N)
+
+        if R is not None:
+            # Expand batch dim to match merged time steps if needed
+            if R.dim() == 3:
+                T = Bx // R.size(0)
+                if T > 1:
+                    R = R.repeat_interleave(T, dim=0)
+                R_bias = R.unsqueeze(1)   # (Bx, 1, N, N)
+            else:
+                R_bias = R.unsqueeze(0).unsqueeze(0)  # (1, 1, N, N)
+            score = score + self.fuzzy_bias * R_bias
+
+        attn = F.softmax(score, dim=-1)
+        attn = self.dropout(attn)
+
+        out = (attn @ v).transpose(1, 2).contiguous().view(Bx, N, D)
+        return self.out_proj(out)
+
+
 class FuzzyRelationalGraphLearner(nn.Module):
     """Multi-View Fuzzy Relational Graph Learner (MV-FRGL).
 

@@ -54,6 +54,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self.use_torch_compile = config.get("use_torch_compile", False)
 
         self.use_fuzzy_graph = config.get("use_fuzzy_graph", True)
+        self.use_fuzzy_spatial_attn = config.get("use_fuzzy_spatial_attn", False)
         self.fuzzy_num_sets = config.get("fuzzy_num_sets", 3)
         self.graph_topk = config.get("graph_topk", 32)
         self.graph_sparsify_topk = config.get("graph_sparsify_topk", 0)  # 0=off
@@ -162,6 +163,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             max_time_steps=self.input_window,
             use_gradient_checkpointing=self.use_gradient_checkpointing,
             use_fuzzy_graph=self.use_fuzzy_graph,
+            use_fuzzy_spatial_attn=self.use_fuzzy_spatial_attn,
             use_cell_attention=self.use_cell_attention,
             num_cells=self.num_cells,
             use_hollow_kernel=self.use_hollow_kernel,
@@ -180,6 +182,7 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             num_nodes=self.num_nodes,
             use_gradient_checkpointing=self.use_gradient_checkpointing,
             use_fuzzy_graph=self.use_fuzzy_graph,
+            use_fuzzy_spatial_attn=self.use_fuzzy_spatial_attn,
             use_cell_attention=self.use_cell_attention,
             num_cells=self.num_cells,
             use_hollow_kernel=self.use_hollow_kernel,
