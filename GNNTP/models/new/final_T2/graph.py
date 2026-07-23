@@ -412,6 +412,17 @@ class FuzzyRelationalGraphLearner(nn.Module):
         self._current_view_dist_lh = (z_low.detach() - z_high.detach()).norm(dim=-1).mean()
         self._current_view_dist_mh = (z_mid.detach() - z_high.detach()).norm(dim=-1).mean()
 
+        # ── Prototype utilization diagnostics (per-view, averaged) ──
+        #   μ entropy: low → sparse assignment (each node → few prototypes)
+        #   top1_ratio: max(μ) / sum(μ) — peakedness of assignment
+        ep = 1e-8
+        for tag, mu in [('low', mu_low_raw), ('mid', mu_mid_raw), ('high', mu_high_raw)]:
+            mu_d = mu.detach()
+            ent = -(mu_d * (mu_d + ep).log()).sum(dim=-1).mean()        # H(μ)
+            peak = mu_d.max(dim=-1).values.mean()                       # avg max μ
+            setattr(self, f'_current_mu_entropy_{tag}', ent)
+            setattr(self, f'_current_mu_peak_{tag}', peak)
+
         return mu_lower, mu_upper, mu_expected, mu_low_raw, mu_mid_raw, mu_high_raw
 
     # ═══════════════════════════════════════════════════════════════

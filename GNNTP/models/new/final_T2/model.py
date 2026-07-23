@@ -558,6 +558,15 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                     self.fuzzy_graph._current_view_dist_lh.item(), 2)
                 diag['view_dist_mh'] = round(
                     self.fuzzy_graph._current_view_dist_mh.item(), 2)
+            # Prototype utilization (entropy & peak)
+            for tag in ('low', 'mid', 'high'):
+                ent_attr = f'_current_mu_entropy_{tag}'
+                peak_attr = f'_current_mu_peak_{tag}'
+                if hasattr(self.fuzzy_graph, ent_attr):
+                    diag[f'mu_entropy_{tag}'] = round(
+                        getattr(self.fuzzy_graph, ent_attr).item(), 3)
+                    diag[f'mu_peak_{tag}'] = round(
+                        getattr(self.fuzzy_graph, peak_attr).item(), 3)
             # Graph energy: max ||GCN_contrib|| / ||input|| across all GCN layers
             ge_vals = []
             for block in self.condition_encoder.blocks:

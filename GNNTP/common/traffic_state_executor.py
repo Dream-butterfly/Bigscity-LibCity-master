@@ -480,6 +480,10 @@ class TrafficStateExecutor(AbstractExecutor):
                                     diag.get('mu_raw_low', 0), diag.get('mu_raw_mid', 0), diag.get('mu_raw_high', 0),
                                     diag.get('sigma_delta_mean', 0),
                                     diag.get('mu_diff_mean', 0), diag.get('mu_diff_max', 0)))
+                            if 'mu_entropy_low' in diag:
+                                parts2.append('Hμ(L={:.3f},M={:.3f},H={:.3f}) pk(L={:.3f},M={:.3f},H={:.3f})'.format(
+                                    diag['mu_entropy_low'], diag['mu_entropy_mid'], diag['mu_entropy_high'],
+                                    diag['mu_peak_low'], diag['mu_peak_mid'], diag['mu_peak_high']))
                             if 'proto_norm' in diag:
                                 parts2.append('|proto|={:.1f} |latent|={:.1f} Δc={:.1f} |W|={:.1f} Δp={:.2e} Δl={:.1f}'.format(
                                     diag['proto_norm'], diag['latent_norm'],
