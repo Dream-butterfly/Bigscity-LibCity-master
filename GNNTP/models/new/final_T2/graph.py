@@ -350,10 +350,12 @@ class FuzzyRelationalGraphLearner(nn.Module):
         tau_mid  = F.softplus(self.log_tau_mid) + 0.1
         tau_high = F.softplus(self.log_tau_high) + 0.1
 
-        # Gaussian membership on each view's own geometry × own temperature
-        mu_low_raw  = torch.exp(-d2_low  / (2 * sigma_high.pow(2) * tau_low))
-        mu_mid_raw  = torch.exp(-d2_mid  / (2 * sigma_mid.pow(2)  * tau_mid))
-        mu_high_raw = torch.exp(-d2_high / (2 * sigma_low.pow(2)  * tau_high))
+        # Softmax membership: competitive prototype assignment per view
+        #   Σ μ = 1 per node → prevents uniform saturation observed with Gaussian.
+        #   sigma controls per-prototype "width" (lower σ → sharper assignment).
+        mu_low_raw  = F.softmax(-d2_low  / (sigma_high * tau_low),  dim=-1)
+        mu_mid_raw  = F.softmax(-d2_mid  / (sigma_mid  * tau_mid),  dim=-1)
+        mu_high_raw = F.softmax(-d2_high / (sigma_low  * tau_high), dim=-1)
 
         # Multi-view envelope: upper/lower across three independent views
         mu_upper = torch.maximum(torch.maximum(mu_low_raw, mu_mid_raw), mu_high_raw)
@@ -446,8 +448,9 @@ class FuzzyRelationalGraphLearner(nn.Module):
     def _build_fuzzy_relation(self, memberships):
         # memberships: [N, K] or [B, N, K]
         if self.relation_mode == "inner":
-            K = memberships.size(-1)
-            R = (memberships @ memberships.transpose(-2, -1)) / K  # [*B, N, N]
+            # softmax already normalizes μ to sum to 1 per node,
+            # so μᵀμ ∈ [0,1] without /K (was needed for unnormalized Gaussian).
+            R = (memberships @ memberships.transpose(-2, -1))  # [*B, N, N]
         else:  # "maxmin"
             if memberships.dim() == 3:
                 mu_i = memberships.unsqueeze(2)  # [B, N, 1, K]
