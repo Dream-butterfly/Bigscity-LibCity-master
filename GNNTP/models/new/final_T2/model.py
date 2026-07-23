@@ -213,17 +213,11 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             mu_mid_raw = mu_mid_raw.to(history_sequence.device)
             mu_high_raw = mu_high_raw.to(history_sequence.device)
             self._current_fou = fou
-            # Decoder/adaptive embed uses batch-mean memberships (N,K)
-            if mu_mid.dim() == 3:
-                self._current_mu_mid = mu_mid.mean(dim=0)
-                self._current_mu_low_raw = mu_low_raw.mean(dim=0)
-                self._current_mu_mid_raw = mu_mid_raw.mean(dim=0)
-                self._current_mu_high_raw = mu_high_raw.mean(dim=0)
-            else:
-                self._current_mu_mid = mu_mid
-                self._current_mu_low_raw = mu_low_raw
-                self._current_mu_mid_raw = mu_mid_raw
-                self._current_mu_high_raw = mu_high_raw
+            # Per-sample memberships for decoder proto routing (no batch mean)
+            self._current_mu_mid = mu_mid        # (B,N,K)
+            self._current_mu_low_raw = mu_low_raw
+            self._current_mu_mid_raw = mu_mid_raw
+            self._current_mu_high_raw = mu_high_raw
             # β: per-node (N,3) if enabled, else global [3]
             if self.use_per_node_beta:
                 if beta_node.dim() == 3:
