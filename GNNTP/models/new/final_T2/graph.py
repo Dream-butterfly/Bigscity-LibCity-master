@@ -344,14 +344,14 @@ class FuzzyRelationalGraphLearner(nn.Module):
         Three views → three prototype sets → three distance fields → three
         structurally different membership matrices (not just scaled copies).
 
-        Widths: Low view uses σ_low (narrow → sharp assignment, few prototypes
-        per node), High view uses σ_high (wide → diffuse assignment, many
-        prototypes per node), maximizing structural differentiation.
+        Widths (cross-assigned): Low view uses σ_high (wide → diffuse logits),
+        High view uses σ_low (narrow → sharp logits). Combined with per-view
+        temperature τ, this produces structurally different assignment patterns.
 
         Returns:
-            mu_low_raw:  (B,N,K) Low-view softmax assignment (finest: σ_low→sharp)
-            mu_mid_raw:  (B,N,K) Mid-view softmax assignment (reference)
-            mu_high_raw: (B,N,K) High-view softmax assignment (coarsest: σ_high→diffuse)
+            mu_low_raw:  (B,N,K) Low-view softmax assignment (uses σ_high)
+            mu_mid_raw:  (B,N,K) Mid-view softmax assignment (uses σ_mid)
+            mu_high_raw: (B,N,K) High-view softmax assignment (uses σ_low)
             mu_upper:    (B,N,K) upper envelope  μ⁺ = max over three views
             mu_lower:    (B,N,K) lower envelope  μ⁻ = min over three views
             mu_expected: (B,N,K) expected μ̄ = (μ⁺+μ⁻)/2  (NOT mid-view!)
