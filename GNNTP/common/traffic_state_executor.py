@@ -515,6 +515,9 @@ class TrafficStateExecutor(AbstractExecutor):
                                 parts4 = ['Δ/sh={:.3f}'.format(diag['adapter_ratio'])]
                                 if 'graph_energy' in diag:
                                     parts4.append('GCN={:.3f}'.format(diag['graph_energy']))
+                                if 'spatial_bias' in diag:
+                                    sb = ','.join(['{:.3f}'.format(b) for b in diag['spatial_bias']])
+                                    parts4.append('w=[{}]'.format(sb))
                                 if 'view_dist_lm' in diag:
                                     parts4.append('∇z(LM={:.1f},LH={:.1f},MH={:.1f})'.format(
                                         diag['view_dist_lm'], diag['view_dist_lh'], diag['view_dist_mh']))

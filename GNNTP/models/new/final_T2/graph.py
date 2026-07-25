@@ -339,21 +339,22 @@ class FuzzyRelationalGraphLearner(nn.Module):
     # ═══════════════════════════════════════════════════════════════
 
     def _compute_memberships(self, node_features):
-        """Compute multi-view Gaussian T1 memberships with independent geometry per view.
+        """Compute multi-view softmax memberships with independent geometry per view.
 
         Three views → three prototype sets → three distance fields → three
         structurally different membership matrices (not just scaled copies).
 
-        Cross-assigned widths: Low view uses σ_H (coarse), High view uses σ_L (fine),
-        maximizing structural differentiation.
+        Widths: Low view uses σ_low (narrow → sharp assignment, few prototypes
+        per node), High view uses σ_high (wide → diffuse assignment, many
+        prototypes per node), maximizing structural differentiation.
 
         Returns:
-            mu_lower_raw:  [N, K]  Low-view  T1 membership (coarse, wide Gaussian)
-            mu_mid_raw:    [N, K]  Mid-view  T1 membership (reference)
-            mu_high_raw:   [N, K]  High-view T1 membership (fine, narrow Gaussian)
-            mu_upper:      [N, K]  upper envelope  μ⁺ = max over three views
-            mu_lower:      [N, K]  lower envelope  μ⁻ = min over three views
-            mu_expected:   [N, K]  expected μ̄ = (μ⁺+μ⁻)/2  (NOT mid-view!)
+            mu_low_raw:  (B,N,K) Low-view softmax assignment (finest: σ_low→sharp)
+            mu_mid_raw:  (B,N,K) Mid-view softmax assignment (reference)
+            mu_high_raw: (B,N,K) High-view softmax assignment (coarsest: σ_high→diffuse)
+            mu_upper:    (B,N,K) upper envelope  μ⁺ = max over three views
+            mu_lower:    (B,N,K) lower envelope  μ⁻ = min over three views
+            mu_expected: (B,N,K) expected μ̄ = (μ⁺+μ⁻)/2  (NOT mid-view!)
         """
         # 1. Node representation from latest traffic state + short-term trend
         if node_features is not None:
@@ -567,7 +568,7 @@ class FuzzyRelationalGraphLearner(nn.Module):
 
         Returns:
             R_with_closure: [N, N] effective fuzzy relation
-            fou_node:       [N]    per-node MDI scalar δ(n)
+            fou_node:       (B,N) or (N,)  per-sample per-node MDI δ(n)
             mu_expected:    [B,N,K] expected memberships μ̄ (envelope midpoint)
             mu_low_raw:     [B,N,K] Low-view T1 memberships
             mu_mid_raw:     [B,N,K] Mid-view T1 memberships
@@ -578,11 +579,11 @@ class FuzzyRelationalGraphLearner(nn.Module):
         mu_lower, mu_upper, mu_expected, mu_low_raw, mu_mid_raw, mu_high_raw = \
             self._compute_memberships(node_features)
 
-        # Per-node MDI δ(n) (mean over batch if per-sample)
+        # Per-sample per-node MDI δ(n): preserve batch dim for downstream analysis
         if mu_upper.dim() == 3:
-            fou_node = (mu_upper - mu_lower).clamp(min=0.0).mean(dim=-1).mean(dim=0)  # [N]
+            fou_node = (mu_upper - mu_lower).clamp(min=0.0).mean(dim=-1)  # (B,N)
         else:
-            fou_node = (mu_upper - mu_lower).clamp(min=0.0).mean(dim=-1)  # [N]
+            fou_node = (mu_upper - mu_lower).clamp(min=0.0).mean(dim=-1)  # (N)
 
         # ── Per-sample relations → per-view sparsification → batch-mean → (N,N) ──
         R_low  = self._build_fuzzy_relation(mu_low_raw)

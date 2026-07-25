@@ -216,6 +216,10 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             mu_mid_raw = mu_mid_raw.to(history_sequence.device)
             mu_high_raw = mu_high_raw.to(history_sequence.device)
             self._current_fou = fou
+            # Preserve per-sample FOU (B,N) for diagnostics/UQ; CellAttention
+            # pools over batch so we mean it to (N,) for forward compatibility.
+            if fou.dim() > 1:
+                fou = fou.mean(dim=0)  # (B,N) → (N,)
             # Per-sample memberships for decoder proto routing (no batch mean)
             self._current_mu_mid = mu_mid        # (B,N,K)
             self._current_mu_low_raw = mu_low_raw
@@ -570,20 +574,27 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
                         getattr(self.fuzzy_graph, ent_attr).item(), 3)
                     diag[f'mu_peak_{tag}'] = round(
                         getattr(self.fuzzy_graph, peak_attr).item(), 3)
-            # Graph energy: max ||GCN_contrib|| / ||input|| across all GCN layers
+            # Graph energy / spatial bias: per-layer contribution diagnostics
             ge_vals = []
+            sp_bias_vals = []
             for block in self.condition_encoder.blocks:
                 if hasattr(block, 'graph_convolution'):
                     ge = getattr(block.graph_convolution, '_current_graph_energy', None)
                     if ge is not None:
                         ge_vals.append(ge.item())
+                if hasattr(block, 'spatial_mixer'):
+                    sp_bias_vals.append(block.spatial_mixer.fuzzy_bias.item())
             for block in self.future_decoder.blocks:
                 if hasattr(block, 'graph_convolution'):
                     ge = getattr(block.graph_convolution, '_current_graph_energy', None)
                     if ge is not None:
                         ge_vals.append(ge.item())
+                if hasattr(block, 'spatial_mixer'):
+                    sp_bias_vals.append(block.spatial_mixer.fuzzy_bias.item())
             if ge_vals:
                 diag['graph_energy'] = round(max(ge_vals), 3)
+            if sp_bias_vals:
+                diag['spatial_bias'] = [round(b, 4) for b in sp_bias_vals]
             # Gradient norms for key Type-2 parameters
             g = self.fuzzy_graph
             for pname, grad_key in [
