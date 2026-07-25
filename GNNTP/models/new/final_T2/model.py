@@ -238,23 +238,28 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             self._current_fou = None
             self._current_mu_mid = None
         rm = getattr(self.fuzzy_graph, 'relation_mode', 'maxmin') if self.fuzzy_graph else 'maxmin'
-        # ── Encoder GCN: static adjacency by default; fuzzy graph if enabled ──
+        # ── Encoder graph: static adjacency by default; fuzzy graph if enabled ──
         if self.encoder_use_fuzzy_graph and self.use_fuzzy_graph and self.fuzzy_graph is not None:
             encoder_gcn_graph = graph_matrix.to(history_sequence.device)
         else:
             encoder_gcn_graph = self.adjacency_matrix.to(history_sequence.device)
-        encoder_powers = FuzzyGraphConvolution.precompute_powers(
-            encoder_gcn_graph, k_hop=self.graph_k_hop, topk=self.graph_topk, relation_mode=rm)
+        # Powers only needed for the GCN path; FuzzySpatialAttention uses R directly.
+        encoder_powers = (None if self.use_fuzzy_spatial_attn
+                          else FuzzyGraphConvolution.precompute_powers(
+                              encoder_gcn_graph, k_hop=self.graph_k_hop,
+                              topk=self.graph_topk, relation_mode=rm))
         condition_features = self.condition_encoder(
             history_sequence, encoder_gcn_graph, graph_uncertainty=fou, powers=encoder_powers)
 
-        # ── Decoder GCN: fuzzy graph (multi-view adaptive routing) ──
+        # ── Decoder graph: fuzzy graph (multi-view adaptive routing) ──
         if self.use_fuzzy_graph and self.fuzzy_graph is not None:
             decoder_graph = graph_matrix  # fuzzy
         else:
             decoder_graph = encoder_gcn_graph  # fallback to static
-        decoder_powers = FuzzyGraphConvolution.precompute_powers(
-            decoder_graph, k_hop=self.graph_k_hop, topk=self.graph_topk, relation_mode=rm)
+        decoder_powers = (None if self.use_fuzzy_spatial_attn
+                          else FuzzyGraphConvolution.precompute_powers(
+                              decoder_graph, k_hop=self.graph_k_hop,
+                              topk=self.graph_topk, relation_mode=rm))
 
         # Prototype-aware spatial embedding: route envelope midpoint μ̄ through
         # the prototype embedding. E_node = μ̄ @ E_proto → per-node fuzzy
