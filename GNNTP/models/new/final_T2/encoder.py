@@ -72,9 +72,9 @@ class STEncoderBlock(nn.Module):
             sequence_features = self.norm_graph(sequence_features + self.dropout(graph_output))
 
         if self.use_cell_attention:
-            node_repr = CellAttentionPool.mean_pool(sequence_features)
-            cell_out = self.cell_attention(node_repr, node_uncertainty=graph_uncertainty)
-            cell_out = cell_out.unsqueeze(0).unsqueeze(0)
+            node_repr = CellAttentionPool.time_mean_pool(sequence_features)  # (B,N,D)
+            cell_out = self.cell_attention(node_repr, node_uncertainty=graph_uncertainty)  # (B,N,D)
+            cell_out = cell_out.unsqueeze(1)  # (B,1,N,D)
             blend = self.cell_attention.cell_blend.sigmoid()
             sequence_features = self.norm_cell(
                 sequence_features + blend * cell_out

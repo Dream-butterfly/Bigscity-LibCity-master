@@ -216,10 +216,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             mu_mid_raw = mu_mid_raw.to(history_sequence.device)
             mu_high_raw = mu_high_raw.to(history_sequence.device)
             self._current_fou = fou
-            # Preserve per-sample FOU (B,N) for diagnostics/UQ; CellAttention
-            # pools over batch so we mean it to (N,) for forward compatibility.
-            if fou.dim() > 1:
-                fou = fou.mean(dim=0)  # (B,N) → (N,)
+            # Per-sample FOU (B,N) preserved. CellAttention now accepts (B,N)
+            # per-sample uncertainty (no batch averaging in forward path).
             # Per-sample memberships for decoder proto routing (no batch mean)
             self._current_mu_mid = mu_mid        # (B,N,K)
             self._current_mu_low_raw = mu_low_raw
@@ -260,9 +258,10 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
 
         # Prototype-aware spatial embedding: route through multi-view membership
         if self.use_proto_adaptive_embed and mu_mid is not None:
-            # E_node = μ_mid @ E_proto  (N,K) @ (K,D) → (N,D)
-            node_adaptive = mu_mid @ self.proto_embed  # (N, K) @ (1, K, D) → (N, D)
-            condition_features = condition_features + node_adaptive  # broadcast (B,T)
+            # E_node = μ_mid @ E_proto  (B,N,K) @ (1,K,D) → (B,N,D)
+            node_adaptive = mu_mid @ self.proto_embed
+            node_adaptive = node_adaptive.unsqueeze(1)  # (B,1,N,D) broadcast over T
+            condition_features = condition_features + node_adaptive
 
         return condition_features, decoder_graph, fou, decoder_powers
 
@@ -685,8 +684,12 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
 
                 bt, t, n, d = x.shape
                 g_in = x.reshape(bt * t, n, d)
-                g_out = block.graph_convolution(g_in, graph_matrix)
-                x = block.norm_graph(x + block.dropout(g_out.reshape(bt, t, n, d)))
+                if hasattr(block, 'graph_convolution'):
+                    g_out = block.graph_convolution(g_in, graph_matrix)
+                    x = block.norm_graph(x + block.dropout(g_out.reshape(bt, t, n, d)))
+                elif hasattr(block, 'spatial_mixer'):
+                    g_out = block.spatial_mixer(g_in, R=graph_matrix)
+                    x = block.norm_spatial(x + block.dropout(g_out.reshape(bt, t, n, d)))
                 x = block.norm_ffn(x + block.dropout(block.feed_forward(x)))
 
         return metrics

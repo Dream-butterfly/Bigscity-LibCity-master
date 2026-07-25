@@ -82,24 +82,27 @@ class FuzzyCellAttention(nn.Module):
         return_stability: bool = False,
         node_uncertainty: torch.Tensor | None = None,
     ):
-        if x.dim() != 2:
-            raise ValueError(
-                f"FuzzyCellAttention expects [N, D] input, got shape {x.shape}"
-            )
+        # Accept both (N, D) and batched (B, N, D) inputs.
+        batched = x.dim() == 3
+        if not batched:
+            x = x.unsqueeze(0)  # (N, D) → (1, N, D)
 
-        u = self._compute_membership(x)  # [N, K_c]
+        u = self._compute_membership(x)  # (B, N, K_c)
         u_norm = F.normalize(u, p=2, dim=-1, eps=1e-8)
-        region_affinity = u_norm @ u_norm.T  # [N, N]
+        region_affinity = torch.bmm(u_norm, u_norm.transpose(-2, -1))  # (B, N, N)
 
         if self.use_hollow_kernel:
-            dist = torch.cdist(x, x)
+            dist = torch.cdist(x, x)  # (B, N, N)
             hollow = self._hollow_kernel(dist)
             region_affinity = region_affinity * hollow
 
-        # If provided, modulate by MDI mask U_ij = (δ_i + δ_j) / 2
+        # If provided, modulate by MDI mask U_ij = (δ_i + δ_j) / 2 (per-sample)
         if node_uncertainty is not None:
-            fou = node_uncertainty.view(-1).to(device=region_affinity.device, dtype=region_affinity.dtype)
-            U_ij = (fou.unsqueeze(0) + fou.unsqueeze(1)) / 2.0
+            fou = node_uncertainty.to(
+                device=region_affinity.device, dtype=region_affinity.dtype)
+            if fou.dim() == 1:
+                fou = fou.unsqueeze(0).expand(x.size(0), -1)  # (N,) → (B,N)
+            U_ij = (fou.unsqueeze(1) + fou.unsqueeze(2)) / 2.0  # (B,N,N)
             alpha = self.uncertainty_alpha.sigmoid()
             region_affinity = region_affinity * (1.0 - alpha * U_ij)
 
@@ -107,8 +110,11 @@ class FuzzyCellAttention(nn.Module):
             region_affinity.sum(dim=-1, keepdim=True).clamp_min(1e-8)
         )
 
-        cell_output = region_affinity @ self.cell_transform(x)
+        cell_output = torch.bmm(region_affinity, self.cell_transform(x))  # (B,N,D)
         output = self.output_projection(cell_output)
+
+        if not batched:
+            output = output.squeeze(0)
 
         if return_stability:
             H = -(u * (u + 1e-8).log()).sum(dim=-1)
@@ -121,7 +127,14 @@ class FuzzyCellAttention(nn.Module):
 class CellAttentionPool:
     @staticmethod
     def mean_pool(sequence_features: torch.Tensor) -> torch.Tensor:
+        """Pool over batch and time: (B,T,N,D) → (N,D). Batch-dependent — use
+        time_mean_pool for per-sample behavior."""
         return sequence_features.mean(dim=(0, 1))
+
+    @staticmethod
+    def time_mean_pool(sequence_features: torch.Tensor) -> torch.Tensor:
+        """Pool over time only, keep batch: (B,T,N,D) → (B,N,D). Per-sample."""
+        return sequence_features.mean(dim=1)
 
     @staticmethod
     def batch_mean_pool(sequence_features: torch.Tensor) -> torch.Tensor:

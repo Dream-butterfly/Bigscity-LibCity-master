@@ -84,9 +84,9 @@ class DecoderBlock(nn.Module):
             queries = self.norm_graph(queries + self.dropout(graph_output))
 
         if self.use_cell_attention:
-            node_repr = CellAttentionPool.mean_pool(queries)  # [N, D]
-            cell_out = self.cell_attention(node_repr, node_uncertainty=graph_uncertainty)          # [N, D]
-            cell_out = cell_out.unsqueeze(0).unsqueeze(0)      # [1, 1, N, D]
+            node_repr = CellAttentionPool.time_mean_pool(queries)  # (B,N,D)
+            cell_out = self.cell_attention(node_repr, node_uncertainty=graph_uncertainty)  # (B,N,D)
+            cell_out = cell_out.unsqueeze(1)  # (B,1,N,D)
             blend = self.cell_attention.cell_blend.sigmoid()
             queries = self.norm_cell(queries + blend * cell_out)
 
