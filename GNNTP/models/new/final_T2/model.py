@@ -256,10 +256,11 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         decoder_powers = FuzzyGraphConvolution.precompute_powers(
             decoder_graph, k_hop=self.graph_k_hop, topk=self.graph_topk, relation_mode=rm)
 
-        # Prototype-aware spatial embedding: route through multi-view membership
-        if self.use_proto_adaptive_embed and mu_mid is not None:
-            # E_node = μ_mid @ E_proto  (B,N,K) @ (1,K,D) → (B,N,D)
-            node_adaptive = mu_mid @ self.proto_embed
+        # Prototype-aware spatial embedding: route envelope midpoint μ̄ through
+        # the prototype embedding. E_node = μ̄ @ E_proto → per-node fuzzy
+        # prototype spatial signature added to encoder output (time-invariant).
+        if self.use_proto_adaptive_embed and self._current_mu_mid is not None:
+            node_adaptive = self._current_mu_mid @ self.proto_embed  # (B,N,K)@(1,K,D)→(B,N,D)
             node_adaptive = node_adaptive.unsqueeze(1)  # (B,1,N,D) broadcast over T
             condition_features = condition_features + node_adaptive
 

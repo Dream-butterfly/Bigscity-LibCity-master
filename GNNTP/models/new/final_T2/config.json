@@ -16,7 +16,7 @@
   "cell_blend_init": 0.4,
   "use_spatiotemporal_attention": true,
   "use_temporal_position_embedding": true,
-  "use_proto_adaptive_embed": false,
+  "use_proto_adaptive_embed": true,
   "relation_mode": "inner",
   "use_gradient_checkpointing": false,
   "use_amp": true,

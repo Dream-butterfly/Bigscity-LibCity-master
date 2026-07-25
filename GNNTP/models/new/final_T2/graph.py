@@ -5,8 +5,10 @@ Design notes:
   prototype geometry, node representation, Gaussian width, and temperature.
 - The upper/lower envelope (max/min over three views) quantifies cross-view disagreement
   rather than classical IT2 parametric uncertainty.
-- The mid (expected) graph is built from mu_mid = (upper+lower)/2 and any closure
-  is applied only on this mid graph.
+- The effective relation graph is the β-weighted blend of the three per-view fuzzy
+  relations R_mixed = Σ β_v·(μ_v @ μ_vᵀ). The envelope midpoint μ̄ = (μ⁺+μ⁻)/2 is NOT
+  used for relation construction; it serves as the expected fuzzy membership for
+  prototype-aware spatial embedding (use_proto_adaptive_embed) and downstream routing.
 - The Membership Disagreement Interval (MDI, code variable 'fou') is intended solely
   for gating/attention; it is NOT used in relation propagation (avoids structure collapse).
 """
