@@ -307,9 +307,12 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         self._loss_mae = regression_loss.detach()  # cache for diagnostics
 
         # ── Conservation (if enabled) ──
+        # Reuse gcn_graph (decoder_graph from encode_condition) instead of
+        # recomputing get_type2_info — avoids double fuzzy-graph forward and
+        # a latent NameError when fuzzy_graph is None.
         effective_weight = self._get_effective_conservation_weight()
         if effective_weight > 0:
-            fuzzy_R = self.fuzzy_graph.get_type2_info(history_sequence)[0] if self.fuzzy_graph else graph_matrix
+            fuzzy_R = gcn_graph  # decoder_graph: fuzzy R (use_fuzzy) or static
             conservation_loss = self._fuzzy_conservation_loss(predicted_future, fuzzy_R)
             contrib = effective_weight * conservation_loss
             self._loss_consv = contrib.detach()

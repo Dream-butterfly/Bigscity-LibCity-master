@@ -146,9 +146,13 @@ class STEncoder(nn.Module):
             encoded_features = encoded_features + self.temporal_position_embedding[:, :history_steps]
         for block in self.blocks:
             if self.use_gradient_checkpointing and self.training:
-                encoded_features = checkpoint(
-                    block, encoded_features, graph_matrix, graph_uncertainty, powers, use_reentrant=False
-                )
+                if graph_uncertainty is None:
+                    # checkpoint cannot accept None input; fall back to eager
+                    encoded_features = block(encoded_features, graph_matrix, None, powers=powers)
+                else:
+                    encoded_features = checkpoint(
+                        block, encoded_features, graph_matrix, graph_uncertainty, powers, use_reentrant=False
+                    )
             else:
                 encoded_features = block(encoded_features, graph_matrix, graph_uncertainty, powers=powers)
         encoded_features = self.final_norm(encoded_features)

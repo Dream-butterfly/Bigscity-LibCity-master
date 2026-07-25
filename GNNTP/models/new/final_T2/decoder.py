@@ -252,9 +252,13 @@ class FutureDecoder(nn.Module):
 
         for block in self.blocks:
             if self.use_gradient_checkpointing and self.training:
-                queries = checkpoint(
-                    block, queries, condition_features, graph_matrix, graph_uncertainty, powers, use_reentrant=False
-                )
+                if graph_uncertainty is None:
+                    # checkpoint cannot accept None input; fall back to eager
+                    queries = block(queries, condition_features, graph_matrix, None, powers=powers)
+                else:
+                    queries = checkpoint(
+                        block, queries, condition_features, graph_matrix, graph_uncertainty, powers, use_reentrant=False
+                    )
             else:
                 queries = block(queries, condition_features, graph_matrix, graph_uncertainty, powers=powers)
 
