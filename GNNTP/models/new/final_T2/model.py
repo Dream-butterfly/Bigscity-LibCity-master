@@ -206,12 +206,12 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
 
     def encode_condition(self, history_sequence):
         if self.use_fuzzy_graph and self.fuzzy_graph is not None:
-            (graph_matrix, fou, mu_mid,
+            (graph_matrix, fou, mu_expected,
              mu_low_raw, mu_mid_raw, mu_high_raw, beta_global, beta_node
             ) = self.fuzzy_graph.get_type2_info(history_sequence)
             graph_matrix = graph_matrix.to(history_sequence.device)
             fou = fou.to(history_sequence.device)
-            mu_mid = mu_mid.to(history_sequence.device)
+            mu_expected = mu_expected.to(history_sequence.device)
             mu_low_raw = mu_low_raw.to(history_sequence.device)
             mu_mid_raw = mu_mid_raw.to(history_sequence.device)
             mu_high_raw = mu_high_raw.to(history_sequence.device)
@@ -219,24 +219,21 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
             # Per-sample FOU (B,N) preserved. CellAttention now accepts (B,N)
             # per-sample uncertainty (no batch averaging in forward path).
             # Per-sample memberships for decoder proto routing (no batch mean)
-            self._current_mu_mid = mu_mid        # (B,N,K)
+            self._current_mu_expected = mu_expected  # envelope midpoint μ̄ (B,N,K)
             self._current_mu_low_raw = mu_low_raw
-            self._current_mu_mid_raw = mu_mid_raw
+            self._current_mu_mid_raw = mu_mid_raw    # mid-view raw membership (B,N,K)
             self._current_mu_high_raw = mu_high_raw
             # β: per-node (N,3) if enabled, else global [3]
             if self.use_per_node_beta:
-                if beta_node.dim() == 3:
-                    self._current_beta = beta_node.mean(dim=0)  # (N,3)
-                else:
-                    self._current_beta = beta_node
+                self._current_beta = beta_node  # (N,3)
             else:
                 self._current_beta = beta_global  # [3]
         else:
             graph_matrix = self.adjacency_matrix.to(history_sequence.device)
             fou = None
-            mu_mid = None
+            mu_expected = None
             self._current_fou = None
-            self._current_mu_mid = None
+            self._current_mu_expected = None
         rm = getattr(self.fuzzy_graph, 'relation_mode', 'maxmin') if self.fuzzy_graph else 'maxmin'
         # ── Encoder graph: static adjacency by default; fuzzy graph if enabled ──
         if self.encoder_use_fuzzy_graph and self.use_fuzzy_graph and self.fuzzy_graph is not None:
@@ -264,8 +261,8 @@ class NewFuzzyCellAttention(AbstractTrafficStateModel):
         # Prototype-aware spatial embedding: route envelope midpoint μ̄ through
         # the prototype embedding. E_node = μ̄ @ E_proto → per-node fuzzy
         # prototype spatial signature added to encoder output (time-invariant).
-        if self.use_proto_adaptive_embed and self._current_mu_mid is not None:
-            node_adaptive = self._current_mu_mid @ self.proto_embed  # (B,N,K)@(1,K,D)→(B,N,D)
+        if self.use_proto_adaptive_embed and self._current_mu_expected is not None:
+            node_adaptive = self._current_mu_expected @ self.proto_embed  # (B,N,K)@(1,K,D)→(B,N,D)
             node_adaptive = node_adaptive.unsqueeze(1)  # (B,1,N,D) broadcast over T
             condition_features = condition_features + node_adaptive
 

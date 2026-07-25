@@ -655,16 +655,16 @@ class FuzzyRelationalGraphLearner(nn.Module):
         return R
 
     def get_memberships(self, node_features=None):
-        """Return midpoint memberships for backward compatibility."""
+        """Return envelope-midpoint memberships μ̄ (3rd return of _compute_memberships)."""
         if node_features is None:
             with torch.no_grad():
                 dummy = torch.zeros(1, 1, self.num_nodes,
                                     self.prototype_center.size(1),
                                     device=self.prototype_center.device)
-            _, _, mu_mid = self._compute_memberships(dummy)
+            _, _, mu_expected = self._compute_memberships(dummy)
         else:
-            _, _, mu_mid = self._compute_memberships(node_features)
-        return mu_mid
+            _, _, mu_expected = self._compute_memberships(node_features)
+        return mu_expected
 
     def get_prototypes(self):
         return self.prototype_center
