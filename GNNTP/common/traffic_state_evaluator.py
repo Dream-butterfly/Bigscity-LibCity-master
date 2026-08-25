@@ -48,6 +48,12 @@ class TrafficStateEvaluator(AbstractEvaluator):
         if y_true.shape != y_pred.shape:
             raise ValueError("batch['y_true'].shape is not equal to batch['y_pred'].shape")
         self.len_timeslots = y_true.shape[1]
+        # 累积全量真值/预测，用于计算论文口径（STGformer/STAEformer All-Steps）的 pooled 指标
+        if not hasattr(self, '_y_trues'):
+            self._y_trues = []
+            self._y_preds = []
+        self._y_trues.append(y_true)
+        self._y_preds.append(y_pred)
         for i in range(1, self.len_timeslots + 1):
             for metric in self.metrics:
                 if metric + '@' + str(i) not in self.intermediate_result:
@@ -151,6 +157,18 @@ class TrafficStateEvaluator(AbstractEvaluator):
             for metric in self.metrics:
                 self.result[metric + '@' + str(i)] = sum(self.intermediate_result[metric + '@' + str(i)]) / \
                                                      len(self.intermediate_result[metric + '@' + str(i)])
+        # 论文主流口径：全步 pooled masked 指标（mask 剔除 y_true==0）。
+        # 与 STGformer/STAEformer/STG4Traffic 的 All-Steps 平均一致：对全部
+        # (样本×时间步×节点) 联合计算，而非对逐 horizon 指标取算术平均。
+        if getattr(self, '_y_trues', None):
+            y_true_all = torch.cat(self._y_trues, dim=0)
+            y_pred_all = torch.cat(self._y_preds, dim=0)
+            self.result['masked_MAE_avg'] = loss.masked_mae_torch(y_pred_all, y_true_all, 0,
+                                                                  mask_val=self.mask_val).item()
+            self.result['masked_MAPE_avg'] = loss.masked_mape_torch(y_pred_all, y_true_all, 0,
+                                                                    mask_val=self.mask_val).item()
+            self.result['masked_RMSE_avg'] = loss.masked_rmse_torch(y_pred_all, y_true_all, 0,
+                                                                    mask_val=self.mask_val).item()
         return self.result
 
     def save_result(self, save_path, filename=None):
@@ -195,3 +213,5 @@ class TrafficStateEvaluator(AbstractEvaluator):
         """
         self.result = {}
         self.intermediate_result = {}
+        self._y_trues = []
+        self._y_preds = []
